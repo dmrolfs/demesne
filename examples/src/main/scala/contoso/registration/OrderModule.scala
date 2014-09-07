@@ -2,18 +2,15 @@ package contoso.registration
 
 import scala.concurrent.duration._
 import scala.util.Random
-import akka.actor.{ ActorLogging, ActorRef, ActorSystem, Cancellable, Props }
-import akka.contrib.pattern.{ ClusterSharding, ShardRegion }
+import akka.actor.{ ActorRef, ActorSystem, Cancellable, Props }
+import akka.contrib.pattern.ClusterSharding
 import akka.event.LoggingReceive
 import com.typesafe.config.ConfigFactory
 import squants._
-import com.typesafe.scalalogging.LazyLogging
 import com.github.nscala_time.time.{ Imports => joda }
 import com.github.nscala_time.time.Imports._
 import demesne._
 import peds.akka.publish.{ EventPublisher, LocalPublisher }
-import peds.commons.module._
-import peds.commons.identifier._
 import contoso.conference.ConferenceModule
 
 
@@ -40,7 +37,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   //DMR move these into common AggregateModuleCompanion trait
   val trace = Trace[OrderModule.type]
 
-  val fallback = "reservation-auto-expiration = 15 minutes"  
+  val fallback = "reservation-auto-expiration = 15 minutes"
   val config = ConfigFactory.load
                 .getConfig( "contoso.registration.order" )
                 .withFallback( ConfigFactory.parseString( fallback ) )
@@ -54,9 +51,9 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     new AggregateRootType {
       override val name: String = module.shardName
       override def aggregateRootProps: Props = {
-        Order.props( 
-          this, 
-          ClusterSharding( system ).shardRegion( PricingRetriever.shardName ) 
+        Order.props(
+          this,
+          ClusterSharding( system ).shardRegion( PricingRetriever.shardName )
         )
       }
       override val toString: String = "OrderAggregateRootType"
@@ -69,14 +66,14 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   }
 
   // Conference/Registration/Commands/RegsiterToConference.cs
-  case class RegisterToConference( 
-    override val targetId: RegisterToConference#TID, 
-    conferenceId: ConferenceModule.TID, 
+  case class RegisterToConference(
+    override val targetId: RegisterToConference#TID,
+    conferenceId: ConferenceModule.TID,
     seats: Seq[SeatQuantity]
   ) extends Command
 
   object RegisterToConference {
-    implicit val SeatQuantityValidator = validator[SeatQuantity] { sq => 
+    implicit val SeatQuantityValidator = validator[SeatQuantity] { sq =>
       sq.quantity should be > Each( 0 )
     }
 
@@ -92,18 +89,18 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
 
   // Conference/Registration/Commands/MarkSeatsAsReserved.cs
-  case class MarkSeatsAsReserved( 
-    override val targetId: MarkSeatsAsReserved#TID, 
-    seats: Seq[SeatQuantity], 
-    expiration: joda.DateTime 
+  case class MarkSeatsAsReserved(
+    override val targetId: MarkSeatsAsReserved#TID,
+    seats: Seq[SeatQuantity],
+    expiration: joda.DateTime
   ) extends Command
 
   // Conference/Registration/Commands/RejectOrder.cs
   case class RejectOrder( override val targetId: RejectOrder#TID ) extends Command
 
   // Conference/Registration/Commands/AssignRegistrantDetails.cs
-  case class AssignRegistrantDetails( 
-    override val targetId: AssignRegistrantDetails#TID, 
+  case class AssignRegistrantDetails(
+    override val targetId: AssignRegistrantDetails#TID,
     firstName: String,    //DMR: better to model as PersonName archetype
     lastName: String,
     email: String
@@ -128,7 +125,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   }
 
   // Registration.Contracts/Events/OrderPlaced.cs
-  case class OrderPlaced( 
+  case class OrderPlaced(
     override val sourceId: OrderPlaced#TID,
     conferenceId: ConferenceModule.TID,
     seats: Seq[SeatQuantity],
@@ -137,8 +134,8 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   ) extends Event
 
   // Registration.Contracts/Events/OrderUpdated.cs
-  case class OrderUpdated( 
-    override val sourceId: OrderUpdated#TID, 
+  case class OrderUpdated(
+    override val sourceId: OrderUpdated#TID,
     seats: Seq[SeatQuantity]
   ) extends Event
 
@@ -152,14 +149,14 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
   // Registration.Contracts/Events/OrderPartiallyReserved.cs
   case class OrderPartiallyReserved(
-    override val sourceId: OrderPartiallyReserved#TID, 
+    override val sourceId: OrderPartiallyReserved#TID,
     reservationExpiration: joda.DateTime,
     seats: Seq[SeatQuantity]
   ) extends Event
 
   // Registration.Contracts/Events/OrderReservationCompleted.cs
   case class OrderReservationCompleted(
-    override val sourceId: OrderReservationCompleted#TID, 
+    override val sourceId: OrderReservationCompleted#TID,
     reservationExpiration: joda.DateTime,
     seats: Seq[SeatQuantity]
   ) extends Event
@@ -169,7 +166,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
   // Registration.Contracts/Events/OrderRegistrantAssigned.cs
   case class OrderRegistrantAssigned(
-    override val sourceId: OrderRegistrantAssigned#TID, 
+    override val sourceId: OrderRegistrantAssigned#TID,
     firstName: String,    //DMR: better to model as PersonName archetype
     lastName: String,
     email: String
@@ -187,11 +184,11 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
 
   // Conference/Registration/Order.cs
-  case class OrderState( 
-    id: TID, 
-    conferenceId: ConferenceModule.TID, 
-    seats: Seq[SeatQuantity] = Seq(), 
-    confirmed: Boolean = false 
+  case class OrderState(
+    id: TID,
+    conferenceId: ConferenceModule.TID,
+    seats: Seq[SeatQuantity] = Seq(),
+    confirmed: Boolean = false
   ) {
     def isCompletedBy( reserved: Seq[SeatQuantity] ): Boolean = {
       seats exists { s =>
@@ -225,7 +222,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     implicit def period2FiniteDuration( p: joda.Period ): FiniteDuration = FiniteDuration( p.getMillis, MILLISECONDS )
   }
 
-  class Order( override val meta: AggregateRootType, pricingRetriever: ActorRef ) extends AggregateRoot[OrderState] { 
+  class Order( override val meta: AggregateRootType, pricingRetriever: ActorRef ) extends AggregateRoot[OrderState] {
     outer: EventPublisher =>
 
     import Order._
@@ -323,7 +320,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     }
 
     // Conference/Conference.Common/Utils/HandleGenerator.cs
-    private def generateHandle: String = Random.alphanumeric.take( 6 ).mkString.capitalize 
+    private def generateHandle: String = Random.alphanumeric.take( 6 ).mkString.capitalize
   }
 
   //TODO: event version mapper OrderPaymentConfirmed -> OrderConfiremed
