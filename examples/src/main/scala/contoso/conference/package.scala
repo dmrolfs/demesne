@@ -12,15 +12,15 @@ import peds.commons.identifier._
 
 package object conference {
   // Conference/Conference/SeatType.cs
-  case class SeatType( 
-    id: SeatType.TID, 
-    name: String, 
-    description: String, 
-    quantity: Dimensionless, 
-    price: Price[Dimensionless] 
+  case class SeatType(
+    id: SeatType.TID,
+    name: String,
+    description: String,
+    quantity: Dimensionless,
+    price: Price[Dimensionless]
   ) extends Equals {
     override def hashCode: Int = 41 * ( 41 + id.## )
-    
+
     override def equals( rhs: Any ): Boolean = rhs match {
       case that: SeatType => {
         if ( this eq that ) true
@@ -38,9 +38,10 @@ package object conference {
   }
 
   object SeatType {
-    type TID = TaggedID[ShortUUID]
+    type ID = ShortUUID
+    type TID = TaggedID[ID]
 
-    implicit val seatTypeValidator = validator[SeatType] { st => 
+    implicit val seatTypeValidator = validator[SeatType] { st =>
       st.name is notEmpty
       st.name.size as "name length" is within( 2 to 70 )
       st.description is notEmpty
@@ -52,7 +53,7 @@ package object conference {
 
 
   // Conference/Conference/ConferenceInfo.cs
-  case class ConferenceInfo( 
+  case class ConferenceInfo(
     id: ConferenceModule.ID,
     name: String,
     slug: String,
@@ -69,9 +70,9 @@ package object conference {
   )
 
   object ConferenceInfo {
-    implicit val conferenceInfoValidator = validator[ConferenceInfo] { c => 
-      c.name is notEmpty 
-      c.slug is notEmpty 
+    implicit val conferenceInfoValidator = validator[ConferenceInfo] { c =>
+      c.name is notEmpty
+      c.slug is notEmpty
       c.slug should matchRegex( """^\w+$""".r )
       c.accessCode has size >= 6
       c.ownerName as "owner's name" is notEmpty
