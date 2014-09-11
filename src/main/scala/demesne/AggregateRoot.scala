@@ -24,7 +24,7 @@ import com.typesafe.scalalogging.StrictLogging
 // support registration with "state" handler (context become state)
 //////////////////////////////////////
 
-abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentActor with EnvelopingActor with ActorLogging { 
+abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentActor with EnvelopingActor with ActorLogging {
   outer: EventPublisher =>
 
   val trace = Trace( "AggregateRoot", log )
@@ -38,7 +38,7 @@ abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentA
   def transitionFor( state: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]
 
   override def around( r: Receive ): Receive = LoggingReceive {
-    case SaveSnapshot => { 
+    case SaveSnapshot => {
       log info "received SaveSnapshot command"
       saveSnapshot( state )
       super.around( r )( SaveSnapshot )
@@ -74,7 +74,7 @@ abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentA
     publish( event )
     result
   }
-  
+
   def acceptSnapshot( snapshotOffer: SnapshotOffer ): S = accept( snapshotOffer.snapshot )
 
 
@@ -103,31 +103,6 @@ object AggregateRoot extends StrictLogging {
 
   type Transition = PartialFunction[Any, Unit]
 
-  object emptyBehavior extends Transition {
-    def isDefinedAt( x: Any ) = false
-    def apply( x: Any ) = throw new UnsupportedOperationException( "Empty behavior apply()" )
-  }
-
-
-  // val HEADER_AGGREGATE_ID: Symbol = 'AggregateId
-  // val HEADER_AGGREGATE_TYPE: Symbol = 'AggregateRootType
-  
-  // def message2AggregateEnvelope(
-  //   message: Any, 
-  //   aggregateId: Any, 
-  //   rootType: AggregateRootType
-  // )(
-  //   implicit fromComponentType: ComponentType,
-  //   fromComponentPath: ComponentPath,
-  //   workId: WorkId,
-  //   messageNumber: MessageNumber,
-  //   version: EnvelopeVersion,
-  //   properties: Map[String, Any] = Map()
-  // ): Envelope = trace.block( s"message2AggregateEnvelope(${message}, ${aggregateId})" ) {
-  //   def addAggregateProperties( properties: Map[Symbol, Any] ): Map[Symbol, Any] = {
-  //     properties ++ Map( 'AggregateId -> aggregateId, 'AggregateRootType -> rootType.name )
-  //   }
-
   //   val metaLens = lens[Envelope] >> 'header >> 'properties
   //   val messageNumberLens = lens[Envelope] >> 'header >> 'messageNumber
   //   val envelopeUpdateLens = messageNumberLens ~ metaLens
@@ -137,7 +112,7 @@ object AggregateRoot extends StrictLogging {
   //   message match {
   //     case e: Envelope if !hasAggregateId( e ) => {
   //       val properties = addAggregateProperties( metaLens.get( e ) )
-  //       envelopeUpdateLens.set( e )( (newMessageNumber, properties) ) 
+  //       envelopeUpdateLens.set( e )( (newMessageNumber, properties) )
   //     }
 
   //     case m => {
