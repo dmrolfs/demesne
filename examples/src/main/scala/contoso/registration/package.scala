@@ -49,7 +49,9 @@ package object registration {
   case class OrderItem( seatTypeId: SeatType.TID, quantity: Dimensionless )
 
   // Conference/Registration.Contracts/SeatQuantity.cs
-  case class SeatQuantity( seatTypeId: SeatType.TID, quantity: Dimensionless )
+  case class SeatQuantity( seatTypeId: SeatType.TID, quantity: Dimensionless ) {
+    def count: Int = quantity.toEach.toInt
+  }
 
 
   //Conference/Registration.Contracts/OrderLine.cs
@@ -59,10 +61,10 @@ package object registration {
 
 
   //Conference/Registration.Contracts/OrderLine.cs
-  case class SeatOrderLine( 
-    seatTypeId: SeatType.TID, 
-    unitPrice: Price[Dimensionless], 
-    quantity: Dimensionless 
+  case class SeatOrderLine(
+    seatTypeId: SeatType.TID,
+    unitPrice: Price[Dimensionless],
+    quantity: Dimensionless
   ) extends OrderLine {
     override val total: Money = unitPrice * quantity
   }
