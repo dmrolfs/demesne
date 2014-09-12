@@ -35,7 +35,7 @@ object SeatAssignmentsModule extends AggregateRootModuleCompanion { module =>
     new AggregateRootType {
       override val name: String = module.shardName
       override def aggregateRootProps: Props = SeatAssignments.props( this )
-      override val toString: String = "SeatsAssignmentAggregateRootType"
+      override val toString: String = shardName + "AggregateRootType"
     }
   }
 
