@@ -2,7 +2,7 @@ package contoso.registration
 
 import scala.concurrent.duration._
 import scala.util.Random
-import akka.actor.{ ActorRef, ActorSystem, Cancellable, Props }
+import akka.actor._
 import akka.contrib.pattern.ClusterSharding
 import akka.event.LoggingReceive
 import com.typesafe.config.ConfigFactory
@@ -117,6 +117,8 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
   // Conference/Registration/Commands/ConfirmOrder.cs
   case class ConfirmOrder( override val targetId: ConfirmOrder#TID ) extends Command
+
+  case class ExpireOrder( override val targetId: ExpireOrder#TID ) extends Command
 
 
   sealed trait Event extends EventLike {
@@ -237,6 +239,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     override def transitionFor( state: OrderState ): Transition = {
       case _: OrderPlaced => context.become( around( reserved orElse common ) )
       case _: OrderConfirmed => context.become( around( confirmed orElse common ) )
+      case _: OrderExpired => context.become( around( expired ) )
     }
 
     override def receiveCommand: Receive = around( quiescent )
@@ -249,7 +252,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
           state = accept( event )
           pricingRetriever ! PricingRetriever.CalculateTotal( conferenceId, seats )
           expirationMessager = context.system.scheduler.scheduleOnce( reservationAutoExpiration ) {
-            self ! OrderExpired( orderId )
+            self ! ExpireOrder( orderId )
           }
           publish( event )
         }
@@ -301,9 +304,13 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
       // Conference/Registration/Handlers/OrderCommandHandler.cs[80]
       // Conference/Registration/Order.cs[153]
       case ConfirmOrder( orderId ) => persist( OrderConfirmed( orderId ) ) { e => state = acceptAndPublish( e ) }
+
+      case ExpireOrder( orderId ) => persist( OrderExpired( orderId ) ) { e => state = acceptAndPublish( e ) }
     }
 
-    def confirmed: Receive = peds.commons.util.emptyBehavior[Any, Unit]
+    def confirmed: Receive = Actor.emptyBehavior
+
+    def expired: Receive = Actor.emptyBehavior
 
     def common: Receive = LoggingReceive {
       // Conference/Registration/Order.cs[88 - 102]
@@ -322,7 +329,5 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     // Conference/Conference.Common/Utils/HandleGenerator.cs
     private def generateHandle: String = Random.alphanumeric.take( 6 ).mkString.capitalize
   }
-
-  //TODO: event version mapper OrderPaymentConfirmed -> OrderConfiremed
-  //TODO: ReservationAutoExpriation
 }
+
