@@ -56,7 +56,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
           ClusterSharding( system ).shardRegion( PricingRetriever.shardName )
         )
       }
-      override val toString: String = "OrderAggregateRootType"
+      override val toString: String = shardName + "AggregateRootType"
     }
   }
 

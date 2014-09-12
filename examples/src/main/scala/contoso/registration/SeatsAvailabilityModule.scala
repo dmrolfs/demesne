@@ -41,7 +41,7 @@ object SeatsAvailabilityModule extends AggregateRootModuleCompanion { module =>
     new AggregateRootType {// def actorFactory: ActorFactory
       override def name: String = module.shardName
       override def aggregateRootProps: Props = SeatsAvailability.props( this )
-      override  val toString: String = "SeatsAvailabilityRootType"
+      override  val toString: String = shardName + "AggregateRootType"
     }
   }
 

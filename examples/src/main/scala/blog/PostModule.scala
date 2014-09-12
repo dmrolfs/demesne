@@ -42,13 +42,13 @@ object PostModule extends AggregateRootModuleCompanion { module =>
       override val name: String = module.shardName
 
       override def aggregateRootProps: Props = {
-        Post.props( 
-          this, 
-          ClusterSharding( system ).shardRegion( AuthorListingModule.shardName ) 
+        Post.props(
+          this,
+          ClusterSharding( system ).shardRegion( AuthorListingModule.shardName )
         )
       }
 
-      override val toString: String = "PostAggregateRootType"
+      override val toString: String = shardName + "AggregateRootType"
     }
   }
 
@@ -108,7 +108,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
 
   object Post {
     def props( meta: AggregateRootType, authorListing: ActorRef ): Props = {
-      Props( 
+      Props(
         new Post( meta ) with ReliablePublisher {
           override def destination: ActorPath = authorListing.path
         }
