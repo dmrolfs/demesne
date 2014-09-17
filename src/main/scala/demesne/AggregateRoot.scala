@@ -1,15 +1,13 @@
 package demesne
 
-import scala.reflect.ClassTag
-import akka.actor.{ Actor, ActorLogging, ReceiveTimeout }
+import akka.actor.{ActorLogging, ReceiveTimeout}
 import akka.event.LoggingReceive
-import akka.persistence.{ PersistentActor, SnapshotOffer }
-import shapeless._
+import akka.persistence.{PersistentActor, SnapshotOffer}
+import com.typesafe.scalalogging.StrictLogging
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
 import peds.commons.util._
-import com.typesafe.scalalogging.StrictLogging
 
 
 //////////////////////////////////////
@@ -35,7 +33,7 @@ abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentA
   var state: S
 
   type Transition = AggregateRoot.Transition
-  def transitionFor( state: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]
+  def transitionFor( state: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]()
 
   override def around( r: Receive ): Receive = LoggingReceive {
     case SaveSnapshot => {
