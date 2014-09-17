@@ -1,23 +1,18 @@
 package sample.blog.post
 
-import scala.concurrent.duration._
-import akka.actor.{ ActorContext, ActorPath, ActorRef, ActorSystem, Props }
+import akka.actor.{ActorPath, ActorRef, ActorSystem, Props}
+import akka.contrib.pattern.ClusterSharding
 import akka.event.LoggingReceive
-import akka.contrib.pattern.{ ClusterSharding, ShardRegion }
-import akka.persistence.{ SnapshotOffer }
-import com.typesafe.scalalogging.LazyLogging
-import shapeless._
-import peds.akka.publish.{ EventPublisher, ReliablePublisher }
-import peds.commons.log.Trace
-import peds.commons.module._
-import peds.commons.identifier._
-import peds.commons.util._
 import demesne._
+import peds.akka.publish.{EventPublisher, ReliablePublisher}
+import peds.commons.identifier._
+import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule
+import shapeless._
 
 
 trait PostModule extends AggregateRootModule {
-  import PostModule.trace
+  import sample.blog.post.PostModule.trace
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
@@ -51,25 +46,6 @@ object PostModule extends AggregateRootModuleCompanion { module =>
       override val toString: String = shardName + "AggregateRootType"
     }
   }
-
-  sealed trait Command extends CommandLike {
-    override type ID = module.ID
-  }
-
-  case class AddPost( override val targetId: AddPost#TID, content: PostContent ) extends Command
-  case class GetContent( override val targetId: GetContent#TID ) extends Command
-  case class ChangeBody( override val targetId: ChangeBody#TID, body: String ) extends Command
-  case class Publish( override val targetId: Publish#TID ) extends Command
-
-
-  sealed trait Event extends EventLike {
-    override type ID = module.ID
-    override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
-  }
-
-  case class PostAdded( override val sourceId: PostAdded#TID, content: PostContent ) extends Event
-  case class BodyChanged( override val sourceId: BodyChanged#TID, body: String ) extends Event
-  case class PostPublished( sourceId: PostPublished#TID, author: String, title: String ) extends Event
 
 
   case class PostContent( author: String, title: String, body: String ) {
@@ -119,8 +95,6 @@ object PostModule extends AggregateRootModuleCompanion { module =>
 
   class Post( override val meta: AggregateRootType ) extends AggregateRoot[PostState] { outer: EventPublisher =>
     override val trace = Trace( "Post", log )
-
-    import Post._
 
     // override protected var state: PostState = PostState( ShortUUID.nilUUID, PostContent.empty, false )
     override var state: PostState = _
