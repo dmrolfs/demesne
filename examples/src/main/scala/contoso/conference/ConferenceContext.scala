@@ -19,7 +19,7 @@ object ConferenceContext {
   def props: Props = Props( new ConferenceContext )
 
   // val shardName: String = "PricingRetrievers"
-  
+
   sealed trait ConferenceContextMessage
   // case class HoldSlug( slug: String, conferenceId: ConferenceModule.TID ) extends ConferenceContext
   // case class SlugHeld( slug: String ) extends ConferenceContext
@@ -43,7 +43,7 @@ object ConferenceContext {
 
   val fallback = "context-timeout = 250ms"
   val config = ConfigFactory.load
-                .getConfig( "contoso.registration" )
+                .getConfig( "contoso.conference.registration" )
                 .withFallback( ConfigFactory.parseString( fallback ) )
 
   import java.util.concurrent.TimeUnit
@@ -105,8 +105,8 @@ class ConferenceContext extends Actor with ActorLogging {
   //DMR: With refactor to external service consider using CircuitBreaker
   //DMR: and use separate execetioncontext:
   //DMR: implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(new ForkJoinPool())
-  def findSlug( slug: String ): Future[Option[SlugReserved]] = Future successful { 
-    slugCache get slug map { SlugReserved( slug, _ ) } 
+  def findSlug( slug: String ): Future[Option[SlugReserved]] = Future successful {
+    slugCache get slug map { SlugReserved( slug, _ ) }
   }
 
   // def sendResponseAndShutdown( response: Future[Any] ): Unit = {
