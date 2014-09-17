@@ -1,32 +1,33 @@
 package sample.blog
 
-import scala.concurrent.duration._
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
-import akka.event.LoggingReceive
+import akka.actor.{Actor, ActorLogging}
 import akka.cluster.Cluster
 import akka.contrib.pattern.ClusterSharding
+import akka.event.LoggingReceive
+import demesne.{AggregateRootRef, DomainModel}
 import peds.commons.identifier._
 import peds.commons.log.Trace
-import demesne.{ AggregateRootRef, DomainModel }
-import author.AuthorListingModule
-import post.PostModule
+import sample.blog.author.AuthorListingModule
+import sample.blog.post.{Publish, ChangeBody, AddPost, PostModule}
+
+import scala.concurrent.duration._
 
 
 object Bot {
   // def props( model: DomainModel ): Props = Props( new Bot( model ) )
-  
+
   private case object Tick
 }
 
 class Bot extends Actor with ActorLogging {
   val trace = Trace[Bot]
 
-  import Bot._
   import context.dispatcher
+  import sample.blog.Bot._
   val tickTask = context.system.scheduler.schedule( 3.seconds, 3.seconds, self, Tick )
 
   val model = DomainModel()( context.system )
-  // val model = 
+  // val model =
   // val postRegion = ClusterSharding( context.system ).shardRegion( PostModule.shardName )
   def postRegion( id: ShortUUID ): AggregateRootRef = trace.block( s"postRegion( $id) " ) {
     val result = model.aggregateOf( PostModule.aggregateRootType, id )
@@ -49,7 +50,7 @@ class Bot extends Actor with ActorLogging {
 
   def receive = create
 
-  import PostModule._
+  import sample.blog.post.PostModule._
 
   val create: Receive = LoggingReceive {
     case Tick => {
@@ -57,7 +58,7 @@ class Bot extends Actor with ActorLogging {
       n += 1
       log.info( s"bot CREATING post $n" )
       val title = s"Post $n from $from"
-      postRegion( postId ) ! PostModule.AddPost( postId, PostContent( currentAuthor, title, "..." ) )
+      postRegion( postId ) ! AddPost( postId, PostContent( currentAuthor, title, "..." ) )
       context become edit( postId )
     }
   }
@@ -65,7 +66,7 @@ class Bot extends Actor with ActorLogging {
   def edit( postId: PostModule.ID ): Receive = LoggingReceive {
     case Tick => {
       log.info( s"bot EDITING post $postId" )
-      postRegion( postId ) ! PostModule.ChangeBody( postId, "Something very interesting ..." )
+      postRegion( postId ) ! ChangeBody( postId, "Something very interesting ..." )
       context become publish( postId )
     }
   }
@@ -73,7 +74,7 @@ class Bot extends Actor with ActorLogging {
   def publish( postId: PostModule.ID ): Receive = LoggingReceive {
     case Tick => {
       log.info( s"bot PUBLISHING post $postId" )
-      postRegion( postId ) ! PostModule.Publish( postId )
+      postRegion( postId ) ! Publish( postId )
       context become list
     }
   }

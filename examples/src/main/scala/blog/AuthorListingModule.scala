@@ -1,28 +1,26 @@
 package sample.blog.author
 
-import scala.collection.immutable
-import scala.concurrent.duration._
-import akka.actor.{ Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout }
-import akka.contrib.pattern.{ ClusterSharding, ShardRegion }
+import akka.actor.{Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout}
+import akka.contrib.pattern.{ClusterSharding, ShardRegion}
 import akka.event.LoggingReceive
-import akka.persistence.{ Persistent, Processor }
 import com.typesafe.scalalogging.LazyLogging
 import peds.akka.envelope.EnvelopingActor
 import peds.akka.publish.ReliableReceiver
 import peds.commons.log.Trace
 import peds.commons.module._
-import peds.commons.identifier._
-import demesne.DomainModel
-import sample.blog.post.PostModule
+import sample.blog.post.PostPublished
+
+import scala.collection.immutable
+import scala.concurrent.duration._
 
 
 trait AuthorListingModule extends ModuleLifecycle {
-  import AuthorListingModule._
-  
+  import sample.blog.author.AuthorListingModule._
+
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
 
-    val model = ctx( 'model ).asInstanceOf[DomainModel]
+//    val model = ctx( 'model ).asInstanceOf[DomainModel]
     implicit lazy val system: ActorSystem = ctx get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
     // import scala.language.reflectiveCalls
     // val system: ActorSystem = ctx map { case DomainModel.Provider( _, system ) => system } getOrElse { ActorSystem() }
@@ -44,18 +42,17 @@ object AuthorListingModule extends LazyLogging {
 
   // case class PostSummary( author: String, postId: ShortUUID, title: String )
   case class GetPosts( author: String )
-  case class Posts( list: immutable.IndexedSeq[PostModule.PostPublished] )
+  case class Posts( list: immutable.IndexedSeq[PostPublished] )
 
   object AuthorListing {
     import peds.akka.envelope.Envelope
     import peds.akka.publish.ReliableMessage
-    import peds.commons.util._
 
 
     def props: Props = Props[AuthorListing]
 
     val idExtractor: ShardRegion.IdExtractor = {
-      case p: PostModule.PostPublished => ( p.author, p ) 
+      case p: PostPublished => ( p.author, p )
       case m: GetPosts => ( m.author, m )
 
       //DMR: abstract these into complementing trait
@@ -63,37 +60,36 @@ object AuthorListingModule extends LazyLogging {
       case r @ ReliableMessage( _, msg ) if idExtractor.isDefinedAt( msg ) => ( idExtractor( msg )._1, r )
     }
 
-    val shardResolver: ShardRegion.ShardResolver = msg => msg match {
-      case PostModule.PostPublished( _, author, _ ) => {
+    val shardResolver: ShardRegion.ShardResolver = {
+      case PostPublished(_, author, _) => {
         // logger info s"AuthorListing.shardResolver: POST_PUBLISHED recognized: ${( math.abs( author.hashCode ) % 100 )}"
-        ( math.abs( author.hashCode ) % 100 ).toString
+        (math.abs(author.hashCode) % 100).toString
       }
 
-      case GetPosts( author ) => {
+      case GetPosts(author) => {
         // logger info s"AuthorListing.shardResolver: GET_POSTS recognized: ${( math.abs( author.hashCode ) % 100 )}"
-        ( math.abs( author.hashCode ) % 100 ).toString
+        (math.abs(author.hashCode) % 100).toString
       }
 
       //DMR: abstract these into complementing trait
       //DMR: hopefully shardResolver will become a partialfunction to make that easier
-      case Envelope( payload, _ ) => shardResolver( payload )
-      case ReliableMessage( _, msg ) => shardResolver( msg )
+      case Envelope(payload, _) => shardResolver(payload)
+      case ReliableMessage(_, m) => shardResolver(m)
     }
   }
 
   class AuthorListing extends Actor with EnvelopingActor with ReliableReceiver with ActorLogging {
-    import AuthorListing._
     def trace: Trace[_] = Trace[AuthorListing]
 
     log.info( s"STARTED AUTHOR_LISTING: ${self.path}" )
     context setReceiveTimeout 2.minutes
 
-    var posts: immutable.IndexedSeq[PostModule.PostPublished] = Vector.empty
+    var posts: immutable.IndexedSeq[PostPublished] = Vector.empty
 
     override def receive: Receive = around {
       LoggingReceive {
-        case p: PostModule.PostPublished => {
-          log info s"AUTHOR_LISTING. REGULAR PostPublished recd: ${p}   SENDER=${sender}"
+        case p: PostPublished => {
+          log info s"AUTHOR_LISTING. REGULAR PostPublished recd: ${p}   SENDER=${sender()}"
           posts :+= p
           log.info( s"Post added to ${p.author}'s list: ${p.title}" )
           log.info( s"""AUTHOR_LISTING: posts updated to: ${posts.mkString( "[", ",", "]" )}""")
