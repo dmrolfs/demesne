@@ -8,7 +8,7 @@ import demesne.{AggregateRootRef, DomainModel}
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule
-import sample.blog.post.{Publish, ChangeBody, AddPost, PostModule}
+import sample.blog.post._
 
 import scala.concurrent.duration._
 

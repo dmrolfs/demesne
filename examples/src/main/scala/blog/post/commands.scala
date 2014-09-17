@@ -1,7 +1,6 @@
 package sample.blog.post
 
 import demesne.CommandLike
-import sample.blog.post.PostModule.PostContent
 
 
 sealed trait Command extends CommandLike {

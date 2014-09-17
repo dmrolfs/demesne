@@ -29,7 +29,6 @@ trait PostModule extends AggregateRootModule {
 object PostModule extends AggregateRootModuleCompanion { module =>
   val trace = Trace[PostModule.type]
 
-  // val shardName: String = "Posts"
   override val aggregateIdTag: Symbol = 'post
 
   override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
@@ -48,35 +47,17 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   }
 
 
-  case class PostContent( author: String, title: String, body: String ) {
-    def isIncomplete: Boolean = author.isEmpty || title.isEmpty
-  }
-
-  object PostContent {
-    val empty = PostContent( "", "", "" )
-  }
-
-
-  case class PostState( id: TaggedID[ShortUUID], content: PostContent, published: Boolean ) {
-    // def this( id: ShortUUID, content: PostContent, published: Boolean ) = {
-    //   this( TaggedID( 'post, id ), content, published )
-    // }
-  }
+  case class PostState( id: TaggedID[ShortUUID], content: PostContent, published: Boolean )
 
   object PostState {
-    // def apply( id: ShortUUID, content: PostContent, published: Boolean ): PostState = {
-    //   new PostState( id, content, published )
-    // }
-
     implicit val stateSpec = new AggregateStateSpecification[PostState] {
       implicit val postContentLabelledGen = LabelledGeneric[PostContent]
       private val bodyLens = lens[PostState] >> 'content >> 'body
 
       override def acceptance( state: PostState ): PartialFunction[Any, PostState] = {
-        // case PostAdded( _, c ) => logger.info(s"PostState.ACCEPTING PostAdded"); state.copy( content = c )
-        case PostAdded( id, c ) => logger.info(s"PostState.ACCEPTING PostAdded"); PostState( id = id, content = c, published = false )
-        case BodyChanged( _, body: String ) => logger.info(s"PostState.ACCEPTING BodyChanged"); bodyLens.set( state )( body )
-        case _: PostPublished => logger.info(s"PostState.ACCEPTING PostPublished"); state.copy( published = true )
+        case PostAdded( id, c ) => PostState( id = id, content = c, published = false )
+        case BodyChanged( _, body: String ) => bodyLens.set( state )( body )
+        case _: PostPublished => state.copy( published = true )
       }
     }
   }
@@ -96,7 +77,6 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   class Post( override val meta: AggregateRootType ) extends AggregateRoot[PostState] { outer: EventPublisher =>
     override val trace = Trace( "Post", log )
 
-    // override protected var state: PostState = PostState( ShortUUID.nilUUID, PostContent.empty, false )
     override var state: PostState = _
 
     override def transitionFor( state: PostState ): Transition = {
@@ -135,8 +115,6 @@ object PostModule extends AggregateRootModuleCompanion { module =>
           publish( event )
         }
       }
-
-      // case e: envelope.Envelope => receiveCommand( e )
     }
 
     val published: Receive = LoggingReceive {
