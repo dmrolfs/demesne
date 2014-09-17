@@ -1,4 +1,4 @@
-package contoso.registration
+package contoso.conference.registration
 
 import scala.annotation.tailrec
 import akka.actor.{ ActorSystem, Props }
@@ -7,6 +7,7 @@ import peds.commons.log.Trace
 import peds.akka.publish.{ EventPublisher, LocalPublisher }
 import demesne._
 import contoso.conference.SeatType
+import contoso.registration.{SeatQuantity, PersonalInfo}
 
 
 trait SeatAssignmentsModule extends AggregateRootModule {
@@ -16,7 +17,7 @@ trait SeatAssignmentsModule extends AggregateRootModule {
      super.start( ctx )
 
      SeatAssignmentsModule.initialize( ctx )
-     val model = ctx( 'model ).asInstanceOf[DomainModel]
+     val model = SeatAssignmentsModule.model
      implicit val system = SeatAssignmentsModule.system
      val rootType = SeatAssignmentsModule.aggregateRootType
      startClusterShard( rootType )
@@ -109,7 +110,7 @@ object SeatAssignmentsModule extends AggregateRootModuleCompanion { module =>
 
   object SeatAssignmentsState {
     implicit val stateSpec = new AggregateStateSpecification[SeatAssignmentsState] {
-      override def acceptance( state: SeatAssignmentsState ): PartialFunction[Any, SeatAssignmentsState] = {
+      override def acceptance( state: SeatAssignmentsState ): Acceptance = {
         case SeatAssignmentsCreated( id, orderId, seats ) => SeatAssignmentsState( id = id, orderId = orderId, seats = seats )
 
         case SeatAssigned( id, position, seatTypeId, attendee ) => {

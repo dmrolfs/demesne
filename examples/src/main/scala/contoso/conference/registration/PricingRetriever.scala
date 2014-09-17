@@ -1,20 +1,20 @@
-package contoso.registration
+package contoso.conference.registration
 
 import scala.concurrent.duration._
-import scala.reflect.ClassTag
 import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
 import akka.event.LoggingReceive
 import com.typesafe.config.ConfigFactory
 import squants.market._
 import demesne.{ AggregateRootType, DomainModel }
 import contoso.conference.ConferenceModule
+import contoso.registration.{SeatOrderLine, OrderLine, SeatQuantity}
 
 
 object PricingRetriever {
   def props( model: DomainModel ): Props = Props( new PricingRetriever( model ) )
 
   val shardName: String = "PricingRetrievers"
-  
+
   sealed trait PricingMessage
 
   case class CalculateTotal( conferenceId: ConferenceModule.ID, seatItems: Seq[SeatQuantity] ) extends PricingMessage
@@ -28,7 +28,7 @@ object PricingRetriever {
 
   val fallback = "conference-timeout = 250ms"
   val config = ConfigFactory.load
-                .getConfig( "contoso.registration.pricing" )
+                .getConfig( "contoso.conference.registration.pricing" )
                 .withFallback( ConfigFactory.parseString( fallback ) )
 
   import java.util.concurrent.TimeUnit
@@ -47,7 +47,7 @@ object PricingRetriever {
       case ConferenceModule.SeatTypes( seatTypes ) => {
         val lines = for {
           i <- seatItems
-          t <- seatTypes find { _.id == i.seatTypeId } 
+          t <- seatTypes find { _.id == i.seatTypeId }
         } yield SeatOrderLine( seatTypeId = i.seatTypeId, unitPrice = t.price, quantity = i.quantity )
 
         val total = lines.foldLeft( USD(0) )( _ + _.total )
