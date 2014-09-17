@@ -22,7 +22,7 @@ trait ConferenceModule extends AggregateRootModule {
     super.start( ctx )
 
     ConferenceModule.initialize( ctx )
-    val model = ctx( 'model ).asInstanceOf[DomainModel]
+    val model = ConferenceModule.model
     implicit val system = ConferenceModule.system
     val rootType = ConferenceModule.aggregateRootType
     startClusterShard( rootType )
@@ -127,7 +127,7 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
     private val seatsLens = lens[ConferenceState] >> 'seats
 
     implicit val stateSpec = new AggregateStateSpecification[ConferenceState] {
-      override def acceptance( state: ConferenceState ): PartialFunction[Any, ConferenceState] = {
+      override def acceptance( state: ConferenceState ): Acceptance = {
         case ConferenceCreated( _, c ) => ConferenceState( c )
         case ConferenceUpdated( _, c ) => ConferenceState( c )
         case ConferencePublished => state.copy( isPublished = true )

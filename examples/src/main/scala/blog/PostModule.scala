@@ -23,7 +23,7 @@ trait PostModule extends AggregateRootModule {
     super.start( ctx )
 
     PostModule.initialize( ctx )
-    val model = ctx( 'model ).asInstanceOf[DomainModel]
+    val model = PostModule.model
     implicit val system = PostModule.system
     val rootType = PostModule.aggregateRootType
     startClusterShard( rootType )
