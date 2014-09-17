@@ -1,8 +1,9 @@
-package contoso.registration
+package contoso.conference.registration
 
 import akka.actor.{Props, ActorSystem}
 import akka.event.LoggingReceive
 import contoso.conference.{SeatType, ConferenceModule}
+import contoso.registration.SeatQuantity
 import demesne._
 import peds.akka.publish.{EventPublisher, LocalPublisher}
 import peds.commons.log.Trace
@@ -22,7 +23,7 @@ trait SeatsAvailabilityModule extends AggregateRootModule {
     super.start( ctx )
 
     SeatAssignmentsModule.initialize( ctx )
-    val model = ctx( 'model ).asInstanceOf[DomainModel]
+    val model = SeatsAvailabilityModule.model
     implicit val system = SeatsAvailabilityModule.system
     val rootType = SeatsAvailabilityModule.aggregateRootType
     startClusterShard( rootType )
@@ -46,6 +47,7 @@ object SeatsAvailabilityModule extends AggregateRootModuleCompanion { module =>
   }
 
 
+  // targetId is conference ID
   sealed trait Command extends CommandLike {
     override type ID = module.ID
     def conferenceId: ConferenceModule.TID = targetId
@@ -131,7 +133,7 @@ object SeatsAvailabilityModule extends AggregateRootModuleCompanion { module =>
     type PendingReservations = Map[OrderModule.TID, Seq[SeatQuantity]]
 
     implicit val stateSpec = new AggregateStateSpecification[SeatsAvailabilityState] {
-      override def acceptance( state: SeatsAvailabilityState ): PartialFunction[Any, SeatsAvailabilityState] = {
+      override def acceptance( state: SeatsAvailabilityState ): Acceptance = {
         // Conference/Registration/SeatsAvailability.cs[185-198]
         case AvailableSeatsChanged( _, seats ) => {
           val updated = addToRemainingSeats( state.remainingSeats, seats )

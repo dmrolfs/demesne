@@ -1,4 +1,4 @@
-package contoso.registration
+package contoso.conference.registration
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -10,8 +10,10 @@ import squants._
 import com.github.nscala_time.time.{ Imports => joda }
 import com.github.nscala_time.time.Imports._
 import demesne._
+import peds.akka.envelope._
 import peds.akka.publish.{ EventPublisher, LocalPublisher }
 import contoso.conference.ConferenceModule
+import contoso.registration.{OrderLine, SeatQuantity}
 
 
 trait OrderModule extends AggregateRootModule {
@@ -21,7 +23,7 @@ trait OrderModule extends AggregateRootModule {
     super.start( ctx )
 
     OrderModule.initialize( ctx )
-    val model = ctx( 'model ).asInstanceOf[DomainModel]
+    val model = OrderModule.model
     implicit val system = OrderModule.system
     val rootType = OrderModule.aggregateRootType
     startClusterShard( rootType )
@@ -34,16 +36,18 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   import com.wix.accord.dsl._
   import peds.commons.log.Trace
 
-  //DMR move these into common AggregateModuleCompanion trait
-  val trace = Trace[OrderModule.type]
-
   val fallback = "reservation-auto-expiration = 15 minutes"
   val config = ConfigFactory.load
-                .getConfig( "contoso.registration.order" )
-                .withFallback( ConfigFactory.parseString( fallback ) )
+    .getConfig( "contoso.conference.registration" )
+    .withFallback( ConfigFactory.parseString( fallback ) )
 
   import java.util.concurrent.{ TimeUnit => TU }
-  val reservationAutoExpiration = joda.Period.millis( config.getDuration("reservation-auto-expiration", TU.MILLISECONDS).toInt )
+  val reservationAutoExpiration: joda.Period = joda.Period.millis(
+    config.getDuration( "reservation-auto-expiration", TU.MILLISECONDS ).toInt
+  )
+
+  //DMR move these into common AggregateModuleCompanion trait
+  val trace = Trace[OrderModule.type]
 
   override val aggregateIdTag: Symbol = 'order
 
@@ -92,7 +96,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   case class MarkSeatsAsReserved(
     override val targetId: MarkSeatsAsReserved#TID,
     seats: Seq[SeatQuantity],
-    expiration: joda.DateTime
+    expiration: Option[joda.DateTime]
   ) extends Command
 
   // Conference/Registration/Commands/RejectOrder.cs
@@ -118,8 +122,6 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   // Conference/Registration/Commands/ConfirmOrder.cs
   case class ConfirmOrder( override val targetId: ConfirmOrder#TID ) extends Command
 
-  case class ExpireOrder( override val targetId: ExpireOrder#TID ) extends Command
-
 
   sealed trait Event extends EventLike {
     override type ID = module.ID
@@ -131,7 +133,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     override val sourceId: OrderPlaced#TID,
     conferenceId: ConferenceModule.TID,
     seats: Seq[SeatQuantity],
-    reservationAutoExpiration: joda.DateTime,
+    reservationAutoExpiration: Option[joda.DateTime],
     accessCode: String
   ) extends Event
 
@@ -152,14 +154,14 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   // Registration.Contracts/Events/OrderPartiallyReserved.cs
   case class OrderPartiallyReserved(
     override val sourceId: OrderPartiallyReserved#TID,
-    reservationExpiration: joda.DateTime,
+    reservationExpiration: Option[joda.DateTime],
     seats: Seq[SeatQuantity]
   ) extends Event
 
   // Registration.Contracts/Events/OrderReservationCompleted.cs
   case class OrderReservationCompleted(
     override val sourceId: OrderReservationCompleted#TID,
-    reservationExpiration: joda.DateTime,
+    reservationExpiration: Option[joda.DateTime],
     seats: Seq[SeatQuantity]
   ) extends Event
 
@@ -201,10 +203,8 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
   }
 
   object OrderState {
-    // val quiescent: OrderState = OrderState( id = ShortUUID.nilUUID, conferenceId = ShortUUID.nilUUID )
-
     implicit val stateSpec = new AggregateStateSpecification[OrderState] {
-      override def acceptance( state: OrderState ): PartialFunction[Any, OrderState] = {
+      override def acceptance( state: OrderState ): Acceptance = {
         case OrderPlaced( _, conferenceId, seats, _, _ ) => state.copy( conferenceId = conferenceId, seats = seats )
         case OrderUpdated( _, seats ) => state.copy( seats = seats )
         case OrderPartiallyReserved( _, _, seats ) => state.copy( seats = seats )
@@ -219,15 +219,10 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     def props( meta: AggregateRootType, pricingRetriever: ActorRef ): Props = {
       Props( new Order( meta, pricingRetriever ) with LocalPublisher )
     }
-
-    //DMR: det where to locate this b/h; e.g., pull-req into nscala-time, peds?
-    implicit def period2FiniteDuration( p: joda.Period ): FiniteDuration = FiniteDuration( p.getMillis, MILLISECONDS )
   }
 
   class Order( override val meta: AggregateRootType, pricingRetriever: ActorRef ) extends AggregateRoot[OrderState] {
     outer: EventPublisher =>
-
-    import Order._
 
     override val trace = Trace( "Order", log )
 
@@ -248,12 +243,9 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
       // Conference/Registration/Order.cs[88 - 102]
       case c @ RegisterToConference( orderId, conferenceId, seats ) if validate( c ) == Success => {
         val expiration = reservationAutoExpiration.later
-        persist( OrderPlaced( orderId, conferenceId, seats, expiration, generateHandle ) ) { event =>
+        persist( OrderPlaced( orderId, conferenceId, seats, Some(expiration), generateHandle ) ) { event =>
           state = accept( event )
           pricingRetriever ! PricingRetriever.CalculateTotal( conferenceId, seats )
-          expirationMessager = context.system.scheduler.scheduleOnce( reservationAutoExpiration ) {
-            self ! ExpireOrder( orderId )
-          }
           publish( event )
         }
       }
@@ -274,15 +266,22 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
       // Conference/Registration/Handlers/OrderCommandHandler.cs[39]
       // Conference/Registration/Order.cs[124]
       case MarkSeatsAsReserved( orderId, reserved, expiration ) if state.isCompletedBy( reserved ) => {
-        persist( OrderReservationCompleted(sourceId = orderId, reservationExpiration = expiration, seats = reserved) ) { event =>
-          state = acceptAndPublish( event )
-        }
+        val completed = OrderReservationCompleted(
+          sourceId = orderId,
+          reservationExpiration = expiration,
+          seats = reserved
+        )
+        persist( completed ) { event => state = acceptAndPublish( event ) }
       }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[39]
       // Conference/Registration/Order.cs[124]
       case MarkSeatsAsReserved( orderId, reserved, expiration ) => {
-        val partiallyReserved = OrderPartiallyReserved(sourceId = orderId, reservationExpiration = expiration, seats = reserved)
+        val partiallyReserved = OrderPartiallyReserved(
+          sourceId = orderId,
+          reservationExpiration = expiration,
+          seats = reserved
+        )
 
         persist( partiallyReserved ) { event =>
           state = accept( event )
@@ -304,8 +303,6 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
       // Conference/Registration/Handlers/OrderCommandHandler.cs[80]
       // Conference/Registration/Order.cs[153]
       case ConfirmOrder( orderId ) => persist( OrderConfirmed( orderId ) ) { e => state = acceptAndPublish( e ) }
-
-      case ExpireOrder( orderId ) => persist( OrderExpired( orderId ) ) { e => state = acceptAndPublish( e ) }
     }
 
     def confirmed: Receive = Actor.emptyBehavior
