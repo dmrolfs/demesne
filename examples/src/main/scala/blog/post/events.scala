@@ -1,7 +1,6 @@
 package sample.blog.post
 
 import demesne.EventLike
-import sample.blog.post.PostModule.PostContent
 
 
 sealed trait Event extends EventLike {
