@@ -22,7 +22,7 @@ trait ConferenceModule extends AggregateRootModule {
     super.start( ctx )
 
     ConferenceModule.initialize( ctx )
-    val model = ctx( 'model ).asInstanceOf[DomainModel]
+    val model = ConferenceModule.model
     implicit val system = ConferenceModule.system
     val rootType = ConferenceModule.aggregateRootType
     startClusterShard( rootType )
@@ -39,8 +39,8 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
   override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override val aggregateRootProps: Props = Conference.props( this, context( 'ConferenceContext ).asInstanceOf[ActorRef] ) 
-      override val toString: String = "ConferenceAggregateRootType"
+      override val aggregateRootProps: Props = Conference.props( this, context( 'ConferenceContext ).asInstanceOf[ActorRef] )
+      override val toString: String = shardName + "AggregateRootType"
     }
   }
 
@@ -90,7 +90,7 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
   case class SeatDeleted( override val sourceId: ConferenceCreated#TID, seatTypeId: SeatType.TID ) extends Event
 
 
-  case class ConferenceState( 
+  case class ConferenceState(
     id: TID,
     name: String,
     slug: String,
@@ -104,11 +104,11 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
     accessCode: Option[String] = None,
     isPublished: Boolean = false,
     twitterSearch: Option[String] = None
-  ) 
+  )
 
   object ConferenceState {
     def apply( info: ConferenceInfo ): ConferenceState = {
-      ConferenceState( 
+      ConferenceState(
         id = info.id,
         name = info.name,
         slug = info.slug,
@@ -121,13 +121,13 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
         tagline = info.tagline,
         accessCode = info.accessCode,
         twitterSearch = info.twitterSearch
-      ) 
+      )
     }
 
     private val seatsLens = lens[ConferenceState] >> 'seats
 
     implicit val stateSpec = new AggregateStateSpecification[ConferenceState] {
-      override def acceptance( state: ConferenceState ): PartialFunction[Any, ConferenceState] = {
+      override def acceptance( state: ConferenceState ): Acceptance = {
         case ConferenceCreated( _, c ) => ConferenceState( c )
         case ConferenceUpdated( _, c ) => ConferenceState( c )
         case ConferencePublished => state.copy( isPublished = true )
@@ -139,8 +139,8 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
           seatsLens.set( state )( reduced + seatType )
         }
         case SeatDeleted( _, seatTypeId ) => {
-          val result = for { 
-            seatType <- state.seats find { _.id == seatTypeId } 
+          val result = for {
+            seatType <- state.seats find { _.id == seatTypeId }
           } yield {
             val reduced = state.seats - seatType
             seatsLens.set( state )( reduced )
@@ -157,11 +157,11 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
       Props( new Conference( meta, conferenceContext ) with LocalPublisher )
     }
 
-    class ConferenceCreateException( cause: Throwable ) 
+    class ConferenceCreateException( cause: Throwable )
     extends RuntimeException( s"failed to create conference due to: ${cause}", cause )
   }
 
-  class Conference( override val meta: AggregateRootType, conferenceContext: ActorRef ) extends AggregateRoot[ConferenceState] { 
+  class Conference( override val meta: AggregateRootType, conferenceContext: ActorRef ) extends AggregateRoot[ConferenceState] {
     outer: EventPublisher =>
     import Conference._
 
@@ -182,9 +182,9 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
       case CreateConference( id, conference ) if !conference.slug.isEmpty => {
         implicit val ec: ExecutionContext = context.system.dispatchers.lookup( "conference-context-dispatcher" )
 
-        val askForSlugStatus = conferenceContext.askretry( 
-          msg = ConferenceContext.ReserveSlug( conference.slug, conference.id ), 
-          maxAttempts = 5, 
+        val askForSlugStatus = conferenceContext.askretry(
+          msg = ConferenceContext.ReserveSlug( conference.slug, conference.id ),
+          maxAttempts = 5,
           rate = 250.millis
         ).mapTo[ConferenceContext.SlugStatus]
 
