@@ -26,7 +26,6 @@ trait OrderModule extends AggregateRootModule {
     val model = OrderModule.model
     implicit val system = OrderModule.system
     val rootType = OrderModule.aggregateRootType
-    startClusterShard( rootType )
     model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }

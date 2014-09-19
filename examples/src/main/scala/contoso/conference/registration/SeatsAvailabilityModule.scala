@@ -26,7 +26,6 @@ trait SeatsAvailabilityModule extends AggregateRootModule {
     val model = SeatsAvailabilityModule.model
     implicit val system = SeatsAvailabilityModule.system
     val rootType = SeatsAvailabilityModule.aggregateRootType
-    startClusterShard( rootType )
     model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }

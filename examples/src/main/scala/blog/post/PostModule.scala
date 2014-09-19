@@ -21,7 +21,6 @@ trait PostModule extends AggregateRootModule {
     val model = PostModule.model
     implicit val system = PostModule.system
     val rootType = PostModule.aggregateRootType
-    startClusterShard( rootType )
     model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }

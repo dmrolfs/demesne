@@ -37,10 +37,10 @@ object DomainModel {
 
   private[this] var modelRegistry: Map[String, DomainModel] = Map()
 
-  private case class DomainModelImpl( 
-    override val basename: String 
-  )( 
-    implicit override val system: ActorSystem 
+  private case class DomainModelImpl(
+    override val basename: String
+  )(
+    implicit override val system: ActorSystem
   ) extends DomainModel {
     val trace = Trace[DomainModelImpl]
 
@@ -66,8 +66,7 @@ object DomainModel {
       trace( s"factory = ${factory}" )
 
       if ( !aggregateTypeRegistry.contains( rootType.name ) ) {
-        val repoName = s"${rootType.name}Repository"
-        val repoRef = factory( system, repoName ){ EnvelopingAggregateRootRepository.props( rootType ) }
+        val repoRef = factory( system, rootType ){ EnvelopingAggregateRootRepository.props( rootType ) }
         val entry = (rootType, repoRef)
         aggregateTypeRegistry += ( rootType.name -> entry )
       }

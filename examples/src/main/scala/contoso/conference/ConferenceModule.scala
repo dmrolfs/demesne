@@ -25,7 +25,6 @@ trait ConferenceModule extends AggregateRootModule {
     val model = ConferenceModule.model
     implicit val system = ConferenceModule.system
     val rootType = ConferenceModule.aggregateRootType
-    startClusterShard( rootType )
     model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }

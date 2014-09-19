@@ -20,7 +20,6 @@ trait SeatAssignmentsModule extends AggregateRootModule {
      val model = SeatAssignmentsModule.model
      implicit val system = SeatAssignmentsModule.system
      val rootType = SeatAssignmentsModule.aggregateRootType
-     startClusterShard( rootType )
      model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
    }
 }

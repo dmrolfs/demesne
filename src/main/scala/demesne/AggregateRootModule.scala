@@ -1,35 +1,16 @@
 package demesne
 
-import akka.actor.{ ActorRef, ActorSystem }
+import akka.actor.{ActorRef, ActorSystem}
 import akka.contrib.pattern.ClusterSharding
 import com.typesafe.scalalogging.LazyLogging
 import peds.commons.identifier._
 import peds.commons.module.ModuleLifecycle
 
 
-trait AggregateRootModule extends ModuleLifecycle {
-  protected def startClusterShard( rootType: AggregateRootType )( implicit system: ActorSystem ): ActorRef = {
-    val repoSpec = EnvelopingAggregateRootRepository specificationFor rootType
-    ClusterSharding( system ).start(
-      typeName = repoSpec.name,
-      entryProps = Some( repoSpec.props ),
-      idExtractor = repoSpec.idExtractor,
-      shardResolver = repoSpec.shardResolver
-    )
-
-    ClusterSharding( system ).start(
-      typeName = rootType.name,
-      entryProps = Some( rootType.aggregateRootProps ),
-      idExtractor = rootType.aggregateIdFor,
-      shardResolver = rootType.shardIdFor
-    )
-  }
-}
-
+trait AggregateRootModule extends ModuleLifecycle
 
 //DMR: use actorFactory? how specify? via root type? DRY?
 trait AggregateRootModuleCompanion extends LazyLogging {
-  // val trace: Trace[_]
   type ID = ShortUUID
   type TID = TaggedID[ID]
   def nextId: TID = ShortUUID()
@@ -43,14 +24,13 @@ trait AggregateRootModuleCompanion extends LazyLogging {
   }
 
   //DMR: I don't like this var but need to determine how to supply system to aggregateRootType, esp in regular actors
-  val SystemKey: Symbol = 'system
-  implicit lazy val system: ActorSystem = _context get SystemKey map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
+  implicit lazy val system: ActorSystem = _context get demesne.SystemKey map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
   // def system: ActorSystem = {
   //   require( Option(_system).isDefined, s"${getClass.getName} must be start with context supplying 'system" )
   //   _system
   // }
 
-  implicit lazy val model: DomainModel = _context get 'model map { _.asInstanceOf[DomainModel] } getOrElse DomainModel()
+  implicit lazy val model: DomainModel = _context get demesne.ModelKey map { _.asInstanceOf[DomainModel] } getOrElse DomainModel()
 
   private[this] var _context: Map[Symbol, Any] = _
   protected def context_=( c: Map[Symbol, Any] ): Unit = _context = c

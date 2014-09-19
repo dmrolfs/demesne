@@ -39,7 +39,6 @@ trait RegistrationSagaModule extends SagaModule {
     val model = RegistrationSagaModule.model
     implicit val system = RegistrationSagaModule.system
     val rootType = RegistrationSagaModule.aggregateRootType
-    startClusterShard( rootType )
     model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }
@@ -115,7 +114,10 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
           )
         }
 
-        case _: OrderUpdated => state.copy( state = AwaitingReservationConfirmation )
+        case (_: OrderUpdated, workId: WorkId ) => {
+          state.copy( state = AwaitingReservationConfirmation, seatReservationWorkId = workId )
+        }
+
         case _: SeatsReserved => state.copy( state = ReservationConfirmationReceived )
         case _: PaymentCompleted => state.copy( state = PaymentConfirmationReceived )
         case _: OrderConfirmed => state.copy( state = FullyConfirmed )
@@ -182,10 +184,7 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
         accept( e )
       }
 
-      case e @ OrderPlaced( orderId, _, _, _, _ ) => {
-        state = state.copy( state = OrderExpired )
-        order( Some(orderId) ) ! RejectOrder( targetId = orderId )
-      }
+      case OrderPlaced( orderId, _, _, _, _ ) => order( Some(orderId) ) ! RejectOrder( targetId = orderId )
     }
 
     val awaitingReservationConfirmation: Receive = {
@@ -261,9 +260,9 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
         reservationId = state.orderId,
         seats = e.seats
       )
-      state = state.copy( seatReservationWorkId = workId ) //DMR: isn't this cheating accept; how best to provide workId without closing on this in AR usage?
+//      state = state.copy( seatReservationWorkId = workId ) //DMR: isn't this cheating accept; how best to provide workId without closing on this in AR usage?
       seatsAvailability( Some(state.conferenceId) ) ! reservation
-      accept( e )
+      accept( (e, workId) )
     }
 
     def orderConfirmed( e: OrderConfirmed ): Unit = {
