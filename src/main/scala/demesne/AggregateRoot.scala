@@ -3,7 +3,6 @@ package demesne
 import akka.actor.{ActorLogging, ReceiveTimeout}
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
-import com.typesafe.scalalogging.StrictLogging
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
@@ -22,7 +21,10 @@ import peds.commons.util._
 // support registration with "state" handler (context become state)
 //////////////////////////////////////
 
-abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentActor with EnvelopingActor with ActorLogging {
+abstract class AggregateRoot[S: AggregateStateSpecification]
+extends PersistentActor
+with EnvelopingActor
+with ActorLogging {
   outer: EventPublisher =>
 
   val trace = Trace( "AggregateRoot", log )
@@ -32,8 +34,6 @@ abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentA
   val meta: AggregateRootType
   var state: S
 
-  type Transition = AggregateRoot.Transition
-  def transitionFor( state: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]()
 
   override def around( r: Receive ): Receive = LoggingReceive {
     case SaveSnapshot => {
@@ -48,22 +48,10 @@ abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentA
     }
   }
 
-  //DMR: Should accept update state var based on result?
+
   def accept( event: Any ): S = {
     val result = implicitly[AggregateStateSpecification[S]].accept( state, event )
-
-    val t: Transition = (
-      transitionFor( state ) andThen {
-        case u => {
-          log info s"${self.path.parent.name} transitioning for ${event.getClass.safeSimpleName}"
-        }
-      }
-    ) orElse {
-      case ex => log info s"${self.path.parent.name} will not transition state for ${event.getClass.safeSimpleName}"
-    }
-
-    t( event )
-
+    transition( event )
     result
   }
 
@@ -75,6 +63,27 @@ abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentA
 
   def acceptSnapshot( snapshotOffer: SnapshotOffer ): S = accept( snapshotOffer.snapshot )
 
+
+  type Transition = PartialFunction[Any, Unit]
+  def transitionFor( state: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]()
+
+  def transition( event: Any ): Unit = {
+    val core = transitionFor( state )
+    val t: Transition = ( core andThen infoTransitioning ) orElse infoNotTransitioning
+
+    event match {
+      case (e, ctx) if core isDefinedAt e => t( e )
+      case e => t( e )
+    }
+  }
+
+  val infoTransitioning: Transition = {
+    case u => log info s"${self.path.parent.name} transitioning for ${u.getClass.safeSimpleName}"
+  }
+
+  val infoNotTransitioning: Transition = {
+    case ex => log info s"${self.path.parent.name} will not transition state for ${ex.getClass.safeSimpleName}"
+  }
 
   override def receiveRecover: Receive = {
     case offer: SnapshotOffer => { state = acceptSnapshot( offer ) }
@@ -93,41 +102,4 @@ abstract class AggregateRoot[S: AggregateStateSpecification] extends PersistentA
       case m => super.unhandled( m )
     }
   }
-}
-
-
-object AggregateRoot extends StrictLogging {
-  val trace = Trace( "AggregateRoot", logger )
-
-  type Transition = PartialFunction[Any, Unit]
-
-  //   val metaLens = lens[Envelope] >> 'header >> 'properties
-  //   val messageNumberLens = lens[Envelope] >> 'header >> 'messageNumber
-  //   val envelopeUpdateLens = messageNumberLens ~ metaLens
-  //   def hasAggregateId( e: Envelope ): Boolean = metaLens.get( e ).contains( HEADER_AGGREGATE_ID )
-  //   val newMessageNumber = messageNumber.increment
-
-  //   message match {
-  //     case e: Envelope if !hasAggregateId( e ) => {
-  //       val properties = addAggregateProperties( metaLens.get( e ) )
-  //       envelopeUpdateLens.set( e )( (newMessageNumber, properties) )
-  //     }
-
-  //     case m => {
-  //       Envelope(
-  //         message,
-  //         EnvelopeHeader(
-  //           fromComponentType = fromComponentType,
-  //           fromComponentPath = fromComponentPath,
-  //           toComponentPath = ComponentPath.unknown,
-  //           messageType = MessageType( message.getClass.safeSimpleName ),
-  //           workId = workId,
-  //           messageNumber = messageNumber.increment,
-  //           version = version,
-  //           properties = addAggregateProperties( Map() )
-  //         )
-  //       )
-  //     }
-  //   }
-  // }
 }
