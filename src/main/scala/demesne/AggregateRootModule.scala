@@ -1,8 +1,8 @@
 package demesne
 
-import akka.actor.{ActorRef, ActorSystem}
-import akka.contrib.pattern.ClusterSharding
+import akka.actor.ActorSystem
 import com.typesafe.scalalogging.LazyLogging
+import demesne.factory.ActorFactory
 import peds.commons.identifier._
 import peds.commons.module.ModuleLifecycle
 
@@ -24,13 +24,17 @@ trait AggregateRootModuleCompanion extends LazyLogging {
   }
 
   //DMR: I don't like this var but need to determine how to supply system to aggregateRootType, esp in regular actors
-  implicit lazy val system: ActorSystem = _context get demesne.SystemKey map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
-  // def system: ActorSystem = {
-  //   require( Option(_system).isDefined, s"${getClass.getName} must be start with context supplying 'system" )
-  //   _system
-  // }
+  implicit lazy val system: ActorSystem = {
+    _context get demesne.SystemKey map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
+  }
 
-  implicit lazy val model: DomainModel = _context get demesne.ModelKey map { _.asInstanceOf[DomainModel] } getOrElse DomainModel()
+  implicit lazy val model: DomainModel = {
+    _context get demesne.ModelKey map { _.asInstanceOf[DomainModel] } getOrElse DomainModel()
+  }
+
+  lazy val factory: ActorFactory = {
+    _context get demesne.FactoryKey map { _.asInstanceOf[ActorFactory] } getOrElse demesne.factory.systemFactory
+  }
 
   private[this] var _context: Map[Symbol, Any] = _
   protected def context_=( c: Map[Symbol, Any] ): Unit = _context = c
@@ -40,7 +44,10 @@ trait AggregateRootModuleCompanion extends LazyLogging {
     _context
   }
 
-  def initialize( moduleContext: Map[Symbol, Any] ): Unit = _context = moduleContext
+  def initialize( moduleContext: Map[Symbol, Any] ): Unit = {
+    _context = moduleContext
+    model.registerAggregateType( aggregateRootType, factory )
+  }
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
   private[this] lazy val _shardName: String = org.atteo.evo.inflector.English.plural( aggregateIdTag.name ).capitalize

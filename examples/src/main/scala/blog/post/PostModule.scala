@@ -16,12 +16,7 @@ trait PostModule extends AggregateRootModule {
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
-
     PostModule.initialize( ctx )
-    val model = PostModule.model
-    implicit val system = PostModule.system
-    val rootType = PostModule.aggregateRootType
-    model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }
 

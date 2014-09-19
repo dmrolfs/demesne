@@ -1,6 +1,7 @@
 package object demesne {
-  val SystemKey: Symbol = 'system
+  val FactoryKey: Symbol = 'factory
   val ModelKey: Symbol = 'model
+  val SystemKey: Symbol = 'system
 
   case object SaveSnapshot
 }

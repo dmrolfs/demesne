@@ -20,10 +20,7 @@ trait AuthorListingModule extends ModuleLifecycle {
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
 
-//    val model = ctx( 'model ).asInstanceOf[DomainModel]
     implicit lazy val system: ActorSystem = ctx get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
-    // import scala.language.reflectiveCalls
-    // val system: ActorSystem = ctx map { case DomainModel.Provider( _, system ) => system } getOrElse { ActorSystem() }
 
     trace( "starting shard for: AuthorListingModule" )
     ClusterSharding( system ).start(

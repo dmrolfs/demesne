@@ -66,7 +66,7 @@ object DomainModel {
       trace( s"factory = ${factory}" )
 
       if ( !aggregateTypeRegistry.contains( rootType.name ) ) {
-        val repoRef = factory( system, rootType ){ EnvelopingAggregateRootRepository.props( rootType ) }
+        val repoRef = factory( system, rootType )( EnvelopingAggregateRootRepository.props( rootType ) )
         val entry = (rootType, repoRef)
         aggregateTypeRegistry += ( rootType.name -> entry )
       }

@@ -15,12 +15,7 @@ trait SeatAssignmentsModule extends AggregateRootModule {
 
    abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
      super.start( ctx )
-
      SeatAssignmentsModule.initialize( ctx )
-     val model = SeatAssignmentsModule.model
-     implicit val system = SeatAssignmentsModule.system
-     val rootType = SeatAssignmentsModule.aggregateRootType
-     model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
    }
 }
 

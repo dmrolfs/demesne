@@ -34,12 +34,7 @@ trait RegistrationSagaModule extends SagaModule {
 
   abstract override def start( moduleContext: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( moduleContext )
-
     RegistrationSagaModule.initialize( moduleContext )
-    val model = RegistrationSagaModule.model
-    implicit val system = RegistrationSagaModule.system
-    val rootType = RegistrationSagaModule.aggregateRootType
-    model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }
 

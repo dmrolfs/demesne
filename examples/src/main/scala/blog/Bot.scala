@@ -24,7 +24,7 @@ class Bot extends Actor with ActorLogging {
 
   import context.dispatcher
   import sample.blog.Bot._
-  val tickTask = context.system.scheduler.schedule( 3.seconds, 3.seconds, self, Tick )
+  val tickTask = context.system.scheduler.schedule( 3.seconds, 2.seconds, self, Tick )
 
   val model = DomainModel()( context.system )
   // val model =

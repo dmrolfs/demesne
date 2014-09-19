@@ -42,10 +42,7 @@ with ActorLogging {
       super.around( r )( SaveSnapshot )
     }
 
-    case msg => {
-      log info s">>> AR xfer receiveCommand to concrete class for: ${msg}"
-      super.around( r )( msg )
-    }
+    case msg => super.around( r )( msg )
   }
 
 

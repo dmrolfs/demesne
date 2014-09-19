@@ -20,12 +20,7 @@ trait ConferenceModule extends AggregateRootModule {
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
-
     ConferenceModule.initialize( ctx )
-    val model = ConferenceModule.model
-    implicit val system = ConferenceModule.system
-    val rootType = ConferenceModule.aggregateRootType
-    model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }
 
