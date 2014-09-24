@@ -4,6 +4,7 @@ import akka.actor.ActorSystem
 import com.typesafe.scalalogging.LazyLogging
 import demesne.factory.ActorFactory
 import peds.commons.identifier._
+import peds.commons.log.Trace
 import peds.commons.module.ModuleLifecycle
 
 
@@ -11,6 +12,8 @@ trait AggregateRootModule extends ModuleLifecycle
 
 //DMR: use actorFactory? how specify? via root type? DRY?
 trait AggregateRootModuleCompanion extends LazyLogging {
+  def trace: Trace[_]
+
   type ID = ShortUUID
   type TID = TaggedID[ID]
   def nextId: TID = ShortUUID()
@@ -18,7 +21,9 @@ trait AggregateRootModuleCompanion extends LazyLogging {
   def shardName: String = _shardName
   def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType
 
-  def aggregateOf( id: Option[TID] )( implicit system: ActorSystem = this.system ): AggregateRootRef = {
+  def aggregateOf( id: TID )( implicit system: ActorSystem = this.system ): AggregateRootRef = aggregateOf( Some(id) )
+
+  def aggregateOf( id: Option[TID] )( implicit system: ActorSystem ): AggregateRootRef = trace.block( "aggregateOf" ) {
     val effId = id getOrElse nextId
     model.aggregateOf( rootType = aggregateRootType, id = effId )
   }

@@ -36,7 +36,7 @@ object Dependencies {
   val evoInflector = "org.atteo" % "evo-inflector" % "1.2"
   val squants = "com.squants"  %% "squants"  % "0.4.2"
   val inMemoryJournal = "com.github.michaelpisula" %% "akka-persistence-inmemory" % "0.2.1"
-  val h2Database = "com.h2database" % "h2" % "1.4.178"
+  val h2Database = "com.h2database" % "h2" % "1.4.181"
 
   // val commonsMath = "org.apache.commons" % "commons-math3" % "3.2"
   val eaio = "com.eaio.uuid" %% "uuid" % "3.4.0"
@@ -70,10 +70,10 @@ object Dependencies {
   val shiro = "org.apache.shiro" % "shiro-core" % "1.2.3"
   val slick = "com.typesafe.slick" %% "slick" % "2.0.2"
   val specs2 = "org.specs2" %% "specs2" % "2.3.11"
-  val scalatest = "org.scalatest" %% "scalatest" % "2.1.7"
+  val scalatest = "org.scalatest" %% "scalatest" % "2.2.1"
   // val scalaz = "org.scalaz" %% "scalaz-core" % "7.1.0"
   val sprayCan = sprayModule("spray-can")
-  val sprayHttp = sprayModule("spray-http") 
+  val sprayHttp = sprayModule("spray-http")
   val sprayRouting = sprayModule("spray-routing-shapeless2")
   val sprayTestKit = sprayModule("spray-testkit")
   // val sprayJson = "io.spray" %% "spray-json" % "1.2.5"

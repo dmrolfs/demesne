@@ -21,19 +21,19 @@ trait PostModule extends AggregateRootModule {
 }
 
 object PostModule extends AggregateRootModuleCompanion { module =>
-  val trace = Trace[PostModule.type]
+  override val trace = Trace[PostModule.type]
 
   override val aggregateIdTag: Symbol = 'post
+
 
   override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
 
-      override def aggregateRootProps: Props = {
-        Post.props(
-          this,
-          ClusterSharding( system ).shardRegion( AuthorListingModule.shardName )
-        )
+      override def aggregateRootProps: Props = trace.block( "aggregateRootProps" ) {
+//        ClusterSharding( system ).shardRegion( AuthorListingModule.shardName ) //todo determine how to inject this during module start
+        val authorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
+        Post.props( this, authorListing() )
       }
 
       override val toString: String = shardName + "AggregateRootType"
