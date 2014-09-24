@@ -9,7 +9,7 @@ import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliableMessage
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule
-import sample.blog.post.{PostContent, AddPost, PostAdded, PostModule}
+import sample.blog.post._
 
 import scala.reflect.ClassTag
 
@@ -35,15 +35,23 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec]( testkit.system )
     "add a post" in {
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Test Add", body = "testing the post add command" )
-      val command = AddPost(
-        targetId = id,
-        content = content
-      )
 
-      PostModule.aggregateOf( id ) ! command
-
+      PostModule.aggregateOf( id ) ! AddPost( id, content )
       expectMsgPF() {
         case ReliableMessage( 1, Envelope( payload: PostAdded, _) ) => payload.content shouldBe content
+      }
+
+      PostModule.aggregateOf( id ) ! ChangeBody( id, "new content" )
+      expectMsgPF() {
+        case ReliableMessage( 2, Envelope( payload: BodyChanged, _) ) => payload.body shouldBe "new content"
+      }
+
+      PostModule.aggregateOf( id ) ! Publish( id )
+      expectMsgPF() {
+        case ReliableMessage( 3, Envelope( PostPublished( pid, _, title ), _) ) => {
+          pid shouldBe id
+          title shouldBe "Test Add"
+        }
       }
     }
   }
