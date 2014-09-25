@@ -2,7 +2,7 @@ package demesne.testkit
 
 import demesne.{AggregateRootModule, DomainModel}
 import org.scalatest.mock.MockitoSugar
-import org.scalatest.{ BeforeAndAfter, BeforeAndAfterAll, Matchers, WordSpecLike }
+import org.scalatest._
 
 import akka.actor.{ActorRef, ActorSystem, PoisonPill, Terminated}
 import akka.testkit.{ EventFilter, ImplicitSender, TestKit, TestProbe }
@@ -14,6 +14,9 @@ import scala.reflect.ClassTag
 import scala.util.Failure
 
 
+
+
+
 /**
  * Created by damonrolfs on 9/17/14.
  */
@@ -23,31 +26,10 @@ with ImplicitSender
 with WordSpecLike
 with MockitoSugar
 with Matchers
-with BeforeAndAfterAll
-with BeforeAndAfter {
-  def model: DomainModel = DomainModel()
-  def context: Map[Symbol, Any] = {
-    Map(
-      demesne.ModelKey -> model,
-      demesne.SystemKey -> system,
-      demesne.FactoryKey -> demesne.factory.systemFactory
-    )
-  }
+with BeforeAndAfterAll {
+  outer: DemesneModuleFixture =>
 
-  def module: AggregateRootModule
-
-
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    module.start( context )
-  }
-
-  override protected def afterAll(): Unit = {
-    TestKit.shutdownActorSystem( system )
-    system.awaitTermination()
-    super.afterAll()
-  }
-
+  override def afterAll(): Unit = system.shutdown()
 
   //todo: easy support for ReliableMessage( _, Envelope( payload: TARGET_CLASS, _ ) ) matching
   // focus on the target class in usage
