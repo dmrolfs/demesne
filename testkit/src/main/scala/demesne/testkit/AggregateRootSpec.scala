@@ -1,20 +1,15 @@
 package demesne.testkit
 
-import demesne.{AggregateRootModule, DomainModel}
-import org.scalatest.mock.MockitoSugar
-import org.scalatest._
-
 import akka.actor.{ActorRef, ActorSystem, PoisonPill, Terminated}
-import akka.testkit.{ EventFilter, ImplicitSender, TestKit, TestProbe }
+import akka.testkit.{ImplicitSender, TestKit}
 import akka.util.Timeout
+import org.scalatest._
+import org.scalatest.mock.MockitoSugar
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.reflect.ClassTag
 import scala.util.Failure
-
-
-
 
 
 /**

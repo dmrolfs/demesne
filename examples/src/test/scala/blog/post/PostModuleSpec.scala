@@ -1,7 +1,7 @@
 package blog.post
 
-import akka.testkit.{TestActorRef, TestKit}
-import contoso.conference.registration.OrderModule
+import akka.testkit.{TestProbe, TestActorRef, TestKit}
+//import contoso.conference.registration.OrderModule
 import demesne._
 import demesne.testkit.{AggregateRootSpec, DemesneModuleFixture}
 import org.scalatest.{Suite, Tag}
@@ -37,11 +37,20 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec]( testkit.system )
 
   "Post Module should" should {
     "add content" taggedAs( WIP ) in {
+      val author = TestProbe()
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
-      val real = TestActorRef[OrderModule.Order].underlyingActor
-      real.receive( AddPost(id, content) )
+      val real = TestActorRef[PostModule.Post](
+        PostModule.Post.props(
+          meta = PostModule.aggregateRootType,
+          authorListing = author.ref
+        )
+      ).underlyingActor
+      real receive AddPost(id, content)
       real.state shouldBe PostState( id = id, content = content, published = false )
+      author.expectMsgPF( hint = "PostAdded event (ignored in practice)" ) {
+        case ReliableMessage( _, Envelope( payload: PostAdded, _ ) ) => payload.content shouldBe content
+      }
     }
 
     "follow happy path" in {
