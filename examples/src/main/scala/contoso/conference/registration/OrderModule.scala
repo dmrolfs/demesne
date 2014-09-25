@@ -21,13 +21,7 @@ trait OrderModule extends AggregateRootModule {
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
-
     OrderModule.initialize( ctx )
-    val model = OrderModule.model
-    implicit val system = OrderModule.system
-    val rootType = OrderModule.aggregateRootType
-    startClusterShard( rootType )
-    model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }
 

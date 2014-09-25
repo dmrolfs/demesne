@@ -16,30 +16,24 @@ trait PostModule extends AggregateRootModule {
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
-
     PostModule.initialize( ctx )
-    val model = PostModule.model
-    implicit val system = PostModule.system
-    val rootType = PostModule.aggregateRootType
-    startClusterShard( rootType )
-    model.registerAggregateType( rootType, demesne.factory.clusteredFactory )
   }
 }
 
 object PostModule extends AggregateRootModuleCompanion { module =>
-  val trace = Trace[PostModule.type]
+  override val trace = Trace[PostModule.type]
 
   override val aggregateIdTag: Symbol = 'post
+
 
   override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
 
-      override def aggregateRootProps: Props = {
-        Post.props(
-          this,
-          ClusterSharding( system ).shardRegion( AuthorListingModule.shardName )
-        )
+      override def aggregateRootProps: Props = trace.block( "aggregateRootProps" ) {
+//        ClusterSharding( system ).shardRegion( AuthorListingModule.shardName ) //todo determine how to inject this during module start
+        val authorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
+        Post.props( this, authorListing() )
       }
 
       override val toString: String = shardName + "AggregateRootType"
@@ -47,7 +41,11 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   }
 
 
-  case class PostState( id: TaggedID[ShortUUID], content: PostContent, published: Boolean )
+  case class PostState(
+    id: TaggedID[ShortUUID] = ShortUUID.nilUUID,
+    content: PostContent = PostContent.empty,
+    published: Boolean = false
+  )
 
   object PostState {
     implicit val stateSpec = new AggregateStateSpecification[PostState] {
@@ -77,7 +75,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   class Post( override val meta: AggregateRootType ) extends AggregateRoot[PostState] { outer: EventPublisher =>
     override val trace = Trace( "Post", log )
 
-    override var state: PostState = _
+    override var state: PostState = PostState()
 
     override def transitionFor( state: PostState ): Transition = {
       case _: PostAdded => context.become( around( created orElse publishProtocol orElse unhandled("CREATED") ) )
@@ -87,7 +85,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     override def receiveCommand: Receive = around( quiescent )
 
     val quiescent: Receive = LoggingReceive {
-      case GetContent(_) => sender() ! state.content
+      case GetContent(_)  => sender() ! state.content
       case AddPost( id, content ) => {
         if ( !content.isIncomplete ) {
           persist( PostAdded( id, content ) ) { event =>

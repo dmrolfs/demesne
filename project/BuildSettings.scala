@@ -1,5 +1,8 @@
 import sbt._
 import Keys._
+import CoverallsPlugin.CoverallsKeys._
+import scoverage.ScoverageSbtPlugin.instrumentSettings
+import org.scoverage.coveralls.CoverallsPlugin.coverallsSettings
 
 object BuildSettings {
 
@@ -18,6 +21,7 @@ object BuildSettings {
     licenses := Seq("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt")),
     scalaVersion := "2.11.2",
     resolvers ++= Dependencies.resolutionRepos,
+    coverallsTokenFile := "~/.sbt/peds-coveralls-token.txt",
     scalacOptions := Seq(
       "-encoding", 
       "utf8",
@@ -34,7 +38,7 @@ object BuildSettings {
     )
   )
 
-  lazy val moduleSettings = basicSettings ++ seq(
+  lazy val moduleSettings = basicSettings ++ instrumentSettings ++ coverallsSettings ++ seq(
     version := VERSION,
     isSnapshot := true,
     publishTo := Some( Resolver.file("file", new File( Path.userHome.absolutePath + "/dev/dmrolfs.github.com/snapshots" ) ) )

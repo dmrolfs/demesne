@@ -1,21 +1,54 @@
 package demesne
 
-import akka.actor.{ ActorRef, ActorSystem, Props }
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.contrib.pattern.ClusterSharding
-import peds.commons.log.Trace
-import peds.commons.util._
 
 
 package object factory {
-  type ActorFactory = (ActorSystem, String) => ( => Props ) => ActorRef
+  type ActorFactory = (ActorSystem, AggregateRootType) => ( Props ) => ActorRef
 
-  // val systemFactory: ActorFactory = (system: ActorSystem, name: String) => ( props: => Props ) => system.actorOf( props, name )
-  def systemFactory( system: ActorSystem, name: String )( props: => Props ): ActorRef = system.actorOf( props, name )
-
-  // val clusteredFactory: ActorFactory = (system: ActorSystem, name: String) => ( props: => Props ) => {
-  //   ClusterSharding( system ) shardRegion name
-  // }
-  def clusteredFactory( system: ActorSystem, name: String )( props: => Props ): ActorRef = {
-    ClusterSharding( system ) shardRegion name
+  val systemFactory: ActorFactory = ( system: ActorSystem, rootType: AggregateRootType ) => ( props: Props ) => {
+    system.actorOf( props, rootType.repositoryName )
   }
+
+//  def systemFactory( system: ActorSystem, rootType: AggregateRootType )( props: => Props ): ActorRef = {
+//    system.actorOf( props, rootType.repositoryName )
+//  }
+
+  val clusteredFactory: ActorFactory = ( system: ActorSystem, rootType: AggregateRootType ) => ( props: Props ) => {
+    val repoSpec = EnvelopingAggregateRootRepository specificationFor rootType
+    ClusterSharding( system ).start(
+      typeName = repoSpec.name,
+      entryProps = Some( repoSpec.props ),
+      idExtractor = repoSpec.idExtractor,
+      shardResolver = repoSpec.shardResolver
+    )
+
+    ClusterSharding( system ).start(
+      typeName = rootType.name,
+      entryProps = Some( rootType.aggregateRootProps ),
+      idExtractor = rootType.aggregateIdFor,
+      shardResolver = rootType.shardIdFor
+    )
+
+    ClusterSharding( system ) shardRegion rootType.repositoryName
+  }
+//  def clusteredFactory( system: ActorSystem, rootType: AggregateRootType )( props: => Props ): ActorRef = {
+//    val repoSpec = EnvelopingAggregateRootRepository specificationFor rootType
+//    ClusterSharding( system ).start(
+//      typeName = repoSpec.name,
+//      entryProps = Some( repoSpec.props ),
+//      idExtractor = repoSpec.idExtractor,
+//      shardResolver = repoSpec.shardResolver
+//    )
+//
+//    ClusterSharding( system ).start(
+//      typeName = rootType.name,
+//      entryProps = Some( rootType.aggregateRootProps ),
+//      idExtractor = rootType.aggregateIdFor,
+//      shardResolver = rootType.shardIdFor
+//    )
+//
+//    ClusterSharding( system ) shardRegion rootType.repositoryName
+//  }
 }

@@ -1,15 +1,17 @@
 package demesne
 
-import scala.concurrent.duration._
-import akka.actor.{ ActorRef, Props }
+import akka.actor.{ActorRef, Props}
 import akka.contrib.pattern.ShardRegion
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliableMessage
 import peds.commons.util._
 
+import scala.concurrent.duration._
+
 
 trait AggregateRootType {
   def name: String
+  def repositoryName: String = name+"Repository"
 
   // def actorFactory: ActorFactory
   def aggregateRootProps: Props
@@ -23,7 +25,7 @@ trait AggregateRootType {
     case r @ ReliableMessage( _, msg ) if aggregateIdFor.isDefinedAt( msg ) => ( aggregateIdFor( msg )._1, r )  // want MatchError on msg if not found
   }
 
-  def shardIdFor: ShardRegion.ShardResolver = msg => msg match {
+  def shardIdFor: ShardRegion.ShardResolver = {
     case cmd: CommandLike => ( math.abs( cmd.targetId.hashCode ) % 100 ).toString
     case e @ Envelope( payload, _ ) => shardIdFor( payload )
     case r @ ReliableMessage( _, msg ) => shardIdFor( msg )
@@ -40,18 +42,3 @@ trait AggregateRootType {
 
   override def toString: String = getClass.safeSimpleName
 }
-
-
-// trait AggregateRootTypeSpecification {
-//   def aggregateIdFor: ShardRegion.IdExtractor
-//   def shardIdFor: ShardRegion.ShardResolver
-
-//   def aggregateIdOf( aggregateRoot: ActorRef ): String = aggregateRoot.path.name
-
-//   def actorFactory: ActorFactory
-//   def props: Unit => Props
-
-//   def passivation: PassivationSpecification
-
-//   def snapshot: SnapshotSpecification
-// }
