@@ -15,7 +15,7 @@ object Build extends Build {
   //   .settings( noPublishing: _* )
 
   lazy val demesne = Project( "demesne", file( "." ) )
-    .settings( basicSettings: _* )
+    .settings( moduleSettings: _* )
     .settings( libraryDependencies ++=
       compile( config ) ++
       compile( akkaActor ) ++
@@ -66,7 +66,7 @@ object Build extends Build {
 
   lazy val testkit = Project( "testkit", file( "testkit" ) )
     .dependsOn( demesne )
-    .settings( basicSettings: _* )
+    .settings( moduleSettings: _* )
     .settings( libraryDependencies ++=
       compile( config ) ++
       compile( akkaActor ) ++
@@ -107,7 +107,7 @@ object Build extends Build {
 
   lazy val examples = Project( "examples", file( "examples" ) )
     .dependsOn( demesne, testkit % "test->compile" )
-    .settings( basicSettings: _* )
+    .settings( moduleSettings: _* )
     .settings( libraryDependencies ++=
       compile( config ) ++
       compile( akkaActor ) ++
