@@ -86,12 +86,16 @@ object PostModule extends AggregateRootModuleCompanion { module =>
 
     val quiescent: Receive = LoggingReceive {
       case GetContent(_)  => sender() ! state.content
-      case AddPost( id, content ) => {
+      case AddPost( id, content ) => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
         if ( !content.isIncomplete ) {
           persist( PostAdded( id, content ) ) { event =>
-            state = accept( event )
-            log info s"New post saved: ${state.content.title}"
-            publish( event )
+            trace.block( s"persist(${event})" ) {
+              trace( s"before accept state = ${state}" )
+              state = accept( event )
+              trace( s"after accept state = ${state}" )
+              log info s"New post saved: ${state.content.title}"
+              publish( event )
+            }
           }
         }
       }
