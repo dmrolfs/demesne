@@ -4,6 +4,8 @@ import akka.actor.{ActorSystem, ActorContext, ActorPath, ActorRef}
 import peds.akka.envelope._
 
 
+//todo: DO I really need this class? roottype and id aren't used anywhere?  why not return ActorRef from DomainModel
+//todo: since enveloping handles message wrap
 case class AggregateRootRef( rootType: AggregateRootType, id: Any, underlying: ActorRef ) extends Enveloping {
   def path: ActorPath = underlying.path
   override def pathname: String = path.name
