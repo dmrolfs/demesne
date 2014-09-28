@@ -1,6 +1,6 @@
 package demesne
 
-import akka.actor.{ActorSystem, ActorContext, ActorPath, ActorRef}
+import akka.actor.{ActorContext, ActorPath, ActorRef, ActorSystem}
 import peds.akka.envelope._
 import peds.commons.log.Trace
 

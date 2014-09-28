@@ -4,8 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
-import org.scalatest.MustMatchers
-import org.scalatest.{Outcome, ParallelTestExecution, fixture}
+import org.scalatest.{MustMatchers, Outcome, ParallelTestExecution, fixture}
 
 
 object ParallelAkkaTest {
@@ -15,7 +14,7 @@ object ParallelAkkaTest {
 
 // Runs each individual test in parallel. Only possible with Fixture isolation
 trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelTestExecution {
-  import ParallelAkkaTest._
+  import demesne.testkit.ParallelAkkaTest._
 
   type Fixture <: AkkaFixture
   type FixtureParam = Fixture

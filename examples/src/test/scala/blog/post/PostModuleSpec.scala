@@ -1,6 +1,6 @@
 package blog.post
 
-import akka.testkit.{TestActorRef, TestProbe}
+import akka.testkit.TestProbe
 //import contoso.conference.registration.OrderModule
 import demesne._
 import demesne.testkit.AggregateRootSpec
@@ -8,7 +8,6 @@ import org.scalatest.Tag
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliableMessage
 import peds.commons.log.Trace
-import sample.blog.post.PostModule.PostState
 import sample.blog.post._
 
 import scala.concurrent.duration._

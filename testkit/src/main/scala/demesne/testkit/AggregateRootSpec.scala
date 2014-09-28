@@ -2,18 +2,14 @@ package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.actor.{ActorRef, ActorSystem, PoisonPill, Terminated}
+import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
-import akka.util.Timeout
-import demesne.{DomainModel, AggregateRootModule}
+import demesne.{AggregateRootModule, DomainModel}
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
-
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
-import scala.reflect.ClassTag
-import scala.util.Failure
 import peds.commons.log.Trace
+
+import scala.reflect.ClassTag
 
 
 object AggregateRootSpec {

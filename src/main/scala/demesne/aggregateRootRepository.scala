@@ -1,6 +1,6 @@
 package demesne
 
-import akka.actor.{ Actor, ActorRef, ActorLogging, Props }
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.contrib.pattern.ShardRegion
 import akka.event.LoggingReceive
 import peds.akka.envelope._
@@ -28,9 +28,9 @@ object EnvelopingAggregateRootRepository {
     val name = rootType.name
 
     AggregateRootRepository.ClusterShardingSpecification(
-      name = s"${name}Repository", 
+      name = s"${name}Repository",
       props = props( rootType ),
-      idExtractor = { case c => ( name, c ) }, 
+      idExtractor = { case c => ( name, c ) },
       shardResolver = { case c => ( math.abs( name.hashCode ) % 100 ).toString }
     )
   }
@@ -40,9 +40,9 @@ object EnvelopingAggregateRootRepository {
 /**
  * Supervisor for aggregate root actors. All client commands will go through this actor, who resolves/extracts the aggregate's id
  * from the command and either finds the aggregate or (if there is no such aggregate) creates the new aggregate and delegates the
- * command. 
+ * command.
  *
- * In addition to connecting clients with aggregates, this actor is a supervisor responsible for taking care of its child 
+ * In addition to connecting clients with aggregates, this actor is a supervisor responsible for taking care of its child
  * aggregates, handling fault handling and recovery actions.
  */
 class AggregateRootRepository( aggregateRootType: AggregateRootType ) extends Actor with EnvelopingActor with ActorLogging {
@@ -70,24 +70,24 @@ class AggregateRootRepository( aggregateRootType: AggregateRootType ) extends Ac
 
 object AggregateRootRepository {
   val trace = Trace[AggregateRootRepository.type]
-  def props( rootType: AggregateRootType ): Props = trace.block( "AggregateRootRepository" ) { 
+  def props( rootType: AggregateRootType ): Props = trace.block( "AggregateRootRepository" ) {
     Props( classOf[AggregateRootRepository], rootType )
   }
 
-  case class ClusterShardingSpecification( 
-    name: String, 
+  case class ClusterShardingSpecification(
+    name: String,
     props: Props,
-    idExtractor: ShardRegion.IdExtractor, 
-    shardResolver: ShardRegion.ShardResolver 
+    idExtractor: ShardRegion.IdExtractor,
+    shardResolver: ShardRegion.ShardResolver
   )
 
   def specificationFor( rootType: AggregateRootType ): ClusterShardingSpecification = {
     val name = rootType.name
 
     ClusterShardingSpecification(
-      name = s"${name}Repository", 
+      name = s"${name}Repository",
       props = props( rootType ),
-      idExtractor = { case c => ( name, c ) }, 
+      idExtractor = { case c => ( name, c ) },
       shardResolver = { case c => ( math.abs( name.hashCode ) % 100 ).toString }
     )
   }

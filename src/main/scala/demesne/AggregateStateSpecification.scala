@@ -1,9 +1,10 @@
 package demesne
 
-import scala.reflect.ClassTag
 import akka.persistence.SnapshotOffer
 import com.typesafe.scalalogging.LazyLogging
 import peds.commons.util._
+
+import scala.reflect.ClassTag
 
 
 trait AggregateStateSpecification[S] extends LazyLogging { outer =>

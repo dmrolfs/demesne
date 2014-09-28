@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
-import org.scalatest.{Outcome, MustMatchers, fixture}
+import org.scalatest.{MustMatchers, Outcome, fixture}
 
 
 object SequentialAkkaSpecWithIsolatedFixture {
@@ -13,7 +13,7 @@ object SequentialAkkaSpecWithIsolatedFixture {
 
 // Runs each test sequentially but provides fixture isolation
 trait SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMatchers {
-  import SequentialAkkaSpecWithIsolatedFixture._
+  import demesne.testkit.SequentialAkkaSpecWithIsolatedFixture._
 
   type Fixture <: TestKit
   type FixtureParam = Fixture
