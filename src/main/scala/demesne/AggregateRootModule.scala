@@ -28,16 +28,19 @@ trait AggregateRootModuleCompanion extends LazyLogging {
     model.aggregateOf( rootType = aggregateRootType, id = effId )
   }
 
-  //DMR: I don't like this var but need to determine how to supply system to aggregateRootType, esp in regular actors
-  implicit lazy val system: ActorSystem = {
+  //DMR: although there is an assumption of each Aggregate existing in only one ActorSystem in a JVM,
+  // these context properties must be def's rather than val's in order to support testing using multiple isolated
+  // fixtures.
+  //DMR: I don't like this def but need to determine how to supply system to aggregateRootType, esp in regular actors
+  implicit def system: ActorSystem = {
     _context get demesne.SystemKey map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
   }
 
-  implicit lazy val model: DomainModel = {
+  def model: DomainModel = {
     _context get demesne.ModelKey map { _.asInstanceOf[DomainModel] } getOrElse DomainModel()
   }
 
-  lazy val factory: ActorFactory = {
+  def factory: ActorFactory = {
     _context get demesne.FactoryKey map { _.asInstanceOf[ActorFactory] } getOrElse demesne.factory.systemFactory
   }
 

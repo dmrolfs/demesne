@@ -1,78 +1,96 @@
 package blog.post
 
-import akka.testkit.{TestProbe, TestActorRef, TestKit}
+import akka.testkit.{TestActorRef, TestProbe}
 //import contoso.conference.registration.OrderModule
 import demesne._
-import demesne.testkit.{AggregateRootSpec, DemesneModuleFixture}
-import org.scalatest.{Suite, Tag}
+import demesne.testkit.AggregateRootSpec
+import org.scalatest.Tag
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliableMessage
 import peds.commons.log.Trace
 import sample.blog.post.PostModule.PostState
 import sample.blog.post._
 
-
-trait PostFixture extends DemesneModuleFixture { outer: Suite with TestKit =>
-  def trace: Trace[_]
-
-  override val module: AggregateRootModule = new PostModule { }
-
-  override val context: Map[Symbol, Any] = {
-    val result = super.context
-    val makeAuthorListing = () => trace.block( "makeAuthorList" ){ testActor }
-    //    val makeAuthorListing: () => ActorRef = () => { ClusterSharding(system).shardRegion(AuthorListingModule.shardName) }
-    result + ( 'authorListing -> makeAuthorListing )
-  }
-}
-
+import scala.concurrent.duration._
 
 /**
  * Created by damonrolfs on 9/18/14.
  */
-class PostModuleSpec extends AggregateRootSpec[PostModuleSpec]( testkit.system ) with PostFixture {
+class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
 
-  override val trace = Trace[PostModuleSpec]
+  private val trace = Trace[PostModuleSpec]
+
+  override type Fixture = PostFixture
+
+  class PostFixture extends AggregateFixture {
+    private val trace = Trace[PostFixture]
+
+    val probe: TestProbe = TestProbe()
+
+    override def module: AggregateRootModule = new PostModule { }
+
+    override def context: Map[Symbol, Any] = {
+      val result = super.context
+      val makeAuthorListing = () => trace.block( "makeAuthorList" ){ probe.ref }
+      //    val makeAuthorListing: () => ActorRef = () => { ClusterSharding(system).shardRegion(AuthorListingModule.shardName) }
+      result + ( 'authorListing -> makeAuthorListing )
+    }
+  }
+
+  override def createAkkaFixture(): Fixture = new PostFixture
 
   object WIP extends Tag( "wip" )
+  object ADD extends Tag( "add" )
+  object HAPPY extends Tag( "happy" )
+  object NOACTION extends Tag( "no-action" )
 
   "Post Module should" should {
-    "add content" taggedAs( WIP ) in {
-      val author = TestProbe()
+    "add content" taggedAs( WIP, ADD ) in { fixture: Fixture =>
+      import fixture._
+
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
-      val real = TestActorRef[PostModule.Post](
-        PostModule.Post.props(
-          meta = PostModule.aggregateRootType,
-          authorListing = author.ref
-        )
-      ).underlyingActor
-      real receive AddPost(id, content)
-      real.state shouldBe PostState( id = id, content = content, published = false )
-      author.expectMsgPF( hint = "PostAdded event (ignored in practice)" ) {
-        case ReliableMessage( _, Envelope( payload: PostAdded, _ ) ) => payload.content shouldBe content
+      val post = PostModule aggregateOf id
+      post ! AddPost( id, content )
+//      probe.expectNoMsg()
+      probe.expectMsgPF( max = 800.millis, hint = "post added" ) {
+//        case x => fail( s"recd $x" )
+        case ReliableMessage( _, Envelope( payload: PostAdded, _ ) ) => payload.content mustBe content
       }
     }
 
-    "follow happy path" in {
+    "not respond before added" taggedAs( NOACTION ) in { fixture: Fixture =>
+      import fixture._
+
       val id = PostModule.nextId
-      val content = PostContent( author = "Damon", title = "Test Add", body = "testing the post add command" )
+      val post = PostModule aggregateOf id
+      post ! ChangeBody( id, "dummy content" )
+      post ! Publish( id )
+      probe.expectNoMsg( 200.millis )
+    }
+
+    "follow happy path" taggedAs( HAPPY ) in { fixture: Fixture =>
+      import fixture._
+
+      val id = PostModule.nextId
+      val content = PostContent( author = "Damon", title = "Test Add", body = "testing happy path" )
 
       PostModule.aggregateOf( id ) ! AddPost( id, content )
       PostModule.aggregateOf( id ) ! ChangeBody( id, "new content" )
       PostModule.aggregateOf( id ) ! Publish( id )
 
-      expectMsgPF() {
-        case ReliableMessage( 1, Envelope( payload: PostAdded, _) ) => payload.content shouldBe content
+      probe.expectMsgPF() {
+        case ReliableMessage( 1, Envelope( payload: PostAdded, _) ) => payload.content mustBe content
       }
 
-      expectMsgPF() {
-        case ReliableMessage( 2, Envelope( payload: BodyChanged, _) ) => payload.body shouldBe "new content"
+      probe.expectMsgPF() {
+        case ReliableMessage( 2, Envelope( payload: BodyChanged, _) ) => payload.body mustBe "new content"
       }
 
-      expectMsgPF() {
+      probe.expectMsgPF() {
         case ReliableMessage( 3, Envelope( PostPublished( pid, _, title ), _) ) => {
-          pid shouldBe id
-          title shouldBe "Test Add"
+          pid mustBe id
+          title mustBe "Test Add"
         }
       }
     }
