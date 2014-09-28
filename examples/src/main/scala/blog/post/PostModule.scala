@@ -78,14 +78,16 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     override var state: PostState = PostState()
 
     override def transitionFor( state: PostState ): Transition = {
-      case _: PostAdded => context.become( around( created orElse publishProtocol orElse unhandled("CREATED") ) )
-      case _: PostPublished => context.become( around( published orElse publishProtocol orElse unhandled("PUBLISHED") ) )
+      case _: PostAdded => context.become( around( created orElse publishProtocol ) )
+      case _: PostPublished => context.become( around( published orElse publishProtocol ) )
     }
 
     override def receiveCommand: Receive = around( quiescent )
 
+    import peds.akka.envelope._
+
     val quiescent: Receive = LoggingReceive {
-      case GetContent(_)  => sender() ! state.content
+      case GetContent(_)  => sender() send state.content
       case AddPost( id, content ) => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
         if ( !content.isIncomplete ) {
           persist( PostAdded( id, content ) ) { event =>
@@ -102,7 +104,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     }
 
     val created: Receive = LoggingReceive {
-      case GetContent( id ) => sender() ! state.content
+      case GetContent( id ) => sender() send state.content
 
       case ChangeBody( id, body ) => persist( BodyChanged( id, body ) ) { event =>
         state = accept( event )
@@ -120,11 +122,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     }
 
     val published: Receive = LoggingReceive {
-      case GetContent(_) => sender() ! state.content
-    }
-
-    def unhandled( label: String ): Receive = {
-      case x => log info s">>>>> POST[${label}] UNEXPECTED MESSAGE: $x"
+      case GetContent(_) => sender() send state.content
     }
   }
 }

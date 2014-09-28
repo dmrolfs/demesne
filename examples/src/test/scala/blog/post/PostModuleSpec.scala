@@ -5,7 +5,7 @@ import akka.testkit.TestProbe
 import demesne._
 import demesne.testkit.AggregateRootSpec
 import org.scalatest.Tag
-import peds.akka.envelope.Envelope
+import peds.akka.envelope.{WorkId, MessageNumber, Envelope}
 import peds.akka.publish.ReliableMessage
 import peds.commons.log.Trace
 import sample.blog.post._
@@ -51,9 +51,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
       post ! AddPost( id, content )
-//      probe.expectNoMsg()
       probe.expectMsgPF( max = 800.millis, hint = "post added" ) {
-//        case x => fail( s"recd $x" )
         case ReliableMessage( _, Envelope( payload: PostAdded, _ ) ) => payload.content mustBe content
       }
     }
@@ -66,6 +64,91 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       post ! ChangeBody( id, "dummy content" )
       post ! Publish( id )
       probe.expectNoMsg( 200.millis )
+    }
+
+    "have empty contents before use" in { fixture: Fixture =>
+      import fixture._
+
+      val id = PostModule.nextId
+      val post = PostModule aggregateOf id
+      post.tell( GetContent( id ), probe.ref )
+      probe.expectMsgPF( max = 200.millis, hint = "empty contents" ){
+        case Envelope( payload: PostContent, h ) => {
+          payload mustBe PostContent( "", "", "" )
+          h.messageNumber mustBe MessageNumber( 2 )
+          h.workId must not be WorkId.unknown
+
+        }
+      }
+    }
+
+    "have contents after posting" in { fixture: Fixture =>
+      import fixture._
+
+      val id = PostModule.nextId
+      val post = PostModule aggregateOf id
+      val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
+
+      val clientProbe = TestProbe()
+      post ! AddPost( id, content )
+      post.tell( GetContent( id ), clientProbe.ref )
+      clientProbe.expectMsgPF( max = 200.millis, hint = "initial contents" ){
+        case Envelope( payload: PostContent, h ) if payload == content => true
+      }
+    }
+
+    "have changed contents after change" in { fixture: Fixture =>
+      import fixture._
+
+      val id = PostModule.nextId
+      val post = PostModule aggregateOf id
+      val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
+      val updated = "updated contents"
+
+      val clientProbe = TestProbe()
+      post ! AddPost( id, content )
+      post ! ChangeBody( id, updated )
+      post.tell( GetContent( id ), clientProbe.ref )
+      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
+        case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
+      }
+    }
+
+    "have changed contents after change and published" in { fixture: Fixture =>
+      import fixture._
+
+      val id = PostModule.nextId
+      val post = PostModule aggregateOf id
+      val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
+      val updated = "updated contents"
+
+      val clientProbe = TestProbe()
+      post ! AddPost( id, content )
+      post ! ChangeBody( id, updated )
+      post ! Publish( id )
+      post.tell( GetContent( id ), clientProbe.ref )
+      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
+        case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
+      }
+    }
+
+    "dont change contents after published" in { fixture: Fixture =>
+      import fixture._
+
+      val id = PostModule.nextId
+      val post = PostModule aggregateOf id
+      val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
+      val updated = "updated contents"
+
+      val clientProbe = TestProbe()
+      post ! AddPost( id, content )
+      post ! ChangeBody( id, updated )
+      post ! Publish( id )
+      post ! ChangeBody( id, "BAD CONTENT" )
+      post.tell( GetContent( id ), clientProbe.ref )
+      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
+        case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
+      }
     }
 
     "follow happy path" taggedAs( HAPPY ) in { fixture: Fixture =>
