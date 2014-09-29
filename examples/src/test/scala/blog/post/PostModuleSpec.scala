@@ -66,6 +66,17 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       probe.expectNoMsg( 200.millis )
     }
 
+    "not respond to incomplete content" taggedAs( NOACTION ) in { fixture: Fixture =>
+      import fixture._
+
+      val id = PostModule.nextId
+      val post = PostModule aggregateOf id
+      post ! AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
+      probe.expectNoMsg( 200.millis )
+      post ! AddPost( id, PostContent( author = "", title = "Incomplete Content", body = "no author" ) )
+      probe.expectNoMsg( 200.millis )
+    }
+
     "have empty contents before use" in { fixture: Fixture =>
       import fixture._
 
@@ -113,6 +124,8 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
       }
     }
+
+    //todo: test incomplete PostContent
 
     "have changed contents after change and published" in { fixture: Fixture =>
       import fixture._
