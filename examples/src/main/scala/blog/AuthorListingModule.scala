@@ -45,7 +45,6 @@ object AuthorListingModule extends LazyLogging {
     import peds.akka.envelope.Envelope
     import peds.akka.publish.ReliableMessage
 
-
     def props: Props = Props[AuthorListing]
 
     val idExtractor: ShardRegion.IdExtractor = {
