@@ -8,12 +8,12 @@ object BuildSettings {
 
   val VERSION = "0.1.0-SNAPSHOT"
 
-  lazy val noPublishing = seq(
+  lazy val noPublishing = Seq(
     publish := (),
     publishLocal := ()
   )
 
-  lazy val basicSettings = seq(
+  lazy val basicSettings = Seq(
     version := VERSION,
     organization := "com.github.dmrolfs",
     description := "",
@@ -21,9 +21,9 @@ object BuildSettings {
     licenses := Seq("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt")),
     scalaVersion := "2.11.2",
     resolvers ++= Dependencies.resolutionRepos,
-    coverallsTokenFile := "~/.sbt/peds-coveralls-token.txt",
+    coverallsTokenFile := "~/.sbt/demesne-coveralls-token.txt",
     scalacOptions := Seq(
-      "-encoding", 
+      "-encoding",
       "utf8",
       // "-Xlog-implicits",
       "-feature",
@@ -35,10 +35,11 @@ object BuildSettings {
       "-Xlog-reflective-calls",
       "-Ywarn-adapted-args",
       "-Xfatal-warnings"
-    )
+    ),
+    testOptions in Test += Tests.Argument( "-oF" )
   )
 
-  lazy val moduleSettings = basicSettings ++ instrumentSettings ++ coverallsSettings ++ seq(
+  lazy val moduleSettings = basicSettings ++ instrumentSettings ++ coverallsSettings ++ Seq(
     version := VERSION,
     isSnapshot := true,
     publishTo := Some( Resolver.file("file", new File( Path.userHome.absolutePath + "/dev/dmrolfs.github.com/snapshots" ) ) )

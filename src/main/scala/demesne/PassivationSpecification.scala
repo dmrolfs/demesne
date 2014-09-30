@@ -1,7 +1,8 @@
 package demesne
 
-import scala.concurrent.duration._
 import akka.contrib.pattern.ShardRegion.Passivate
+
+import scala.concurrent.duration._
 
 
 object PassivationSpecification {
@@ -10,7 +11,7 @@ object PassivationSpecification {
   }
 }
 
-trait PassivationSpecification { 
+trait PassivationSpecification {
   def inactivityTimeout: Duration
   def passivationMessage( message: Any ): Any = Passivate( stopMessage = message )
 }

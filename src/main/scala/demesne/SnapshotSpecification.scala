@@ -1,8 +1,9 @@
 package demesne
 
+import akka.actor.{ActorRef, ActorSystem, Cancellable}
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import akka.actor.{ ActorRef, ActorSystem, Cancellable }
 
 
 object SnapshotSpecification {
@@ -12,18 +13,18 @@ object SnapshotSpecification {
   }
 }
 
-trait SnapshotSpecification { 
+trait SnapshotSpecification {
   def snapshotInitialDelay: FiniteDuration
   def snapshotInterval: FiniteDuration
 
   private[this] var cancellable: Option[Cancellable] = None
 
-  final def schedule( 
-    system: ActorSystem, 
-    target: ActorRef, 
-    saveSnapshotCommand: Any = SaveSnapshot 
-  )( 
-    implicit executor: ExecutionContext 
+  final def schedule(
+    system: ActorSystem,
+    target: ActorRef,
+    saveSnapshotCommand: Any = SaveSnapshot
+  )(
+    implicit executor: ExecutionContext
   ): Unit = {
     cancellable = Option( system.scheduler.schedule( snapshotInitialDelay, snapshotInterval, target, saveSnapshotCommand ) )
   }
