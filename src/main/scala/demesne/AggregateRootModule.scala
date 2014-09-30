@@ -33,15 +33,15 @@ trait AggregateRootModuleCompanion extends LazyLogging {
   // fixtures.
   //DMR: I don't like this def but need to determine how to supply system to aggregateRootType, esp in regular actors
   implicit def system: ActorSystem = {
-    _context get demesne.SystemKey map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
+    context get demesne.SystemKey map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
   }
 
   def model: DomainModel = {
-    _context get demesne.ModelKey map { _.asInstanceOf[DomainModel] } getOrElse DomainModel()
+    context get demesne.ModelKey map { _.asInstanceOf[DomainModel] } getOrElse DomainModel()
   }
 
   def factory: ActorFactory = {
-    _context get demesne.FactoryKey map { _.asInstanceOf[ActorFactory] } getOrElse demesne.factory.systemFactory
+    context get demesne.FactoryKey map { _.asInstanceOf[ActorFactory] } getOrElse demesne.factory.systemFactory
   }
 
   private[this] var _context: Map[Symbol, Any] = _
