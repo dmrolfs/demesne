@@ -1,8 +1,12 @@
 package demesne
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import com.typesafe.config.ConfigFactory
 import demesne.factory._
 import peds.commons.log.Trace
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 
 trait DomainModel {
@@ -46,16 +50,52 @@ object DomainModel {
 
   private[this] var modelRegistry: Map[Key, DomainModel] = Map()
 
+  private object DomainModelImpl {
+    type RootTypeRef = (AggregateRootType, ActorRef)
+    type AggregateRegistry = Map[String, RootTypeRef]
+
+    object Registry {
+      def props: Props = Props[Registry]
+
+      case class RegistryEntry( rootType: AggregateRootType, repo: ActorRef )
+
+      sealed trait RegistryMessage
+      case class Register( rootType: AggregateRootType, factory: ActorFactory, system: ActorSystem ) extends RegistryMessage
+      case object GetRegistry extends RegistryMessage
+      case class RegistryContents( contents: AggregateRegistry )
+    }
+
+    // used to protect against concurrent registrations.
+    class Registry extends Actor {
+      import demesne.DomainModel.DomainModelImpl.Registry._
+
+      var contents: AggregateRegistry = Map()
+
+      override def receive: Receive = {
+        case GetRegistry => sender() ! RegistryContents( contents )
+
+        case Register( rootType, factory, system ) if !contents.contains( rootType.name ) => {
+          val repoRef = factory( system, rootType )( EnvelopingAggregateRootRepository.props( rootType ) )
+          val entry = (rootType, repoRef)
+          contents += ( rootType.name -> entry )
+        }
+      }
+    }
+  }
+
   private case class DomainModelImpl(
     override val name: String
   )(
     implicit override val system: ActorSystem
   ) extends DomainModel {
+    import demesne.DomainModel.DomainModelImpl._
+
     val trace = Trace[DomainModelImpl]
 
-    type RootTypeRef = (AggregateRootType, ActorRef)
+    var aggregateTypeRegistry: AggregateRegistry = Map()
 
-    var aggregateTypeRegistry: Map[String, RootTypeRef] = Map()
+    val demesneSystem = ActorSystem( "demesne", ConfigFactory.empty() )
+    val registry = demesneSystem actorOf Registry.props
 
     override def aggregateOf( name: String, id: Any ): AggregateRootRef = trace.block( "aggregateOf" ) {
       trace( s"name = $name" )
@@ -71,22 +111,27 @@ object DomainModel {
     }
 
     override def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Unit = trace.block( "registerAggregateType" ) {
+      import akka.pattern.ask
+      import demesne.DomainModel.DomainModelImpl.Registry.{GetRegistry, Register, RegistryContents}
+      implicit val executionContext = system.dispatcher
+
       trace( s"DomainModel.name= $name" )
       trace( s"DomainModel.system= $system" )
       trace( s"rootType = $rootType" )
       trace( s"factory = ${factory}" )
 
-      if ( !aggregateTypeRegistry.contains( rootType.name ) ) {
-        val repoRef = factory( system, rootType )( EnvelopingAggregateRootRepository.props( rootType ) )
-        val entry = (rootType, repoRef)
-        aggregateTypeRegistry += ( rootType.name -> entry )
-      }
+      registry ! Register( rootType, factory, system )
+      val contents = ask( registry, GetRegistry )( 1.second ).mapTo[RegistryContents] map { _.contents }
+      aggregateTypeRegistry = Await.result( contents, 2.seconds )
 
       trace( s"""aggregateTypeRegistry = ${aggregateTypeRegistry.mkString("[", ",", "]")} """ )
       require( aggregateTypeRegistry.contains( rootType.name ), "failed postcondition" )
     }
 
-    override def shutdown(): Unit = system.shutdown()
+    override def shutdown(): Unit = {
+      system.shutdown()
+      demesneSystem.shutdown()
+    }
 
     override def toString: String = s"DomainModelImpl(name=$name, system=$system)"
   }
