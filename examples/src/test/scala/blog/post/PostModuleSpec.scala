@@ -42,7 +42,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
       post ! AddPost( id, content )
-      probe.expectMsgPF( max = 400.millis, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
+      probe.expectMsgPF( max = 1.second, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case ReliableMessage( _, Envelope( payload: PostAdded, _ ) ) => payload.content mustBe content
       }
     }
