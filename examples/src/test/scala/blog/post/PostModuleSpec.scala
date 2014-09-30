@@ -1,14 +1,11 @@
-package blog.post
+package sample.blog.post
 
 import akka.testkit.TestProbe
-//import contoso.conference.registration.OrderModule
 import demesne._
 import demesne.testkit.AggregateRootSpec
-import org.scalatest.Tag
-import peds.akka.envelope.{WorkId, MessageNumber, Envelope}
+import peds.akka.envelope.{Envelope, MessageNumber, WorkId}
 import peds.akka.publish.ReliableMessage
 import peds.commons.log.Trace
-import sample.blog.post._
 
 import scala.concurrent.duration._
 
@@ -31,32 +28,26 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
     override def context: Map[Symbol, Any] = {
       val result = super.context
       val makeAuthorListing = () => trace.block( "makeAuthorList" ){ probe.ref }
-      //    val makeAuthorListing: () => ActorRef = () => { ClusterSharding(system).shardRegion(AuthorListingModule.shardName) }
       result + ( 'authorListing -> makeAuthorListing )
     }
   }
 
   override def createAkkaFixture(): Fixture = new PostFixture
 
-  object WIP extends Tag( "wip" )
-  object ADD extends Tag( "add" )
-  object HAPPY extends Tag( "happy" )
-  object NOACTION extends Tag( "no-action" )
-
   "Post Module should" should {
-    "add content" taggedAs( WIP, ADD ) in { fixture: Fixture =>
+    "add content" in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
       post ! AddPost( id, content )
-      probe.expectMsgPF( max = 800.millis, hint = "post added" ) {
+      probe.expectMsgPF( max = 400.millis, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case ReliableMessage( _, Envelope( payload: PostAdded, _ ) ) => payload.content mustBe content
       }
     }
 
-    "not respond before added" taggedAs( NOACTION ) in { fixture: Fixture =>
+    "not respond before added" in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId
@@ -66,7 +57,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       probe.expectNoMsg( 200.millis )
     }
 
-    "not respond to incomplete content" taggedAs( NOACTION ) in { fixture: Fixture =>
+    "not respond to incomplete content" in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId
@@ -125,8 +116,6 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       }
     }
 
-    //todo: test incomplete PostContent
-
     "have changed contents after change and published" in { fixture: Fixture =>
       import fixture._
 
@@ -164,7 +153,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       }
     }
 
-    "follow happy path" taggedAs( HAPPY ) in { fixture: Fixture =>
+    "follow happy path" in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId
