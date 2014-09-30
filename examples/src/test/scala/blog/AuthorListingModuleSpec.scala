@@ -2,7 +2,8 @@ package sample.blog.author
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.testkit.TestProbe
+import akka.testkit.{TestActorRef, TestProbe}
+import akka.util.Timeout
 import demesne._
 import demesne.testkit._
 import org.scalatest.{Outcome, Tag}
@@ -10,8 +11,12 @@ import peds.akka.envelope._
 import peds.akka.publish.ReliableMessage
 import peds.commons.identifier.{ShortUUID, TaggedID}
 import peds.commons.log.Trace
-import sample.blog.author.AuthorListingModule.GetPosts
+import sample.blog.author.AuthorListingModule.{GetPosts, Posts}
 import sample.blog.post._
+
+import scala.collection.immutable
+import scala.concurrent.duration._
+import scala.util.Success
 
 
 object AuthorListingModuleSpec {
@@ -128,156 +133,34 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
       shard( rgp ) mustBe authorHash
     }
 
-//    "handle PostPublished event" in { fixture: Fixture =>
-//      val real = TestActorRef[AuthorListingModule.AuthorListing].underlyingActor
-//      val
-//      real.receive( )
-//    }
+    "handle PostPublished event" in { fixture: Fixture =>
+      import fixture._
 
-    //    "add content" taggedAs( WIP, ADD ) in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
-//      val post = PostModule aggregateOf id
-//      post ! AddPost( id, content )
-//      probe.expectMsgPF( max = 800.millis, hint = "post added" ) {
-//        case ReliableMessage( _, Envelope( payload: PostAdded, _ ) ) => payload.content mustBe content
-//      }
-//    }
-//
-//    "not respond before added" taggedAs( NOACTION ) in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val post = PostModule aggregateOf id
-//      post ! ChangeBody( id, "dummy content" )
-//      post ! Publish( id )
-//      probe.expectNoMsg( 200.millis )
-//    }
-//
-//    "not respond to incomplete content" taggedAs( NOACTION ) in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val post = PostModule aggregateOf id
-//      post ! AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
-//      probe.expectNoMsg( 200.millis )
-//      post ! AddPost( id, PostContent( author = "", title = "Incomplete Content", body = "no author" ) )
-//      probe.expectNoMsg( 200.millis )
-//    }
-//
-//    "have empty contents before use" in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val post = PostModule aggregateOf id
-//      post.tell( GetContent( id ), probe.ref )
-//      probe.expectMsgPF( max = 200.millis, hint = "empty contents" ){
-//        case Envelope( payload: PostContent, h ) => {
-//          payload mustBe PostContent( "", "", "" )
-//          h.messageNumber mustBe MessageNumber( 2 )
-//          h.workId must not be WorkId.unknown
-//
-//        }
-//      }
-//    }
-//
-//    "have contents after posting" in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val post = PostModule aggregateOf id
-//      val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-//
-//      val clientProbe = TestProbe()
-//      post ! AddPost( id, content )
-//      post.tell( GetContent( id ), clientProbe.ref )
-//      clientProbe.expectMsgPF( max = 200.millis, hint = "initial contents" ){
-//        case Envelope( payload: PostContent, h ) if payload == content => true
-//      }
-//    }
-//
-//    "have changed contents after change" in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val post = PostModule aggregateOf id
-//      val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-//      val updated = "updated contents"
-//
-//      val clientProbe = TestProbe()
-//      post ! AddPost( id, content )
-//      post ! ChangeBody( id, updated )
-//      post.tell( GetContent( id ), clientProbe.ref )
-//      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
-//        case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-//      }
-//    }
-//
-//    //todo: test incomplete PostContent
-//
-//    "have changed contents after change and published" in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val post = PostModule aggregateOf id
-//      val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-//      val updated = "updated contents"
-//
-//      val clientProbe = TestProbe()
-//      post ! AddPost( id, content )
-//      post ! ChangeBody( id, updated )
-//      post ! Publish( id )
-//      post.tell( GetContent( id ), clientProbe.ref )
-//      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
-//        case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-//      }
-//    }
-//
-//    "dont change contents after published" in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val post = PostModule aggregateOf id
-//      val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-//      val updated = "updated contents"
-//
-//      val clientProbe = TestProbe()
-//      post ! AddPost( id, content )
-//      post ! ChangeBody( id, updated )
-//      post ! Publish( id )
-//      post ! ChangeBody( id, "BAD CONTENT" )
-//      post.tell( GetContent( id ), clientProbe.ref )
-//      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
-//        case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-//      }
-//    }
-//
-//    "follow happy path" taggedAs( HAPPY ) in { fixture: Fixture =>
-//      import fixture._
-//
-//      val id = PostModule.nextId
-//      val content = PostContent( author = "Damon", title = "Test Add", body = "testing happy path" )
-//
-//      PostModule.aggregateOf( id ) ! AddPost( id, content )
-//      PostModule.aggregateOf( id ) ! ChangeBody( id, "new content" )
-//      PostModule.aggregateOf( id ) ! Publish( id )
-//
-//      probe.expectMsgPF() {
-//        case ReliableMessage( 1, Envelope( payload: PostAdded, _) ) => payload.content mustBe content
-//      }
-//
-//      probe.expectMsgPF() {
-//        case ReliableMessage( 2, Envelope( payload: BodyChanged, _) ) => payload.body mustBe "new content"
-//      }
-//
-//      probe.expectMsgPF() {
-//        case ReliableMessage( 3, Envelope( PostPublished( pid, _, title ), _) ) => {
-//          pid mustBe id
-//          title mustBe "Test Add"
-//        }
-//      }
-//    }
+      val pp = PostPublished( sourceId = nextPostId, author = "Damon", title = "Handle Publishing" )
+      val real = TestActorRef[AuthorListingModule.AuthorListing].underlyingActor
+      real.posts mustBe Vector.empty
+      real.receive( pp )
+      real.posts mustBe IndexedSeq( pp )
+    }
+
+    "respond to GetPosts requests" in { fixture: Fixture =>
+      import akka.pattern.ask
+      import fixture._
+      implicit val timeout = Timeout( 5.seconds )
+
+      val pp = PostPublished( sourceId = nextPostId, author = "Damon", title = "Handle Publishing" )
+      val ref = TestActorRef[AuthorListingModule.AuthorListing]
+      val real = ref.underlyingActor
+      val expected: immutable.IndexedSeq[PostPublished] = immutable.IndexedSeq( pp )
+      real.posts mustBe Vector.empty
+      val r1 = ref ? GetPosts("Damon")
+      val Success(Posts(a1)) = r1.value.get
+      a1 mustBe immutable.IndexedSeq.empty
+
+      real.receive( pp )
+      val r2 = ref ? GetPosts( "Damon" )
+      val Success(Posts(a2)) = r2.value.get
+      a2 mustBe immutable.IndexedSeq( pp )
+    }
   }
 }
