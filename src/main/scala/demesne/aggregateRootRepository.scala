@@ -1,6 +1,6 @@
 package demesne
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor._
 import akka.contrib.pattern.ShardRegion
 import akka.event.LoggingReceive
 import peds.akka.envelope._
@@ -45,8 +45,14 @@ object EnvelopingAggregateRootRepository {
  * In addition to connecting clients with aggregates, this actor is a supervisor responsible for taking care of its child
  * aggregates, handling fault handling and recovery actions.
  */
-class AggregateRootRepository( aggregateRootType: AggregateRootType ) extends Actor with EnvelopingActor with ActorLogging {
+class AggregateRootRepository(
+  rootType: AggregateRootType,
+  supervisor: SupervisorStrategy = SupervisorStrategy.defaultStrategy
+) extends Actor with EnvelopingActor with ActorLogging {
+
   val trace = Trace( "AggregateRootRepository", log )
+
+  override def supervisorStrategy: SupervisorStrategy = supervisor
 
   override def receive: Actor.Receive = LoggingReceive {
     case command => {
@@ -59,8 +65,8 @@ class AggregateRootRepository( aggregateRootType: AggregateRootType ) extends Ac
   def aggregateFor( command: Any ): ActorRef = trace.block( "aggregateFor" ) {
     trace( s"command = $command" )
     val originalSender = sender
-    val (id, cmd) = aggregateRootType aggregateIdFor command
-    getOrCreateChild( aggregateRootType.aggregateRootProps, id )
+    val (id, cmd) = rootType aggregateIdFor command
+    getOrCreateChild( rootType.aggregateRootProps, id )
   }
 
   def getOrCreateChild( aggregateProps: Props, name: String ): ActorRef = trace.block( "getOrCreateChild" ) {
