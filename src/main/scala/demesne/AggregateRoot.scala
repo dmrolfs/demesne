@@ -42,7 +42,7 @@ with ActorLogging {
       super.around( r )( SaveSnapshot )
     }
 
-    case msg => super.around( r )( msg )
+    case msg => trace.block( "AggregateRoot.around(_)" ) { super.around( r )( msg ) }
   }
 
 
@@ -75,11 +75,11 @@ with ActorLogging {
   }
 
   val infoTransitioning: Transition = {
-    case u => log info s"${self.path.parent.name} transitioning for ${u.getClass.safeSimpleName}"
+    case u => log info s"${self.path.name} transitioning for ${u.getClass.safeSimpleName}"
   }
 
   val infoNotTransitioning: Transition = {
-    case ex => log info s"${self.path.parent.name} will not transition state for ${ex.getClass.safeSimpleName}"
+    case ex => log info s"${self.path.name} will not transition state for ${ex.getClass.safeSimpleName}"
   }
 
   override def receiveRecover: Receive = {

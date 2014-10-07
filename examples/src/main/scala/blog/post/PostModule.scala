@@ -2,6 +2,7 @@ package sample.blog.post
 
 import akka.actor.{ActorPath, ActorRef, ActorSystem, Props}
 import akka.contrib.pattern.ClusterSharding
+import akka.persistence.AtLeastOnceDelivery
 import akka.event.LoggingReceive
 import demesne._
 import peds.akka.publish.{EventPublisher, ReliablePublisher}
@@ -64,7 +65,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   object Post {
     def props( meta: AggregateRootType, authorListing: ActorRef ): Props = {
       Props(
-        new Post( meta ) with ReliablePublisher {
+        new Post( meta ) with ReliablePublisher with AtLeastOnceDelivery {
           override def destination: ActorPath = authorListing.path
         }
       )
@@ -78,8 +79,8 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     override var state: PostState = PostState()
 
     override def transitionFor( state: PostState ): Transition = {
-      case _: PostAdded => context.become( around( created orElse publishProtocol ) )
-      case _: PostPublished => context.become( around( published orElse publishProtocol ) )
+      case _: PostAdded => context become around( created )
+      case _: PostPublished => context become around( published )
     }
 
     override def receiveCommand: Receive = around( quiescent )
@@ -95,7 +96,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
             state = accept( event )
             trace( s"after accept state = ${state}" )
             log info s"New post saved: ${state.content.title}"
-            publish( event )
+            trace.block( s"publish($event)" ) { publish( event ) }
           }
         }
       }
