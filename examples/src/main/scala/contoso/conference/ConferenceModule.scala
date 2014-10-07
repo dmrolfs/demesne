@@ -60,8 +60,8 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
   case class DeleteSeat( override val targetId: DeleteSeat#TID, seatId: SeatType.TID ) extends Command
 
 
-  case class Publish( override val targetId: UpdateConference#TID ) extends Command
-  case class Unpublish( override val targetId: UpdateConference#TID ) extends Command
+  case class Publish( override val targetId: Publish#TID ) extends Command
+  case class Unpublish( override val targetId: Unpublish#TID ) extends Command
 
 
   sealed trait Event extends ConferenceProtocol with EventLike {
