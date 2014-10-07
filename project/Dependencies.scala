@@ -55,9 +55,9 @@ object Dependencies {
 
   val mockito = "org.mockito" % "mockito-core" % "1.9.5"
   // val objectLab = "net.objectlab.kit" % "datecalc-joda" % "1.2.0"
-  val pedsCommons = "peds" %% "peds-commons" % "0.1.6" % "compile" changing()
-  val pedsAkka = "peds" %% "peds-akka" % "0.1.6" % "compile" changing()
-  val pedsArchetype = "peds" %% "peds-archetype" % "0.1.6" % "compile" changing()
+  val pedsCommons = "com.github.dmrolfs" %% "peds-commons" % "0.1.6" % "compile" changing()
+  val pedsAkka = "com.github.dmrolfs" %% "peds-akka" % "0.1.6" % "compile" changing()
+  val pedsArchetype = "com.github.dmrolfs" %% "peds-archetype" % "0.1.6" % "compile" changing()
   // val scalaAsync = "org.scala-lang.modules" %% "scala-async" % "0.9.0-M4"
   // val scalaTime = "scala-time" %% "scala-time" % "0.3.2" % "compile" changing()
   val joda = "joda-time" % "joda-time" % "2.4"
