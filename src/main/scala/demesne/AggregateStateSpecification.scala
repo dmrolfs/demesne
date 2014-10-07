@@ -17,8 +17,7 @@ trait AggregateStateSpecification[S] extends LazyLogging { outer =>
 
     if ( a.isDefinedAt( event ) ) a( event )
     else {
-      logger info s"""|${Option(state).map{_.getClass.safeSimpleName}} does not accept event
-                      |${event.getClass.safeSimpleName}""".stripMargin
+      logger info s"""${Option(state).map{_.getClass.safeSimpleName}} does not accept event ${event.getClass.safeSimpleName}"""
       state
     }
   }
