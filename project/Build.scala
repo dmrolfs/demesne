@@ -134,4 +134,8 @@ object Build extends Build {
 //      test( akkaMultiNodeTestKit )
     )
     .settings( libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-compiler" % _) )
+
+  lazy val coveralls = Project( "coveralls", file( "coveralls" ) )
+    .aggregate( demesne, testkit, examples )
+    .settings( moduleSettings: _* )
 }
