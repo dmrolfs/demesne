@@ -62,6 +62,7 @@ with ActorLogging {
 
 
   type Transition = PartialFunction[Any, Unit]
+  //todo: considering removing - does this add value or make code harder to figure out?
   def transitionFor( state: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]()
 
   def transition( event: Any ): Unit = {

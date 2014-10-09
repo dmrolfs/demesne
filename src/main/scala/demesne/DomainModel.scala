@@ -94,6 +94,7 @@ object DomainModel {
 
     var aggregateTypeRegistry: AggregateRegistry = Map()
 
+    //todo: why isn't this the system parameter? Why does it need to be independent of system?
     val demesneSystem = ActorSystem( "demesne", ConfigFactory.empty() )
     val registry = demesneSystem actorOf Registry.props
 
