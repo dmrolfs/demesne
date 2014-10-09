@@ -135,7 +135,7 @@ object Build extends Build {
     )
     .settings( libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-compiler" % _) )
 
-  lazy val coveralls = Project( "coveralls", file( "coveralls" ) )
+  lazy val coveralls = Project( "aggregate", file( "aggregate" ) )
     .aggregate( demesne, testkit, examples )
     .settings( moduleSettings: _* )
 }
