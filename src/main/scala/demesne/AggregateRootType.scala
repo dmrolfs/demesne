@@ -31,10 +31,12 @@ trait AggregateRootType {
     case r @ ReliableMessage( _, msg ) => shardIdFor( msg )
   }
 
+  //todo: make configuration driven
   def passivation: PassivationSpecification = new PassivationSpecification {
     override val inactivityTimeout: Duration = 2.minutes
   }
 
+  //todo: make configuration driven
   def snapshot: SnapshotSpecification = new SnapshotSpecification {
     override val snapshotInitialDelay: FiniteDuration = 1.minute
     override val snapshotInterval: FiniteDuration = 1.minute
