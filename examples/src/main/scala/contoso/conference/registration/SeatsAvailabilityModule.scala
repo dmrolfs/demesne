@@ -1,13 +1,13 @@
 package contoso.conference.registration
 
-import akka.actor.{Props, ActorSystem}
+import akka.actor.{ActorSystem, Props}
 import akka.event.LoggingReceive
-import contoso.conference.{SeatType, ConferenceModule}
+import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
-import peds.akka.publish.{EventPublisher, LocalPublisher}
+import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
-import squants.{Each, Dimensionless}
+import squants.{Dimensionless, Each}
 
 
 /**
@@ -17,7 +17,7 @@ import squants.{Each, Dimensionless}
  * for the same conference at the same time.
  */
 trait SeatsAvailabilityModule extends AggregateRootModule {
-  import SeatsAvailabilityModule.trace
+  import contoso.conference.registration.SeatsAvailabilityModule.trace
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
@@ -172,13 +172,11 @@ object SeatsAvailabilityModule extends AggregateRootModuleCompanion { module =>
 
 
   object SeatsAvailability {
-    def props( meta: AggregateRootType ): Props = Props( new SeatsAvailability( meta ) with LocalPublisher )
+    def props( meta: AggregateRootType ): Props = Props( new SeatsAvailability( meta ) with EventPublisher )
   }
 
   class SeatsAvailability( override val meta: AggregateRootType ) extends AggregateRoot[SeatsAvailabilityState] {
     outer: EventPublisher =>
-
-    import SeatsAvailability._
 
     override val trace = Trace( "SeatsAvailability", log )
 

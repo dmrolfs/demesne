@@ -1,17 +1,18 @@
 package contoso.conference.registration
 
-import scala.annotation.tailrec
-import akka.actor.{ ActorSystem, Props }
+import akka.actor.{ActorSystem, Props}
 import akka.event.LoggingReceive
-import peds.commons.log.Trace
-import peds.akka.publish.{ EventPublisher, LocalPublisher }
-import demesne._
 import contoso.conference.SeatType
-import contoso.registration.{SeatQuantity, PersonalInfo}
+import contoso.registration.{PersonalInfo, SeatQuantity}
+import demesne._
+import peds.akka.publish.EventPublisher
+import peds.commons.log.Trace
+
+import scala.annotation.tailrec
 
 
 trait SeatAssignmentsModule extends AggregateRootModule {
-   import SeatAssignmentsModule.trace
+   import contoso.conference.registration.SeatAssignmentsModule.trace
 
    abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
      super.start( ctx )
@@ -142,7 +143,7 @@ object SeatAssignmentsModule extends AggregateRootModuleCompanion { module =>
 
 
   object SeatAssignments {
-    def props( meta: AggregateRootType ): Props = Props( new SeatAssignments( meta ) with LocalPublisher )
+    def props( meta: AggregateRootType ): Props = Props( new SeatAssignments( meta ) with EventPublisher )
   }
 
   class SeatAssignments( override val meta: AggregateRootType ) extends AggregateRoot[SeatAssignmentsState] {

@@ -5,7 +5,8 @@ import akka.contrib.pattern.ClusterSharding
 import akka.persistence.AtLeastOnceDelivery
 import akka.event.LoggingReceive
 import demesne._
-import peds.akka.publish.{EventPublisher, ReliablePublisher}
+import peds.akka.envelope.Envelope
+import peds.akka.publish.{Publisher, EventPublisher, ReliablePublisher}
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule
@@ -64,9 +65,17 @@ object PostModule extends AggregateRootModuleCompanion { module =>
 
   object Post {
     def props( meta: AggregateRootType, authorListing: ActorRef ): Props = {
+      import peds.akka.publish._
+
       Props(
         new Post( meta ) with ReliablePublisher with AtLeastOnceDelivery {
-          override def destination: ActorPath = authorListing.path
+          import peds.commons.util.Chain._
+          override def publish: Publisher = local +> filter +> reliablePublisher( authorListing.path )
+
+          val filter: Publisher = {
+            case e @ Envelope( _: PostPublished, _ ) => Left( e )
+            case _ => Right( () )
+          }
         }
       )
     }

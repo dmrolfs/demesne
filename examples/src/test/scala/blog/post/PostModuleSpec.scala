@@ -4,7 +4,7 @@ import akka.testkit.TestProbe
 import demesne._
 import demesne.testkit.AggregateRootSpec
 import peds.akka.envelope.{Envelope, MessageNumber, WorkId}
-import peds.akka.publish.ReliableMessage
+import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.log.Trace
 
 import scala.concurrent.duration._
@@ -38,17 +38,23 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
     "add content" in { fixture: Fixture =>
       import fixture._
 
+      system.eventStream.subscribe( probe.ref, classOf[ReliableMessage] )
+      system.eventStream.subscribe( probe.ref, classOf[Envelope] )
+
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
       post ! AddPost( id, content )
       probe.expectMsgPF( max = 1.second, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case ReliableMessage( _, Envelope( payload: PostAdded, _ ) ) => payload.content mustBe content
+        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
     }
 
     "not respond before added" in { fixture: Fixture =>
       import fixture._
+
+      system.eventStream.subscribe( probe.ref, classOf[ReliableMessage] )
+      system.eventStream.subscribe( probe.ref, classOf[Envelope] )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
@@ -59,6 +65,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
 
     "not respond to incomplete content" in { fixture: Fixture =>
       import fixture._
+
+      system.eventStream.subscribe( probe.ref, classOf[ReliableMessage] )
+      system.eventStream.subscribe( probe.ref, classOf[Envelope] )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
@@ -159,20 +168,30 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Test Add", body = "testing happy path" )
 
+      system.eventStream.subscribe( probe.ref, classOf[ReliableMessage] )
+      system.eventStream.subscribe( probe.ref, classOf[Envelope] )
+
       PostModule.aggregateOf( id ) ! AddPost( id, content )
       PostModule.aggregateOf( id ) ! ChangeBody( id, "new content" )
       PostModule.aggregateOf( id ) ! Publish( id )
 
-      probe.expectMsgPF() {
-        case ReliableMessage( 1, Envelope( payload: PostAdded, _) ) => payload.content mustBe content
+      probe.expectMsgPF( hint = "post-added" ) {
+        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
 
-      probe.expectMsgPF() {
-        case ReliableMessage( 2, Envelope( payload: BodyChanged, _) ) => payload.body mustBe "new content"
+      probe.expectMsgPF( hint = "body-changed" ) {
+        case Envelope( payload: BodyChanged, _ ) => payload.body mustBe "new content"
       }
 
-      probe.expectMsgPF() {
-        case ReliableMessage( 3, Envelope( PostPublished( pid, _, title ), _) ) => {
+      probe.expectMsgPF( hint = "post-published local" ) {
+        case Envelope( PostPublished( pid, _, title ), _ ) => {
+          pid mustBe id
+          title mustBe "Test Add"
+        }
+      }
+
+      probe.expectMsgPF( hint = "post-published reliable" ) {
+        case ReliableMessage( 1, Envelope( PostPublished( pid, _, title ), _) ) => {
           pid mustBe id
           title mustBe "Test Add"
         }

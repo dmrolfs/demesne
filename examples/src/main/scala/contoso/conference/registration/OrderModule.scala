@@ -1,23 +1,23 @@
 package contoso.conference.registration
 
-import scala.concurrent.duration._
-import scala.util.Random
 import akka.actor._
 import akka.contrib.pattern.ClusterSharding
 import akka.event.LoggingReceive
-import com.typesafe.config.ConfigFactory
-import squants._
-import com.github.nscala_time.time.{ Imports => joda }
 import com.github.nscala_time.time.Imports._
-import demesne._
-import peds.akka.envelope._
-import peds.akka.publish.{ EventPublisher, LocalPublisher }
+import com.github.nscala_time.time.{Imports => joda}
+import com.typesafe.config.ConfigFactory
 import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
+import demesne._
+import peds.akka.envelope._
+import peds.akka.publish.EventPublisher
+import squants._
+
+import scala.util.Random
 
 
 trait OrderModule extends AggregateRootModule {
-  import OrderModule.trace
+  import contoso.conference.registration.OrderModule.trace
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
@@ -35,7 +35,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     .getConfig( "contoso.conference.registration" )
     .withFallback( ConfigFactory.parseString( fallback ) )
 
-  import java.util.concurrent.{ TimeUnit => TU }
+  import java.util.concurrent.{TimeUnit => TU}
   val reservationAutoExpiration: joda.Period = joda.Period.millis(
     config.getDuration( "reservation-auto-expiration", TU.MILLISECONDS ).toInt
   )
@@ -211,7 +211,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
   object Order {
     def props( meta: AggregateRootType, pricingRetriever: ActorRef ): Props = {
-      Props( new Order( meta, pricingRetriever ) with LocalPublisher )
+      Props( new Order( meta, pricingRetriever ) with EventPublisher )
     }
   }
 
@@ -221,8 +221,6 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
     override val trace = Trace( "Order", log )
 
     override var state: OrderState = _
-
-    import context.dispatcher
     var expirationMessager: Cancellable = _
 
     override def transitionFor( state: OrderState ): Transition = {

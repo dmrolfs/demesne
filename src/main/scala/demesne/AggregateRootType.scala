@@ -3,7 +3,7 @@ package demesne
 import akka.actor.{ActorRef, Props}
 import akka.contrib.pattern.ShardRegion
 import peds.akka.envelope.Envelope
-import peds.akka.publish.ReliableMessage
+import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.util._
 
 import scala.concurrent.duration._

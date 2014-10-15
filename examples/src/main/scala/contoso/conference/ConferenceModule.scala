@@ -148,7 +148,7 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
 
   object Conference {
     def props( meta: AggregateRootType, conferenceContext: ActorRef ): Props = {
-      Props( new Conference( meta, conferenceContext ) with LocalPublisher )
+      Props( new Conference( meta, conferenceContext ) with EventPublisher )
     }
 
     class ConferenceCreateException( cause: Throwable )

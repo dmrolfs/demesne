@@ -1,23 +1,17 @@
 package contoso.conference.registration
 
-import akka.actor.Actor.Receive
 import akka.actor._
-import akka.contrib.pattern.ClusterSharding
-import com.github.nscala_time.time.{ Imports => joda }
 import com.github.nscala_time.time.Imports._
-import com.typesafe.config.ConfigFactory
+import com.github.nscala_time.time.{Imports => joda}
 import contoso.conference.ConferenceModule
 import contoso.conference.payments.PaymentSourceModule
 import contoso.conference.payments.PaymentSourceModule.PaymentCompleted
 import contoso.conference.registration.OrderModule._
-import contoso.conference.registration.SeatsAvailabilityModule.{CancelSeatReservation, CommitSeatReservation,
-MakeSeatReservation, SeatsReserved}
+import contoso.conference.registration.SeatsAvailabilityModule.{CancelSeatReservation, CommitSeatReservation, MakeSeatReservation, SeatsReserved}
 import contoso.registration.SeatQuantity
 import demesne._
-import peds.akka.envelope.trace
-import peds.akka.publish.{EventPublisher, LocalPublisher}
 import peds.akka.envelope._
-import peds.commons.identifier.ShortUUID
+import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
 
 import scala.concurrent.duration._
@@ -30,7 +24,7 @@ import scala.concurrent.duration._
 * Created by damonrolfs on 9/11/14.
 */
 trait RegistrationSagaModule extends SagaModule {
-  import RegistrationSagaModule.trace
+  import contoso.conference.registration.RegistrationSagaModule.trace
 
   abstract override def start( moduleContext: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( moduleContext )
@@ -122,7 +116,7 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
 
   object RegistrationSaga {
     def props( meta: AggregateRootType, orderType: AggregateRootType, availabilityType: AggregateRootType ): Props = {
-      Props( new RegistrationSaga( meta, orderType, availabilityType ) with LocalPublisher )
+      Props( new RegistrationSaga( meta, orderType, availabilityType ) with EventPublisher )
     }
 
     //DMR: det where to locate this b/h; e.g., pull-req into nscala-time, peds?
@@ -135,8 +129,6 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
     seatsAvailabilityType: AggregateRootType
   ) extends Saga[RegistrationSagaState] {
     outer: EventPublisher =>
-
-    import RegistrationSaga._
 
     override val trace = Trace( "RegistrationSaga", log )
 

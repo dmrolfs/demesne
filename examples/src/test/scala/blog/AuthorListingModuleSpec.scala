@@ -8,7 +8,7 @@ import demesne._
 import demesne.testkit._
 import org.scalatest.{Outcome, Tag}
 import peds.akka.envelope._
-import peds.akka.publish.ReliableMessage
+import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.identifier.{ShortUUID, TaggedID}
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule.{GetPosts, Posts}

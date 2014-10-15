@@ -83,6 +83,7 @@ with ActorLogging {
     case ex => log info s"${self.path.name} will not transition state for ${ex.getClass.safeSimpleName}"
   }
 
+
   override def receiveRecover: Receive = {
     case offer: SnapshotOffer => { state = acceptSnapshot( offer ) }
     case event => { state = accept( event ) }

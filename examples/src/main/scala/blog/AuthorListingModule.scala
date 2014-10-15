@@ -43,7 +43,7 @@ object AuthorListingModule extends LazyLogging {
 
   object AuthorListing {
     import peds.akka.envelope.Envelope
-    import peds.akka.publish.ReliableMessage
+    import peds.akka.publish.ReliablePublisher.ReliableMessage
 
     def props: Props = Props[AuthorListing]
 
