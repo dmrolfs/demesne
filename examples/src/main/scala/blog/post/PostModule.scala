@@ -33,7 +33,6 @@ object PostModule extends AggregateRootModuleCompanion { module =>
       override val name: String = module.shardName
 
       override def aggregateRootProps: Props = trace.block( "aggregateRootProps" ) {
-//        ClusterSharding( system ).shardRegion( AuthorListingModule.shardName ) //todo determine how to inject this during module start
         val authorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
         Post.props( this, authorListing() )
       }
