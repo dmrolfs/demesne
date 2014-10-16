@@ -20,6 +20,7 @@ object Build extends Build {
       compile( config ) ++
       compile( akkaActor ) ++
       compile( akkaPersistence ) ++
+      compile( akkaAgent ) ++
       compile( akkaContrib ) ++
       compile( akkaSlf4j ) ++
       compile( evoInflector ) ++
@@ -71,6 +72,7 @@ object Build extends Build {
       compile( config ) ++
       compile( akkaActor ) ++
       compile( akkaPersistence ) ++
+      compile( akkaAgent ) ++
       compile( akkaContrib ) ++
       compile( akkaSlf4j ) ++
       compile( evoInflector ) ++
@@ -112,6 +114,7 @@ object Build extends Build {
       compile( config ) ++
       compile( akkaActor ) ++
       compile( akkaPersistence ) ++
+      compile( akkaAgent ) ++
       compile( akkaContrib ) ++
       compile( akkaSlf4j ) ++
       compile( evoInflector ) ++

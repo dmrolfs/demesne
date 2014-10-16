@@ -25,11 +25,12 @@ object Dependencies {
 
   val akkaActor = akkaModule( "akka-actor" )
   val akkaPersistence = akkaModule( "akka-persistence-experimental" )
-  val akkaContrib = akkaModule( "akka-contrib" )
   val akkaSlf4j = akkaModule( "akka-slf4j" )
+  val akkaAgent = akkaModule( "akka-agent" )
   val akkaTestKit = akkaModule( "akka-testkit" )
   val akkaRemote = akkaModule( "akka-remote" )
   val akkaMultiNodeTestKit = akkaModule( "akka-multi-node-testkit" )
+  val akkaContrib = akkaModule( "akka-contrib" )
 
   val accord = "com.wix" %% "accord-core" % "0.4"
   val config = "com.typesafe" % "config" % "1.2.1"
