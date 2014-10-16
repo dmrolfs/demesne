@@ -37,6 +37,7 @@ with BeforeAndAfterAll {
 
     def module: AggregateRootModule
 
+    //todo need to figure out how to prevent x-test clobbering of DM across suites
     def model: DomainModel = trace.block( s"model()" ) { DomainModel() }
 
     def context: Map[Symbol, Any] = trace.block( "context()" ) {
@@ -52,6 +53,7 @@ with BeforeAndAfterAll {
 
   override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
     val sys = createAkkaFixture()
+
     trace( s"sys.module = ${sys.module}" )
     trace( s"sys.model = ${sys.model}" )
     trace( s"sys.context = ${sys.context}" )
