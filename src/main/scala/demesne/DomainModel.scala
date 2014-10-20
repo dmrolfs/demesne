@@ -1,12 +1,11 @@
 package demesne
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Props}
-import com.typesafe.config.ConfigFactory
+import akka.actor.{ActorRef, ActorSystem}
+import akka.agent.Agent
 import demesne.factory._
 import peds.commons.log.Trace
-import akka.agent.Agent
 
-import scala.concurrent.{Future, Await}
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 
@@ -32,23 +31,35 @@ object DomainModel {
   }
 
 
-  def apply( name: String = "domain.model" )( implicit system: ActorSystem ): DomainModel = trace.block( s"(${name}, ${system})" ) {
+  def register( name: String )( implicit system: ActorSystem ): DomainModel = trace.block( s"register($name)($system)" ) {
+    val key = Key( name, system )
+    val model = new DomainModelImpl( name )
+    val alteration = modelRegistry alter { _ + (key -> model) }
+    Await.ready( alteration, 200.millis )
+    model
+  }
+
+  def apply( name: String )( implicit system: ActorSystem ): DomainModel = trace.block( s"apply(${name})(${system})" ) {
     val k = Key( name, system )
-    modelRegistry().getOrElse(
+    trace( s"key=$k" )
+
+    val result = modelRegistry().getOrElse(
       k,
-      {
-        trace( s"registering DomainModel($name) with global registry" )
-        val result = new DomainModelImpl( name )
-        val alteration = modelRegistry alter { _ + (k -> result) } // use alter and await on Future instead?
-        Await.result( alteration, 200.millis )
-        result
-      }
+      throw new NoSuchElementException( s"no DomainModel registered for name=$name and system=$system" )
     )
+
+    require(
+      result.system == system,
+      s"requested DomainModel, $name, exists under system=${result.system} not expected=${system}"
+    )
+
+    result
   }
 
   def unapply( dm: DomainModel ): Option[(String)] = Some( dm.name )
 
   private case class Key( name: String, system: ActorSystem )
+  // private case class Key( name: String )
 
   import scala.concurrent.ExecutionContext.global
   private val modelRegistry: Agent[Map[Key, DomainModel]] = Agent( Map[Key, DomainModel]() )( global )
@@ -70,10 +81,8 @@ object DomainModel {
     // default dispatcher is okay since mutations are limited to bootstrap.
     val registry: Agent[AggregateRegistry] = Agent( Map[String, RootTypeRef]() )( system.dispatcher )
 
-    override def aggregateOf( name: String, id: Any ): AggregateRootRef = trace.block( "aggregateOf" ) {
-      trace( s"name = $name" )
-      trace( s"id = $id" )
-      trace( s"""aggregateTypeRegistry = ${registry().mkString("[", ",", "]")} """ )
+    override def aggregateOf( name: String, id: Any ): AggregateRootRef = trace.block( s"aggregateOf($name, $id)" ) {
+      trace( s"""name = $name; system = $system; id = $id; aggregateTypeRegistry = ${registry().mkString("[", ",", "]")} """ )
 
       registry().get( name ) map { rr =>
         val (rootType, aggregateRepository) = rr
@@ -85,11 +94,11 @@ object DomainModel {
 
     override def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Unit = trace.block( "registerAggregateType" ) {
       registry send { r =>
-        trace.block( s"registry send $rootType" ) {
+        trace.block( s"[name=${name}, system=${system}] registry send ${rootType}" ) {
           trace( s"DomainModel.name= $name" )
           if ( r.contains( rootType.name ) ) r
           else {
-            val repoRef = factory( system, rootType )( EnvelopingAggregateRootRepository.props( rootType ) )
+            val repoRef = factory( this, rootType )( EnvelopingAggregateRootRepository.props( this, rootType ) )
             val entry = (rootType, repoRef)
             r + ( rootType.name -> entry )
           }

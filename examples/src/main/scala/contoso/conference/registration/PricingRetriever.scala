@@ -1,13 +1,14 @@
 package contoso.conference.registration
 
-import scala.concurrent.duration._
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.event.LoggingReceive
 import com.typesafe.config.ConfigFactory
-import squants.market._
-import demesne.{ AggregateRootType, DomainModel }
 import contoso.conference.ConferenceModule
-import contoso.registration.{SeatOrderLine, OrderLine, SeatQuantity}
+import contoso.registration.{OrderLine, SeatOrderLine, SeatQuantity}
+import demesne.DomainModel
+import squants.market._
+
+import scala.concurrent.duration._
 
 
 object PricingRetriever {
@@ -24,7 +25,7 @@ object PricingRetriever {
 
   case object ConferencePublishedSeatTypesTimeout extends PricingMessage
 
-  lazy val conferenceRootType: AggregateRootType = ConferenceModule.aggregateRootType
+  // lazy val conferenceRootType: AggregateRootType = ConferenceModule.aggregateRootType
 
   val fallback = "conference-timeout = 250ms"
   val config = ConfigFactory.load
@@ -73,13 +74,13 @@ object PricingRetriever {
 
 
 class PricingRetriever( model: DomainModel ) extends Actor with ActorLogging {
-  import PricingRetriever._
+  import contoso.conference.registration.PricingRetriever._
 
   override def receive: Receive = LoggingReceive {
     case CalculateTotal( conferenceId, seatItems ) => {
       val originalSender = sender
       val handler = context.actorOf( CalculationHandler.props( seatItems, originalSender ) )
-      val conference = model.aggregateOf( conferenceRootType, conferenceId )
+      val conference = model.aggregateOf( ConferenceModule.aggregateRootType, conferenceId )
       conference.tell( ConferenceModule.GetPublishedSeatTypes, handler )
     }
   }

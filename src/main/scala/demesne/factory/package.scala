@@ -1,18 +1,23 @@
 package demesne
 
-import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.actor.{ActorRef, Props}
 import akka.contrib.pattern.ClusterSharding
+import com.typesafe.scalalogging.StrictLogging
+import peds.commons.log.Trace
 
 
-package object factory {
-  type ActorFactory = (ActorSystem, AggregateRootType) => ( Props ) => ActorRef
+package object factory extends StrictLogging {
+  private val trace = Trace( "demesne.factory", logger )
 
-  val systemFactory: ActorFactory = ( system: ActorSystem, rootType: AggregateRootType ) => ( props: Props ) => {
-    system.actorOf( props, rootType.repositoryName )
+  type ActorFactory = (DomainModel, AggregateRootType) => ( Props ) => ActorRef
+
+  val systemFactory: ActorFactory = ( model: DomainModel, rootType: AggregateRootType ) => ( props: Props ) => trace.block( s"systemFactory($model, $rootType)" ) {
+    model.system.actorOf( props, rootType.repositoryName )
   }
 
-  val clusteredFactory: ActorFactory = ( system: ActorSystem, rootType: AggregateRootType ) => ( props: Props ) => {
-    val repoSpec = EnvelopingAggregateRootRepository specificationFor rootType
+  val clusteredFactory: ActorFactory = ( model: DomainModel, rootType: AggregateRootType ) => ( props: Props ) => trace.block( s"clusteredFactory($model, $rootType)" ) {
+    val repoSpec = EnvelopingAggregateRootRepository.specificationFor( model, rootType )
+    val system = model.system
     ClusterSharding( system ).start(
       typeName = repoSpec.name,
       entryProps = Some( repoSpec.props ),
@@ -22,7 +27,7 @@ package object factory {
 
     ClusterSharding( system ).start(
       typeName = rootType.name,
-      entryProps = Some( rootType.aggregateRootProps ),
+      entryProps = Some( rootType.aggregateRootProps( model ) ),
       idExtractor = rootType.aggregateIdFor,
       shardResolver = rootType.shardIdFor
     )

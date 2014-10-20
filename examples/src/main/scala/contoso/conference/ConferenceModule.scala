@@ -1,22 +1,21 @@
 package contoso.conference
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-import scala.util.{ Failure, Success }
-import akka.actor.{ ActorRef, ActorSystem, Props }
+import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
-import shapeless._
-import com.github.nscala_time.time.{ Imports => joda }
+import com.github.nscala_time.time.{Imports => joda}
 import demesne._
-import peds.commons.log.Trace
-import peds.commons.identifier._
 import peds.akka.AskRetry._
 import peds.akka.publish._
-import contoso._
+import peds.commons.log.Trace
+import shapeless._
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 
 trait ConferenceModule extends AggregateRootModule {
-  import ConferenceModule.trace
+  import contoso.conference.ConferenceModule.trace
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
@@ -28,12 +27,19 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
   //DMR move these into common AggregateModuleCompanion trait
   val trace = Trace[ConferenceModule.type]
 
+  var conferenceContext: ActorRef = _
+  override def initialize( context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
+    super.initialize( context )
+    require( context.contains( 'ConferenceContext ), "must start ConferenceModule with ConferenceContext" )
+    conferenceContext = context( 'ConferenceContext ).asInstanceOf[ActorRef]
+  }
+
   override val aggregateIdTag: Symbol = 'conference
 
-  override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
+  override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override val aggregateRootProps: Props = Conference.props( this, context( 'ConferenceContext ).asInstanceOf[ActorRef] )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = Conference.props( this, conferenceContext )
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -66,7 +72,7 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
 
   sealed trait Event extends ConferenceProtocol with EventLike {
     override type ID = module.ID
-    override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
+    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
   }
 
   //Conference/Conference.Contracts/ConferenceCreated.cs
@@ -157,7 +163,7 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
 
   class Conference( override val meta: AggregateRootType, conferenceContext: ActorRef ) extends AggregateRoot[ConferenceState] {
     outer: EventPublisher =>
-    import Conference._
+    import contoso.conference.ConferenceModule.Conference._
 
     override val trace = Trace( "Conference", log )
 

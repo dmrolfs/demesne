@@ -8,8 +8,9 @@ import peds.commons.log.Trace
 
 
 class EnvelopingAggregateRootRepository(
-  aggregateRootType: AggregateRootType
-) extends AggregateRootRepository( aggregateRootType ) with EnvelopingActor {
+  model: DomainModel,
+  rootType: AggregateRootType
+) extends AggregateRootRepository( model, rootType ) with EnvelopingActor {
   override val trace = Trace( "EnvelopingAggregateRootRepository", log )
 
   override def receive: Actor.Receive = LoggingReceive {
@@ -22,14 +23,16 @@ class EnvelopingAggregateRootRepository(
 }
 
 object EnvelopingAggregateRootRepository {
-  def props( rootType: AggregateRootType ): Props = Props( new EnvelopingAggregateRootRepository( rootType ) )
+  def props( model: DomainModel, rootType: AggregateRootType ): Props = {
+    Props( new EnvelopingAggregateRootRepository( model, rootType ) )
+  }
 
-  def specificationFor( rootType: AggregateRootType ): AggregateRootRepository.ClusterShardingSpecification = {
+  def specificationFor( model: DomainModel, rootType: AggregateRootType ): AggregateRootRepository.ClusterShardingSpecification = {
     val name = rootType.name
 
     AggregateRootRepository.ClusterShardingSpecification(
       name = s"${name}Repository",
-      props = props( rootType ),
+      props = props( model, rootType ),
       idExtractor = { case c => ( name, c ) },
       shardResolver = { case c => ( math.abs( name.hashCode ) % 100 ).toString }
     )
@@ -46,6 +49,7 @@ object EnvelopingAggregateRootRepository {
  * aggregates, handling fault handling and recovery actions.
  */
 class AggregateRootRepository(
+  model: DomainModel,
   rootType: AggregateRootType,
   supervisor: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 ) extends Actor with EnvelopingActor with ActorLogging {
@@ -64,9 +68,10 @@ class AggregateRootRepository(
 
   def aggregateFor( command: Any ): ActorRef = trace.block( "aggregateFor" ) {
     trace( s"command = $command" )
+    trace( s"system = ${context.system}" )
     val originalSender = sender
     val (id, cmd) = rootType aggregateIdFor command
-    getOrCreateChild( rootType.aggregateRootProps, id )
+    getOrCreateChild( rootType.aggregateRootProps( model ), id )
   }
 
   def getOrCreateChild( aggregateProps: Props, name: String ): ActorRef = trace.block( "getOrCreateChild" ) {

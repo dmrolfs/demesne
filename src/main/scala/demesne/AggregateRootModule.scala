@@ -19,42 +19,31 @@ trait AggregateRootModuleCompanion extends LazyLogging {
   def nextId: TID = ShortUUID()
   def aggregateIdTag: Symbol
   def shardName: String = _shardName
-  def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType
+  def aggregateRootType: AggregateRootType
 
-  def aggregateOf( id: TID )( implicit system: ActorSystem = this.system ): AggregateRootRef = aggregateOf( Some(id) )
+  def aggregateOf( id: TID )( implicit model: DomainModel ): AggregateRootRef = aggregateOf( Some(id) )
 
-  def aggregateOf( id: Option[TID] )( implicit system: ActorSystem ): AggregateRootRef = trace.block( "aggregateOf" ) {
+  def aggregateOf( id: Option[TID] )( implicit model: DomainModel ): AggregateRootRef = trace.block( s"aggregateOf($id)($model)" ) {
     val effId = id getOrElse nextId
     model.aggregateOf( rootType = aggregateRootType, id = effId )
   }
 
-  //DMR: although there is an assumption of each Aggregate existing in only one ActorSystem in a JVM,
-  // these context properties must be def's rather than val's in order to support testing using multiple isolated
-  // fixtures.
-  //DMR: I don't like this def but need to determine how to supply system to aggregateRootType, esp in regular actors
-  implicit def system: ActorSystem = {
-    context get demesne.SystemKey map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
-  }
+  private[this] var _modelName: String = _
 
-  def model: DomainModel = {
-    context get demesne.ModelKey map { _.asInstanceOf[DomainModel] } getOrElse DomainModel()
-  }
+  def initialize( context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
+    trace( s"context = $context" )
+    require( context.contains( demesne.SystemKey ), "must initialize ${getClass.safeSimpleName} with ActorSystem" )
+    require( context.contains( demesne.ModelKey ), "must initialize ${getClass.safeSimpleName} with DomainModel" )
 
-  def factory: ActorFactory = {
-    context get demesne.FactoryKey map { _.asInstanceOf[ActorFactory] } getOrElse demesne.factory.systemFactory
-  }
+    val s = context( demesne.SystemKey ).asInstanceOf[ActorSystem]
+    val m = context( demesne.ModelKey ).asInstanceOf[DomainModel]
+    val f = context get demesne.FactoryKey map { _.asInstanceOf[ActorFactory] } getOrElse demesne.factory.systemFactory
 
-  private[this] var _context: Map[Symbol, Any] = _
-  protected def context_=( c: Map[Symbol, Any] ): Unit = _context = c
+    _modelName = m.name
 
-  def context: Map[Symbol, Any] = {
-    require( Option(_context).isDefined, "must start aggregate root module with context" )
-    _context
-  }
-
-  def initialize( moduleContext: Map[Symbol, Any] ): Unit = {
-    _context = moduleContext
-    model.registerAggregateType( aggregateRootType, factory )
+    trace( s"system = $s" )
+    trace( s"model = $m" )
+    m.registerAggregateType( aggregateRootType, f )
   }
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )

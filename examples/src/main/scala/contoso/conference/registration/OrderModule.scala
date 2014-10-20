@@ -45,13 +45,13 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
   override val aggregateIdTag: Symbol = 'order
 
-  override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
+  override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps: Props = {
+      override def aggregateRootProps( implicit model: DomainModel ): Props = {
         Order.props(
           this,
-          ClusterSharding( system ).shardRegion( PricingRetriever.shardName )
+          ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
         )
       }
       override val toString: String = shardName + "AggregateRootType"
@@ -119,7 +119,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
   sealed trait Event extends EventLike {
     override type ID = module.ID
-    override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
+    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
   }
 
   // Registration.Contracts/Events/OrderPlaced.cs

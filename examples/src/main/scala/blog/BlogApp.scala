@@ -1,16 +1,16 @@
 package sample.blog
 
-import akka.contrib.pattern.ClusterSharding
-
-import scala.concurrent.duration._
 import akka.actor._
+import akka.contrib.pattern.ClusterSharding
 import akka.pattern.ask
-import akka.persistence.journal.leveldb.{ SharedLeveldbJournal, SharedLeveldbStore }
+import akka.persistence.journal.leveldb.{SharedLeveldbJournal, SharedLeveldbStore}
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
 import demesne.DomainModel
-import author.AuthorListingModule
-import post.PostModule
+import sample.blog.author.AuthorListingModule
+import sample.blog.post.PostModule
+
+import scala.concurrent.duration._
 
 
 object BlogApp {
@@ -33,10 +33,10 @@ object BlogApp {
       )
 
       val makeAuthorListing: () => ActorRef = () => { ClusterSharding(clusterSystem).shardRegion(AuthorListingModule.shardName) }
-
+      val model = DomainModel.register( "blog" )( clusterSystem )
       val context: Map[Symbol, Any] = Map(
         demesne.SystemKey -> clusterSystem,
-        demesne.ModelKey -> DomainModel()( clusterSystem ),
+        demesne.ModelKey -> model,
         demesne.FactoryKey -> demesne.factory.clusteredFactory,
         'authorListing -> makeAuthorListing
       )
@@ -44,7 +44,7 @@ object BlogApp {
       registry.start( context )
 
       // if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
-      if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Props[Bot], "bot" )
+      if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
     }
 
     def startSharedJournal( system: ActorSystem, startStore: Boolean, path: ActorPath ): Unit = {

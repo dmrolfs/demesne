@@ -1,6 +1,6 @@
 package sample.blog
 
-import akka.actor.{Actor, ActorLogging}
+import akka.actor.{Actor, ActorLogging, Props}
 import akka.cluster.Cluster
 import akka.contrib.pattern.ClusterSharding
 import akka.event.LoggingReceive
@@ -14,22 +14,22 @@ import scala.concurrent.duration._
 
 
 object Bot {
-  // def props( model: DomainModel ): Props = Props( new Bot( model ) )
+  def props( model: DomainModel ): Props = Props( new Bot( model ) )
 
   private case object Tick
 }
 
-class Bot extends Actor with ActorLogging {
+class Bot( model: DomainModel ) extends Actor with ActorLogging {
   val trace = Trace[Bot]
 
   import context.dispatcher
   import sample.blog.Bot._
   val tickTask = context.system.scheduler.schedule( 3.seconds, 2.seconds, self, Tick )
 
-  val model = DomainModel()( context.system )
   // val model =
   // val postRegion = ClusterSharding( context.system ).shardRegion( PostModule.shardName )
   def postRegion( id: ShortUUID ): AggregateRootRef = trace.block( s"postRegion( $id) " ) {
+    implicit val system = context.system
     val result = model.aggregateOf( PostModule.aggregateRootType, id )
     // log warning s"post AR = ${result}"
     result

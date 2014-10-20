@@ -17,7 +17,7 @@ object PaymentSourceModule { module =>
 
   sealed trait Event extends EventLike {
     override type ID = module.ID
-    override val sourceTypeName: Option[String] = Some( "PaymentSource" )
+    // override val sourceTypeName: Option[String] = Some( "PaymentSource" )
   }
 
 

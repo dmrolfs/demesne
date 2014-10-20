@@ -1,15 +1,13 @@
 package sample.blog.post
 
-import akka.actor.{ActorPath, ActorRef, ActorSystem, Props}
-import akka.contrib.pattern.ClusterSharding
-import akka.persistence.AtLeastOnceDelivery
+import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
+import akka.persistence.AtLeastOnceDelivery
 import demesne._
 import peds.akka.envelope.Envelope
-import peds.akka.publish.{Publisher, EventPublisher, ReliablePublisher}
+import peds.akka.publish.EventPublisher
 import peds.commons.identifier._
 import peds.commons.log.Trace
-import sample.blog.author.AuthorListingModule
 import shapeless._
 
 
@@ -25,18 +23,20 @@ trait PostModule extends AggregateRootModule {
 object PostModule extends AggregateRootModuleCompanion { module =>
   override val trace = Trace[PostModule.type]
 
+  var makeAuthorListing: () => ActorRef = _
+  override def initialize( context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
+    super.initialize( context )
+    require( context.contains( 'authorListing ), "must start PostModule with author listing factory" )
+    makeAuthorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
+  }
+
   override val aggregateIdTag: Symbol = 'post
 
 
-  override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
+  override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-
-      override def aggregateRootProps: Props = trace.block( "aggregateRootProps" ) {
-        val authorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
-        Post.props( this, authorListing() )
-      }
-
+      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props( this, makeAuthorListing() )
       override val toString: String = shardName + "AggregateRootType"
     }
   }

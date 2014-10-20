@@ -36,16 +36,19 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
   val trace = Trace[RegistrationSagaModule.type]
   override val aggregateIdTag: Symbol = 'registration
 
-  override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
+  override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override def name: String = module.shardName
-      override def aggregateRootProps: Props = {
+
+      override def aggregateRootProps( implicit model: DomainModel ): Props = {
         RegistrationSaga.props(
           meta = this,
+          model = model,
           orderType = OrderModule.aggregateRootType,
           availabilityType = SeatsAvailabilityModule.aggregateRootType
         )
       }
+
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -60,7 +63,7 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
 
   sealed trait Event extends EventLike {
     override type ID = module.ID
-    override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
+    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
   }
 
   case class RegistrationProcessExpired( override val sourceId: RegistrationProcessExpired#TID ) extends Event
@@ -115,8 +118,13 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
   }
 
   object RegistrationSaga {
-    def props( meta: AggregateRootType, orderType: AggregateRootType, availabilityType: AggregateRootType ): Props = {
-      Props( new RegistrationSaga( meta, orderType, availabilityType ) with EventPublisher )
+    def props( 
+      meta: AggregateRootType, 
+      model: DomainModel, 
+      orderType: AggregateRootType, 
+      availabilityType: AggregateRootType 
+    ): Props = {
+      Props( new RegistrationSaga( meta, model, orderType, availabilityType ) with EventPublisher )
     }
 
     //DMR: det where to locate this b/h; e.g., pull-req into nscala-time, peds?
@@ -125,6 +133,7 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
 
   class RegistrationSaga(
     override val meta: AggregateRootType,
+    model: DomainModel,
     orderType: AggregateRootType,
     seatsAvailabilityType: AggregateRootType
   ) extends Saga[RegistrationSagaState] {
@@ -151,10 +160,10 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
     }
 
 
-    def order( id: Option[OrderModule.TID] ): AggregateRootRef = OrderModule aggregateOf id
+    def order( id: Option[OrderModule.TID] ): AggregateRootRef = OrderModule.aggregateOf( id )( model )
 
     def seatsAvailability( id: Option[SeatsAvailabilityModule.TID] ): AggregateRootRef = {
-      SeatsAvailabilityModule aggregateOf id
+      SeatsAvailabilityModule.aggregateOf( id )( model )
     }
 
 

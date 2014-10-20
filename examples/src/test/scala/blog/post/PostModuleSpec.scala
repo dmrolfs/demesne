@@ -27,7 +27,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
 
     override val module: AggregateRootModule = new PostModule { }
 
-    override def context: Map[Symbol, Any] = {
+    override def context: Map[Symbol, Any] = trace.block( "context" ) {
       val result = super.context
       val makeAuthorListing = () => trace.block( "makeAuthorList" ){ author.ref }
       result + ( 'authorListing -> makeAuthorListing )
@@ -50,7 +50,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
       post ! AddPost( id, content )
-      bus.expectMsgPF( max = 1.second, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 400.millis, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
       trace( "<<<<<<<< add content <<<<<<<<" )

@@ -2,9 +2,7 @@ package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.actor.ActorSystem
-import akka.testkit.{ImplicitSender, TestKit}
-import demesne.{AggregateRootModule, DomainModel}
+import demesne.AggregateRootModule
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import peds.commons.log.Trace
@@ -20,25 +18,20 @@ object AggregateRootSpec {
  * Created by damonrolfs on 9/17/14.
  */
 abstract class AggregateRootSpec[A: ClassTag]
-extends SequentialAkkaSpecWithIsolatedFixture
+  extends SequentialAkkaSpecWithIsolatedFixture
 //with WordSpecLike
 with MockitoSugar
 //with Matchers
 with BeforeAndAfterAll {
   private val trace = Trace[AggregateRootSpec[A]]
 
-  abstract class AggregateFixture
-  extends TestKit( ActorSystem( s"WithAggRootFix-${AggregateRootSpec.sysId.incrementAndGet()}", config ) )
-  with ImplicitSender {
+  abstract class AggregateFixture( id: Int = AggregateRootSpec.sysId.incrementAndGet() ) extends AkkaFixture {
     private val trace = Trace[AggregateFixture]
 
     def before(): Unit = trace.block( "before" ) { module start context }
     def after(): Unit = trace.block( "after" ) { module stop context }
 
     def module: AggregateRootModule
-
-    //todo need to figure out how to prevent x-test clobbering of DM across suites
-    def model: DomainModel = trace.block( s"model()" ) { DomainModel() }
 
     def context: Map[Symbol, Any] = trace.block( "context()" ) {
       Map(

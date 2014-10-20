@@ -98,7 +98,10 @@ with ActorLogging {
   override def unhandled( message: Any ): Unit = {
     message match {
       case m: ReceiveTimeout => context.parent ! meta.passivation.passivationMessage( m )
-      case m => super.unhandled( m )
+      case m => {
+        log info s"aggregate root unhandled $m"
+        super.unhandled( m )
+      }
     }
   }
 }

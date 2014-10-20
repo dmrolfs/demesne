@@ -5,7 +5,7 @@ import demesne.EventLike
 
 sealed trait Event extends EventLike {
   override type ID = PostModule.ID
-  override val sourceTypeName: Option[String] = Option( PostModule.aggregateRootType.name )
+  // override val sourceTypeName: Option[String] = Option( PostModule.aggregateRootType.name )
 }
 
 case class PostAdded( override val sourceId: PostAdded#TID, content: PostContent ) extends Event

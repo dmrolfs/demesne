@@ -1,6 +1,6 @@
 package contoso.conference.registration
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.Props
 import akka.event.LoggingReceive
 import contoso.conference.SeatType
 import contoso.registration.{PersonalInfo, SeatQuantity}
@@ -27,10 +27,10 @@ object SeatAssignmentsModule extends AggregateRootModuleCompanion { module =>
 
   override val aggregateIdTag: Symbol = 'seatsAssignment
 
-  override def aggregateRootType( implicit system: ActorSystem = this.system ): AggregateRootType = {
+  override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps: Props = SeatAssignments.props( this )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatAssignments.props( this )
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -72,7 +72,7 @@ object SeatAssignmentsModule extends AggregateRootModuleCompanion { module =>
 
   sealed trait Event extends EventLike {
     override type ID = module.ID
-    override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
+    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
   }
 
   // Registration.Contracts/Events/SeatAssigned.cs

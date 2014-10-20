@@ -40,7 +40,7 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
 
     def module: AggregateRootModule = new PostModule { }
 
-    def model: DomainModel = trace.block( s"model()" ) { DomainModel() }
+    // def model: DomainModel = trace.block( s"model()" ) { DomainModel() }
 
     val authorProbe = TestProbe()
 
