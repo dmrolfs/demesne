@@ -4,4 +4,4 @@
 demesne
 =======
 
-An open-source, opinionated framework for developing CQRS+ES systems using Scala and Akka.
+A tooklit for developing DDD+CQRS+ES systems using Scala and Akka.

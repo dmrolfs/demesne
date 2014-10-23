@@ -1,0 +1,28 @@
+== Overview ==
+Demesne is a toolkit for building DDD+CQRS+ES applications. It is built on Akka's Persistence and Cluster Sharding, and
+is intended to work within a broader Akka system. The goal is to support easier concurrency and persistent development
+of aggregates in a possibly clustered infrastructure and complex domain.
+
+Demesne is intended to be used in an Akka system along side other Actors, and handle the component model and
+persistence for aggregates. Demesne AggregateRoots are Akka PersistentActor, and are accessed via Demesne's
+[[demesne.DomainModel]] class. Commands are submitted to [[demesne.AggregateRoot]], which if accepted and processed,
+may produce zero or many Events that are published and persisted.
+
+== Using Demesne ==
+Aggregates are retrieved through one of [[demesne.DomainModel]]'s `aggregateOf` operations, which uses a previously
+registered aggregate repository to locate or construct the requested aggregate within the cluster. Once a reference is
+acquired the aggregate may be used by sending commands to it:
+ 1. Aggregate receives command
+ 1. If the Aggregate accepts the command, it is processed (applies business logic) and may produce events representing
+results of processing
+ 1. Events are applied to actor so it can update it’s internal state
+ 1. Events are persisted to journal
+ 1. Events are published to subscribers
+
+== Building AggregateRoots ==
+
+== Message Envelopes ==
+Messages (Commands and Events) are wrapped with an envelope containing meta data that describes the unit of work,
+actors involved and ordering.
+
+Aggregates are returned from the DomainModel wrapped in an [[demesne.AggregateRootRef]] to ensure

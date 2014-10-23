@@ -36,6 +36,7 @@ object BuildSettings {
       "-Ywarn-adapted-args",
       "-Xfatal-warnings"
     ),
+    scalacOptions in (Compile, doc) ++= Seq("-doc-root-content", baseDirectory.value+"/src/demesne.wiki"),
     testOptions in Test += Tests.Argument( "-oF" )
   )
 

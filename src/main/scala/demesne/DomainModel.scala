@@ -21,16 +21,6 @@ trait DomainModel {
 object DomainModel {
   val trace = Trace[DomainModel.type]
 
-  trait Provider {
-    def model: DomainModel
-    def system: ActorSystem
-  }
-
-  object Provider{
-    def unapply( p: Provider ): Option[(DomainModel, ActorSystem)] = Some( ( p.model, p.system ) )
-  }
-
-
   def register( name: String )( implicit system: ActorSystem ): DomainModel = trace.block( s"register($name)($system)" ) {
     val key = Key( name, system )
     val model = new DomainModelImpl( name )
@@ -59,7 +49,6 @@ object DomainModel {
   def unapply( dm: DomainModel ): Option[(String)] = Some( dm.name )
 
   private case class Key( name: String, system: ActorSystem )
-  // private case class Key( name: String )
 
   import scala.concurrent.ExecutionContext.global
   private val modelRegistry: Agent[Map[Key, DomainModel]] = Agent( Map[Key, DomainModel]() )( global )
