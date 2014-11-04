@@ -11,12 +11,8 @@ import scala.reflect.ClassTag
 
 
 object Relay extends com.typesafe.scalalogging.LazyLogging {
-//  type Msg = Any
-//  type Key = Any
-//  type Id = Any
-  type KeyIdExtractor[Msg, Key, Id] = PartialFunction[Msg, (Key, Id)]
-  def props[Msg: ClassTag, Key, Id]( register: ActorRef, keyIdExtractor: KeyIdExtractor[Msg, Key, Id] ): Props = {
-    Trace( "Relay", logger ).msg( s"props:: Msg=${implicitly[ClassTag[Msg]].runtimeClass}" )
+  type KeyIdExtractor[K, I] = PartialFunction[Any, (K, I)]
+  def props[K, I]( register: ActorRef, keyIdExtractor: KeyIdExtractor[K, I] ): Props = {
     Props( new Relay( register, keyIdExtractor) )
   }
 
@@ -27,29 +23,29 @@ object Relay extends com.typesafe.scalalogging.LazyLogging {
 /**
  * Created by damonrolfs on 10/27/14.
  */
-class Relay[Msg: ClassTag, Key, Id]( register: ActorRef, keyIdExtractor: PartialFunction[Msg, (Key, Id)] )
+class Relay[K, I]( register: ActorRef, extractor: Relay.KeyIdExtractor[K, I] )
 extends Actor
 with ActorLogging {
 
   val trace = Trace( getClass.safeSimpleName, log )
 
-  val classifier: Class[_] = implicitly[ClassTag[Msg]].runtimeClass
+//  val classifier: Class[_] = implicitly[ClassTag[Msg]].runtimeClass
   val proxy = context.actorOf( ReliableProxy.props( targetPath = register.path, retryAfter = 100.millis ) )
 
 
-  @scala.throws[Exception](classOf[Exception])
-  override def preStart(): Unit = log info s"Msg type=${implicitly[ClassTag[Msg]].runtimeClass}"
+//  @scala.throws[Exception](classOf[Exception])
+//  override def preStart(): Unit = log info s"Msg type=${implicitly[ClassTag[Msg]].runtimeClass}"
 
   override def receive: Receive = LoggingReceive {
 //    case SubscribeTo( aggregate ) => trace.block( s"receive:SubscribeTo(${aggregate})" ) { context.system.eventStream.subscribe( aggregate, classifier ) }
 //
-    case event: Msg if keyIdExtractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
-      val (key, id) = keyIdExtractor( event )
-      val registered = Register.RegisterAggregate( key = key, id = id, classifier = classifier )
+    case event if extractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
+      val (key, id) = extractor( event )
+      val registered = RegisterAggregate.RecordAggregate( key = key, id = id )
       proxy ! registered
       log info s"relayed to aggregate register: ${registered}"
     }
 
-    case m => log info s"RELAY UNHANDLED ${m} class=${m.getClass}; classifier[${classifier}}]=${classifier.isInstance(m)}; implicitly=${implicitly[ClassTag[Msg]].runtimeClass}; extractor=${keyIdExtractor.isDefinedAt(m.asInstanceOf[Msg])}"
+    case m => log info s"RELAY UNHANDLED ${m} class=${m.getClass}; extractor=${extractor.isDefinedAt(m)}"
   }
 }

@@ -11,25 +11,26 @@ import scala.reflect.ClassTag
 import peds.commons.util._
 
 
-object Register {
+object RegisterAggregate {
 //  val IndexTopic = "index"
 //  val RegisterSubscriberPath = ""
+  type Register[K, I] = Map[K, I]
 
 //  def props[K: ClassTag, A: ClassTag]( subscriberPath: String ): Props = Props( new Register[K, A](subscriberPath)  )
-  def props[K: ClassTag, A: ClassTag]( subscriber: ActorRef ): Props = Props( new Register[K, A]( subscriber )  )
+  def props[K: ClassTag, I: ClassTag]( subscriber: ActorRef ): Props = Props( new RegisterAggregate[K, I]( subscriber )  )
 
   import scala.language.existentials
   sealed trait RegisterMessage
-  case class RegisterAggregate( key: Any, id: Any, classifier: Class[_] ) extends RegisterMessage
-  case class AggregateRegistered( key: Any, id: Any, classifier: Class[_] ) extends RegisterMessage {
-    def mapIdTo[TID]( implicit tag: ClassTag[TID] ): TID = {
+  case class RecordAggregate( key: Any, id: Any ) extends RegisterMessage
+  case class AggregateRecorded( key: Any, id: Any ) extends RegisterMessage {
+    def mapIdTo[T]( implicit tag: ClassTag[T] ): T = {
 
       val boxedClass = {
         val c = tag.runtimeClass
         if ( c.isPrimitive ) AggregateRegistered toBoxed c else c
       }
       require( boxedClass ne null )
-      boxedClass.cast( id ).asInstanceOf[TID]
+      boxedClass.cast( id ).asInstanceOf[T]
     }
   }
 
@@ -53,8 +54,8 @@ object Register {
  * Created by damonrolfs on 10/26/14.
  */
 //class Register[Key, AggregateId]( subscriberPath: String ) extends PersistentActor with ActorLogging {
-class Register[Key: ClassTag, AggregateId: ClassTag]( subscriber: ActorRef ) extends Actor with ActorLogging {
-  import Register._
+class RegisterAggregate[K: ClassTag, I: ClassTag]( subscriber: ActorRef ) extends Actor with ActorLogging {
+  import RegisterAggregate._
 
   val trace = Trace( getClass.safeSimpleName, log )
 //  val mediator: ActorRef = DistributedPubSubExtension( context.system ).mediator
@@ -73,11 +74,11 @@ class Register[Key: ClassTag, AggregateId: ClassTag]( subscriber: ActorRef ) ext
 //      .getOrElse( "master" )
 //  }
 
-  type State = Map[Key, AggregateId]
+  type State = Register[K, I]
   private var state: State = Map()
 
 //  override def receiveRecover: Receive = LoggingReceive {
-//    case AggregateRegistered( key, id, _ ) => trace.block( s"receiveRecover:AggregateRegistered( $key, $id, _ )" ) {
+//    case RegisterAggregate( key, id, _ ) => trace.block( s"receiveRecover:RegisterAggregate( $key, $id, _ )" ) {
 //      val k = key.asInstanceOf[Key]
 //      val v = id.asInstanceOf[AggregateId]
 //      state += ( k -> v )
@@ -92,12 +93,13 @@ class Register[Key: ClassTag, AggregateId: ClassTag]( subscriber: ActorRef ) ext
 //        log info s"aggregate recorded in register: ${key} -> ${id}"
 //      }
 //    }
-    case mapping @ RegisterAggregate( key, id, classifier ) => trace.block( s"receive:${mapping}" ) {
-      val e = AggregateRegistered( key, id, classifier )
-      state += ( key.asInstanceOf[Key] -> id.asInstanceOf[AggregateId] )
+
+    case RecordAggregate( key: K, id: I ) => trace.block( s"receive:RegisterAggregate($key, $id})" ) {
+      val e = AggregateRecorded( key, id )
+      state += ( key -> id )
       subscriber ! e
 //      mediator ! DistributedPubSubMediator.SendToAll( path = subscriberPath, msg = e, allButSelf = true )
-      log info s"aggregate recorded in register: ${key} -> ${id}"
+      log info s"aggregate recorded in register: $key -> $id"
     }
 
 //    case m => unhandled( m )

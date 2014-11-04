@@ -12,25 +12,29 @@ import scala.util.Try
 
 
 object RegisterSubscriber {
-  def props[Key, AggregateId: ClassTag]: Props = Props( new RegisterSubscriber[Key, AggregateId] )
+  def props[K: ClassTag, I: ClassTag]: Props = Props( new RegisterSubscriber[K, I] )
 
   sealed trait Message
 
   case object GetRegister extends Message
 
   import scala.language.existentials
+  type RegisterAgent[K, I] = Agent[RegisterAggregate.Register[K, I]]
+
   case class Register( agent: Agent[_] ) {
-    def mapTo[Key, AggregateId]: Agent[Map[Key, AggregateId]] = agent.asInstanceOf[Agent[Map[Key, AggregateId]]]
+    def mapTo[K, I]: RegisterAgent[K, I] = agent.asInstanceOf[RegisterAgent[K, I]]
   }
 }
 
 /**
  * Created by damonrolfs on 10/27/14.
  */
-class RegisterSubscriber[Key, AggregateId: ClassTag] extends Actor with ActorLogging {
+class RegisterSubscriber[K: ClassTag, I: ClassTag] extends Actor with ActorLogging {
   val trace = Trace( getClass.safeSimpleName, log )
 
-  type RegisterSummary = Map[Key, AggregateId]
+  type Register = RegisterAggregate.Register[K, I]
+  type RegisterAgent = RegisterSubscriber.RegisterAgent[K, I]
+
   val dispatcher: ExecutionContextExecutor = trace.block( "dispatcher" ) {
     val result = Try {
       context.system.dispatchers.lookup( "demesne.register-dispatcher" )
@@ -40,12 +44,12 @@ class RegisterSubscriber[Key, AggregateId: ClassTag] extends Actor with ActorLog
     result.get
   }
 
-  val register: Agent[RegisterSummary] = trace.block( "register" ) { Agent( Map[Key, AggregateId]() )( dispatcher ) }
+  val register: RegisterAgent = trace.block( "register" ) { Agent( Map[K, I]() )( dispatcher ) }
 
   override def receive: Receive = LoggingReceive {
-    case e: Register.AggregateRegistered => trace.block( s"receive:${e}" ) {
-      val key = e.key.asInstanceOf[Key]
-      val id = e.mapIdTo[AggregateId]
+    case e @ RegisterAggregate.AggregateRecorded( key: K, _ ) => trace.block( s"receive:${e}" ) {
+//      val key = e.key.asInstanceOf[Key]
+      val id = e.mapIdTo[I] //dmr: cast here to handled boxed primitive cases
       register send { r => r + ( key -> id ) }
     }
 
