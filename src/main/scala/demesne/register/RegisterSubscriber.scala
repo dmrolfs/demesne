@@ -48,7 +48,6 @@ class RegisterSubscriber[K: ClassTag, I: ClassTag] extends Actor with ActorLoggi
 
   override def receive: Receive = LoggingReceive {
     case e @ RegisterAggregate.AggregateRecorded( key: K, _ ) => trace.block( s"receive:${e}" ) {
-//      val key = e.key.asInstanceOf[Key]
       val id = e.mapIdTo[I] //dmr: cast here to handled boxed primitive cases
       register send { r => r + ( key -> id ) }
     }
