@@ -1,23 +1,22 @@
 package demesne.register
 
-import akka.actor.{ActorRef, Actor, Props, ActorLogging}
+import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
-import akka.contrib.pattern.{DistributedPubSubMediator, ClusterReceptionistExtension, DistributedPubSubExtension}
+import akka.contrib.pattern.DistributedPubSubExtension
 import akka.event.LoggingReceive
-import akka.persistence.{SnapshotOffer, PersistentActor}
+import akka.persistence.{PersistentActor, SnapshotOffer}
 import peds.commons.log.Trace
+import peds.commons.util._
 
 import scala.reflect.ClassTag
-import peds.commons.util._
 
 
 object RegisterAggregate {
-//  val IndexTopic = "index"
-//  val RegisterSubscriberPath = ""
   type Register[K, I] = Map[K, I]
 
-//  def props[K: ClassTag, A: ClassTag]( subscriberPath: String ): Props = Props( new Register[K, A](subscriberPath)  )
-  def props[K: ClassTag, I: ClassTag]( subscriber: ActorRef ): Props = Props( new RegisterAggregate[K, I]( subscriber )  )
+  def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterAggregate[K, I]( topic )  )
+
+  def topic( rootType: String, keyType: String ): String = s"register/${rootType}/${keyType}"
 
   import scala.language.existentials
   sealed trait Command
@@ -37,6 +36,7 @@ object RegisterAggregate {
   }
 
   object AggregateRegistered {
+    //todo find a better home; i.e., someplace utility like
     val toBoxed: Map[Class[_], Class[_]] = Map(
       classOf[Boolean] -> classOf[java.lang.Boolean],
       classOf[Byte]    -> classOf[java.lang.Byte],
@@ -55,28 +55,25 @@ object RegisterAggregate {
 /**
  * Created by damonrolfs on 10/26/14.
  */
-//class Register[Key, AggregateId]( subscriberPath: String ) extends PersistentActor with ActorLogging {
-class RegisterAggregate[K: ClassTag, I: ClassTag]( subscriber: ActorRef ) extends PersistentActor with ActorLogging {
-  import RegisterAggregate._
+class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String )
+extends PersistentActor
+with ActorLogging {
+  import akka.contrib.pattern.DistributedPubSubMediator.Publish
+  import demesne.register.RegisterAggregate._
 
   val trace = Trace( getClass.safeSimpleName, log )
-//  val mediator: ActorRef = DistributedPubSubExtension( context.system ).mediator
+  val mediator: ActorRef = DistributedPubSubExtension( context.system ).mediator
 
-  override def preStart(): Unit = trace.block( "preStart" ) {
-    super.preStart()
-//    ClusterReceptionistExtension( context.system ).registerService( self )
-  }
 
   // persistenceId must include cluster role to support multiple masters
-
-
-  override def persistenceId: String = {
-    "register"
-//    Cluster( context.system )
-//      .selfRoles
-//      .find( _.startsWith( "register-" ) )
-//      .map( _ + "-master" )
-//      .getOrElse( "master" )
+  override lazy val persistenceId: String = trace.block( "persistenceId" ) {
+    topic +
+    "/" +
+    Cluster( context.system )
+      .selfRoles
+      .find( _.startsWith( "register-" ) )
+      .map( _ + "-master" )
+      .getOrElse( "register-master" )
   }
 
   type State = Register[K, I]
@@ -99,36 +96,16 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( subscriber: ActorRef ) extend
     }
   }
 
-//  override def receive: Receive = receiveCommand
-
   override def receiveCommand: Receive = LoggingReceive {
     case RecordAggregate( key: K, id: I ) => trace.block( s"receiveCommand:RecordAggregate($key, $id)" ) {
-      persist( AggregateRecorded( key, id ) ) { e =>
+      persistAsync( AggregateRecorded( key, id ) ) { e =>
         updateState( e )
-        //        mediator ! DistributedPubSubMediator.SendToAll( path = subscriberPath, msg = e, allButSelf = true )
-        subscriber ! e
+        mediator ! Publish( topic = topic, msg = e )
       }
     }
 
-//    case RecordAggregate( key, id ) => trace.block( s"receiveCommand:RecordAggregate($key, $id)" ) {
-//      persist( AggregateRecorded( key, id ) ) { e =>
-//        updateState( e )
-//        //        mediator ! DistributedPubSubMediator.SendToAll( path = subscriberPath, msg = e, allButSelf = true )
-//        subscriber ! e
-//      }
-//    }
-
     case "print" => println( s"register state = ${state}" )
-//    case RecordAggregate( key: K, id: I ) => trace.block( s"receive:RegisterAggregate($key, $id})" ) {
-//      val e = AggregateRecorded( key, id )
-//      state += ( key -> id )
-//      subscriber ! e
-////      mediator ! DistributedPubSubMediator.SendToAll( path = subscriberPath, msg = e, allButSelf = true )
-//      log info s"aggregate recorded in register: $key -> $id"
-//    }
-
-    case m => unhandled( m )
   }
 
-  override def unhandled(message: Any): Unit = log error s"REGISTER UNHANDLED ${message}"
+  override def unhandled( message: Any ): Unit = log warning s"REGISTER UNHANDLED ${message}"
 }
