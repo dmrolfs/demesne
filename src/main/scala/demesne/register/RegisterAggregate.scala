@@ -23,14 +23,18 @@ object RegisterAggregate {
   case class RecordAggregate( key: Any, id: Any ) extends Command
 
   sealed trait Event
-  case class AggregateRecorded( key: Any, id: Any ) extends Event {
+  case class AggregateRecorded( key: Any, keyType: Class[_], id: Any, idType: Class[_] ) extends Event {
     def mapIdTo[T]( implicit tag: ClassTag[T] ): T = {
-
       val boxedClass = {
         val c = tag.runtimeClass
-        if ( c.isPrimitive ) AggregateRegistered toBoxed c else c
+        if ( c.isPrimitive ) {
+          AggregateRegistered toBoxed c
+        } else {
+          require( c isAssignableFrom idType, s"target class[${c}}] incompatible with id type[${idType}]" )
+          c
+        }
       }
-      require( boxedClass ne null )
+      require( boxedClass ne null, s"id[${id}] boxed class cannot be null" )
       boxedClass.cast( id ).asInstanceOf[T]
     }
   }
@@ -63,7 +67,8 @@ with ActorLogging {
 
   val trace = Trace( getClass.safeSimpleName, log )
   val mediator: ActorRef = DistributedPubSubExtension( context.system ).mediator
-
+  val keyType: Class[_] = implicitly[ClassTag[K]].runtimeClass
+  val idType: Class[_] = implicitly[ClassTag[I]].runtimeClass
 
   // persistenceId must include cluster role to support multiple masters
   override lazy val persistenceId: String = trace.block( "persistenceId" ) {
@@ -76,12 +81,12 @@ with ActorLogging {
       .getOrElse( "register-master" )
   }
 
-  type State = Register[K, I]
+  type State = RegisterAggregate.Register[K, I]
   private var state: State = Map()
 
   private def updateState( event: Any ): Unit = trace.block( s"updateState(${event}})" ) {
     event match {
-      case e @ AggregateRecorded( key: K, _ ) => {
+      case e @ AggregateRecorded( key: K, _, _, _ ) => {
         val id = e.mapIdTo[I]
         state += ( key -> id )
         log info s"aggregate recorded in register: ${key} -> ${id}"
@@ -92,13 +97,13 @@ with ActorLogging {
   override val receiveRecover: Receive = LoggingReceive {
     case e: AggregateRecorded => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
     case SnapshotOffer( _, snapshot ) => trace.block( s"receiveRecover:SnapshotOffer(_, ${snapshot})" ) {
-      state = snapshot.asInstanceOf[Register[K, I]]
+      state = snapshot.asInstanceOf[RegisterAggregate.Register[K, I]]
     }
   }
 
   override def receiveCommand: Receive = LoggingReceive {
     case RecordAggregate( key: K, id: I ) => trace.block( s"receiveCommand:RecordAggregate($key, $id)" ) {
-      persistAsync( AggregateRecorded( key, id ) ) { e =>
+      persistAsync( AggregateRecorded( key = key, keyType = keyType, id = id, idType = idType ) ) { e =>
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }
