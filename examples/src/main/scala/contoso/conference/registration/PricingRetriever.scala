@@ -78,7 +78,7 @@ class PricingRetriever( model: DomainModel ) extends Actor with ActorLogging {
 
   override def receive: Receive = LoggingReceive {
     case CalculateTotal( conferenceId, seatItems ) => {
-      val originalSender = sender
+      val originalSender = sender()
       val handler = context.actorOf( CalculationHandler.props( seatItems, originalSender ) )
       val conference = model.aggregateOf( ConferenceModule.aggregateRootType, conferenceId )
       conference.tell( ConferenceModule.GetPublishedSeatTypes, handler )

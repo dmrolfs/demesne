@@ -37,7 +37,7 @@ with BeforeAndAfterAll {
       Map(
         demesne.ModelKey -> model,
         demesne.SystemKey -> system,
-        demesne.FactoryKey -> demesne.factory.systemFactory
+        demesne.FactoryKey -> demesne.factory.contextFactory
       )
     }
   }

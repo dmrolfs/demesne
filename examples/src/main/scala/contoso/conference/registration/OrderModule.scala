@@ -16,12 +16,12 @@ import squants._
 import scala.util.Random
 
 
-trait OrderModule extends AggregateRootModule {
+trait OrderModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
   import contoso.conference.registration.OrderModule.trace
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
-    OrderModule.initialize( ctx )
+    OrderModule.initialize( module, ctx )
   }
 }
 

@@ -1,8 +1,10 @@
 package demesne
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.agent.Agent
 import demesne.factory._
+import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ StartChild, ChildStarted }
+import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
 
 import scala.concurrent.Await
@@ -54,7 +56,7 @@ object DomainModel {
   private val modelRegistry: Agent[Map[Key, DomainModel]] = Agent( Map[Key, DomainModel]() )( global )
 
   private object DomainModelImpl {
-    type RootTypeRef = (AggregateRootType, ActorRef)
+    type RootTypeRef = (ActorRef, AggregateRootType)
     type AggregateRegistry = Map[String, RootTypeRef]
   }
 
@@ -69,12 +71,30 @@ object DomainModel {
 
     // default dispatcher is okay since mutations are limited to bootstrap.
     val registry: Agent[AggregateRegistry] = Agent( Map[String, RootTypeRef]() )( system.dispatcher )
+//use this to make register actors per root type
+    val repositorySupervisor: ActorRef = system.actorOf(
+      Props(
+        new IsolatedDefaultSupervisor with OneForOneStrategyFactory {
+          override def childStarter(): Unit = { }
+        }
+      ),
+      "Repositories"
+    )
+
+    val registerSupervisor: ActorRef = system.actorOf(
+      Props(
+        new IsolatedDefaultSupervisor with OneForOneStrategyFactory {
+          override def childStarter(): Unit = { }
+        }
+      ),
+      "AggregateRegisters"
+    )
 
     override def aggregateOf( name: String, id: Any ): AggregateRootRef = trace.block( s"aggregateOf($name, $id)" ) {
       trace( s"""name = $name; system = $system; id = $id; aggregateTypeRegistry = ${registry().mkString("[", ",", "]")} """ )
 
       registry().get( name ) map { rr =>
-        val (rootType, aggregateRepository) = rr
+        val (aggregateRepository, rootType) = rr
         AggregateRootRef( rootType, id, aggregateRepository )
       } getOrElse {
         throw new IllegalStateException(s"DomainModel type registry does not have root type:${name}")
@@ -82,14 +102,24 @@ object DomainModel {
     }
 
     override def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Unit = trace.block( "registerAggregateType" ) {
+      import akka.pattern.ask
+      implicit val ec = system.dispatcher
+
       registry send { r =>
-        trace.block( s"[name=${name}, system=${system}] registry send ${rootType}" ) {
+        trace.block(s"[name=${name}, system=${system}] registry send ${rootType}") {
           trace( s"DomainModel.name= $name" )
-          if ( r.contains( rootType.name ) ) r
+          if (r.contains(rootType.name)) r
           else {
-            val repoRef = factory( this, rootType )( EnvelopingAggregateRootRepository.props( this, rootType ) )
-            val entry = (rootType, repoRef)
-            r + ( rootType.name -> entry )
+            val props = EnvelopingAggregateRootRepository.props( this, rootType, factory )
+            val entry = for {
+              repoStarted <- ask( repositorySupervisor, StartChild(props, rootType.repositoryName) )( 3.seconds ).mapTo[ChildStarted]
+              repo = repoStarted.child
+            } yield ( rootType.name, (repo, rootType) )
+
+            //todo make configuration driven
+            //todo is Await necessary?
+            val e = Await.result( entry, 3.seconds )
+            r + e
           }
         }
       }

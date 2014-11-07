@@ -1,6 +1,7 @@
 package demesne
 
 import akka.actor.ActorSystem
+import akka.contrib.pattern.ClusterSharding
 import com.typesafe.scalalogging.LazyLogging
 import demesne.factory.ActorFactory
 import peds.commons.identifier._
@@ -8,9 +9,25 @@ import peds.commons.log.Trace
 import peds.commons.module.ModuleLifecycle
 
 
-trait AggregateRootModule extends ModuleLifecycle
+trait AggregateModuleInitializationExtension {
+  def initialize( rootType: AggregateRootType )( implicit model: DomainModel ): Unit = { }
+}
 
-//DMR: use actorFactory? how specify? via root type? DRY?
+trait ClusteredAggregateModuleExtension extends AggregateModuleInitializationExtension {
+  override def initialize( rootType: AggregateRootType )( implicit model: DomainModel ): Unit = {
+    ClusterSharding( model.system ).start(
+      typeName = rootType.name,
+      entryProps = Some( rootType.aggregateRootProps ),
+      idExtractor = rootType.aggregateIdFor,
+      shardResolver = rootType.shardIdFor
+    )
+  }
+}
+
+
+trait AggregateRootModule extends ModuleLifecycle { module: AggregateModuleInitializationExtension => }
+
+
 trait AggregateRootModuleCompanion extends LazyLogging {
   def trace: Trace[_]
 
@@ -28,22 +45,20 @@ trait AggregateRootModuleCompanion extends LazyLogging {
     model.aggregateOf( rootType = aggregateRootType, id = effId )
   }
 
-  private[this] var _modelName: String = _
-
-  def initialize( context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
+  def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
     trace( s"context = $context" )
     require( context.contains( demesne.SystemKey ), "must initialize ${getClass.safeSimpleName} with ActorSystem" )
     require( context.contains( demesne.ModelKey ), "must initialize ${getClass.safeSimpleName} with DomainModel" )
 
     val s = context( demesne.SystemKey ).asInstanceOf[ActorSystem]
-    val m = context( demesne.ModelKey ).asInstanceOf[DomainModel]
+    implicit val m = context( demesne.ModelKey ).asInstanceOf[DomainModel]
     val f = context get demesne.FactoryKey map { _.asInstanceOf[ActorFactory] } getOrElse demesne.factory.systemFactory
-
-    _modelName = m.name
 
     trace( s"system = $s" )
     trace( s"model = $m" )
-    m.registerAggregateType( aggregateRootType, f )
+    val rootType = aggregateRootType
+    module.initialize( rootType )
+    m.registerAggregateType( rootType, f )
   }
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )

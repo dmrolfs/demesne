@@ -6,20 +6,21 @@ import akka.pattern.ask
 import akka.persistence.journal.leveldb.{SharedLeveldbJournal, SharedLeveldbStore}
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
-import demesne.DomainModel
+import com.typesafe.scalalogging.StrictLogging
+import demesne._
 import sample.blog.author.AuthorListingModule
 import sample.blog.post.PostModule
 
 import scala.concurrent.duration._
 
 
-object BlogApp {
+object BlogApp extends StrictLogging {
   def main( args: Array[String] ): Unit = {
     if ( args.isEmpty ) startup( Seq( 2551, 2552, 0 ) )
     else startup( args map { _.toInt } )
   }
 
-  object registry extends AuthorListingModule with PostModule
+  object registry extends AuthorListingModule with PostModule with ClusteredAggregateModuleExtension
 
   def startup( ports: Seq[Int] ): Unit = {
     ports foreach { port =>
@@ -32,7 +33,16 @@ object BlogApp {
         path = ActorPath.fromString( "akka.tcp://ClusterSystem@127.0.0.1:2551/user/store" )
       )
 
-      val makeAuthorListing: () => ActorRef = () => { ClusterSharding(clusterSystem).shardRegion(AuthorListingModule.shardName) }
+      val makeAuthorListing: () => ActorRef = () => {
+        logger info s"##### clusterSystem = $clusterSystem"
+        val cs = ClusterSharding(clusterSystem)
+        logger info s"##### cluster sharding = $cs"
+        logger info s"##### author listing shard name = ${AuthorListingModule.shardName}"
+        val result = cs.shardRegion(AuthorListingModule.shardName)
+        logger info s"makeAuthorListing() = $result"
+        result
+      }
+
       val model = DomainModel.register( "blog" )( clusterSystem )
       val context: Map[Symbol, Any] = Map(
         demesne.SystemKey -> clusterSystem,

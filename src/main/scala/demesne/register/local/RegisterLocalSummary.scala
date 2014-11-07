@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorLogging, Props}
 import akka.agent.Agent
 import akka.contrib.pattern.DistributedPubSubExtension
 import akka.event.LoggingReceive
-import demesne.register.{RegisterEnvelope, GetRegister, Register, RegisterAggregate}
+import demesne.register.{GetRegister, Register, RegisterAggregate, RegisterEnvelope}
 import peds.commons.log.Trace
 import peds.commons.util._
 
@@ -19,9 +19,6 @@ object RegisterLocalSummary {
   import scala.language.existentials
   type RegisterAgent[K, I] = Agent[RegisterAggregate.Register[K, I]]
 
-//  case class Register( agent: Agent[_] ) {
-//    def mapTo[K, I]: RegisterAgent[K, I] = agent.asInstanceOf[RegisterAgent[K, I]]
-//  }
 
     /** Implements the Register trait through a locally cached Akka agent that is kept current with changes in the
       * register.
@@ -36,8 +33,8 @@ object RegisterLocalSummary {
  * Created by damonrolfs on 10/27/14.
  */
 class RegisterLocalSummary[K: ClassTag, I: ClassTag]( topic: String ) extends Actor with ActorLogging {
-  import RegisterLocalSummary._
   import akka.contrib.pattern.DistributedPubSubMediator.{Subscribe, SubscribeAck}
+  import demesne.register.local.RegisterLocalSummary._
 
   val trace = Trace( getClass.safeSimpleName, log )
 
@@ -63,7 +60,7 @@ class RegisterLocalSummary[K: ClassTag, I: ClassTag]( topic: String ) extends Ac
 
   val ready: Receive = LoggingReceive {
     case e @ RegisterAggregate.AggregateRecorded( key: K, _, _, _ ) => trace.block( s"receive:${e}" ) {
-      val id = e.mapIdTo[I] //dmr: cast here to handled boxed primitive cases
+      val id = e.mapIdTo[I] // cast here to handled boxed primitive cases
       register send { r => r + ( key -> id ) }
     }
 

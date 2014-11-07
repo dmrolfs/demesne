@@ -4,6 +4,7 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
+import peds.akka.creation.CreationSupport
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier._
@@ -11,12 +12,12 @@ import peds.commons.log.Trace
 import shapeless._
 
 
-trait PostModule extends AggregateRootModule {
+trait PostModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
   import sample.blog.post.PostModule.trace
 
-  abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-    super.start( ctx )
-    PostModule.initialize( ctx )
+  abstract override def start( contex: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+    super.start( contex )
+    PostModule.initialize( module, contex )
   }
 }
 
@@ -24,10 +25,11 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   override val trace = Trace[PostModule.type]
 
   var makeAuthorListing: () => ActorRef = _
-  override def initialize( context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
-    super.initialize( context )
+
+  override def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
     require( context.contains( 'authorListing ), "must start PostModule with author listing factory" )
     makeAuthorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
+    super.initialize( module, context )
   }
 
   override val aggregateIdTag: Symbol = 'post
@@ -36,7 +38,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props( this, makeAuthorListing() )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props( this, makeAuthorListing )
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -63,13 +65,21 @@ object PostModule extends AggregateRootModuleCompanion { module =>
 
 
   object Post {
-    def props( meta: AggregateRootType, authorListing: ActorRef ): Props = {
+    def props( meta: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = {
       import peds.akka.publish._
 
       Props(
         new Post( meta ) with ReliablePublisher with AtLeastOnceDelivery {
+          val authorListing: ActorRef = makeAuthorListing()
+
           import peds.commons.util.Chain._
-          override def publish: Publisher = local +> filter +> reliablePublisher( authorListing.path )
+
+//          override def preStart(): Unit = {
+//            super.preStart()
+//            authorListing = makeAuthorListing()
+//          }
+
+          override def publish: Publisher = stream +> filter +> reliablePublisher( authorListing.path )
 
           val filter: Publisher = {
             case e @ Envelope( _: PostPublished, _ ) => Left( e )

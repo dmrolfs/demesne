@@ -14,12 +14,12 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 
-trait ConferenceModule extends AggregateRootModule {
+trait ConferenceModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
   import contoso.conference.ConferenceModule.trace
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
-    ConferenceModule.initialize( ctx )
+    ConferenceModule.initialize( module, ctx )
   }
 }
 
@@ -28,8 +28,8 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
   val trace = Trace[ConferenceModule.type]
 
   var conferenceContext: ActorRef = _
-  override def initialize( context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
-    super.initialize( context )
+  override def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
+    super.initialize( module, context )
     require( context.contains( 'ConferenceContext ), "must start ConferenceModule with ConferenceContext" )
     conferenceContext = context( 'ConferenceContext ).asInstanceOf[ActorRef]
   }

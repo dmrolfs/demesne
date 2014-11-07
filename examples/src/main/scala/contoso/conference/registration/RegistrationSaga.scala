@@ -23,12 +23,12 @@ import scala.concurrent.duration._
 *
 * Created by damonrolfs on 9/11/14.
 */
-trait RegistrationSagaModule extends SagaModule {
+trait RegistrationSagaModule extends SagaModule { module: AggregateModuleInitializationExtension =>
   import contoso.conference.registration.RegistrationSagaModule.trace
 
   abstract override def start( moduleContext: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( moduleContext )
-    RegistrationSagaModule.initialize( moduleContext )
+    RegistrationSagaModule.initialize( module, moduleContext )
   }
 }
 
@@ -118,11 +118,11 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
   }
 
   object RegistrationSaga {
-    def props( 
-      meta: AggregateRootType, 
-      model: DomainModel, 
-      orderType: AggregateRootType, 
-      availabilityType: AggregateRootType 
+    def props(
+      meta: AggregateRootType,
+      model: DomainModel,
+      orderType: AggregateRootType,
+      availabilityType: AggregateRootType
     ): Props = {
       Props( new RegistrationSaga( meta, model, orderType, availabilityType ) with EventPublisher )
     }

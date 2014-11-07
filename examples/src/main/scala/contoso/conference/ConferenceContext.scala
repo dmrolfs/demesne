@@ -14,6 +14,7 @@ import com.typesafe.config.ConfigFactory
 // use a bloomfilter behand
 // initially use in-memory cache, but later use shard system
 
+//todo replace with aggregate register: slug -> conferenceId
 // Conference/Conference/ConferenceContext.cs
 object ConferenceContext {
   def props: Props = Props( new ConferenceContext )

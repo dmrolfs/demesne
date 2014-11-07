@@ -1,7 +1,8 @@
 package demesne
 
-import akka.actor.{ActorRef, Props}
+import akka.actor.{ActorRef, Props, SupervisorStrategy}
 import akka.contrib.pattern.ShardRegion
+import demesne.register.FinderSpec
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.util._
@@ -13,10 +14,8 @@ trait AggregateRootType {
   def name: String
   def repositoryName: String = name+"Repository"
 
-  // def actorFactory: ActorFactory
   def aggregateRootProps( implicit model: DomainModel ): Props
 
-  //DMR: AggregateRootModuleCompanion.shardName???  How to get that?  or at least DRY them up?
   def aggregateIdOf( aggregateRoot: ActorRef ): String = aggregateRoot.path.name
 
   def aggregateIdFor: ShardRegion.IdExtractor = {
@@ -41,6 +40,10 @@ trait AggregateRootType {
     override val snapshotInitialDelay: FiniteDuration = 1.minute
     override val snapshotInterval: FiniteDuration = 1.minute
   }
+
+  def finders: Map[Symbol, FinderSpec] = Map()
+
+  def repositorySupervisionStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 
   override def toString: String = getClass.safeSimpleName
 }

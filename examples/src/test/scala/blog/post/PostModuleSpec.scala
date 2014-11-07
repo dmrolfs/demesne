@@ -25,7 +25,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
     val bus: TestProbe = TestProbe()
     val author: TestProbe = TestProbe()
 
-    override val module: AggregateRootModule = new PostModule { }
+    override val module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
 
     override def context: Map[Symbol, Any] = trace.block( "context" ) {
       val result = super.context
@@ -122,7 +122,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       trace( "<<<<<<<< have contents after posting <<<<<<<<" )
     }
 
-    "have changed contents after change" taggedAs( WIP ) in { fixture: Fixture =>
+    "have changed contents after change" in { fixture: Fixture =>
       import fixture._
       trace( ">>>>>>>> have changed contents after change >>>>>>>>" )
 
@@ -152,7 +152,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       trace( "<<<<<<<< have changed contents after change <<<<<<<<" )
     }
 
-    "have changed contents after change and published" in { fixture: Fixture =>
+    "have changed contents after change and published" taggedAs( WIP ) in { fixture: Fixture =>
       import fixture._
       trace( ">>>>>>>> have changed contents after change and published >>>>>>>>" )
 
@@ -166,7 +166,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       post ! ChangeBody( id, updated )
       post ! Publish( id )
       post.tell( GetContent( id ), clientProbe.ref )
-      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
+      clientProbe.expectMsgPF( max = 400.millis, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
       }
       trace( "<<<<<<<< have changed contents after change and published <<<<<<<<" )
