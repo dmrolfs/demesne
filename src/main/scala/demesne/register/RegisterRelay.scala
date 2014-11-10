@@ -9,30 +9,31 @@ import peds.commons.util._
 import scala.concurrent.duration._
 
 
-object Relay extends com.typesafe.scalalogging.LazyLogging {
-  type KeyIdExtractor[K, I] = PartialFunction[Any, (K, I)]
-  def props[K, I]( registerPath: ActorPath, extractor: KeyIdExtractor[K, I] ): Props = {
-    Props( new Relay( registerPath, extractor) )
+object RegisterRelay extends com.typesafe.scalalogging.LazyLogging {
+  def props[K, I]( registerAggregatePath: ActorPath, extractor: KeyIdExtractor[K, I] ): Props = {
+    Props( new RegisterRelay( registerAggregatePath, extractor) )
   }
 }
 
 /**
  * Created by damonrolfs on 10/27/14.
  */
-class Relay[K, I]( registerPath: ActorPath, extractor: Relay.KeyIdExtractor[K, I] )
+class RegisterRelay[K, I]( registerAggregatePath: ActorPath, extractor: KeyIdExtractor[K, I] )
 extends Actor
 with ActorLogging {
   val trace = Trace( getClass.safeSimpleName, log )
 
   //todo move into configuration retry timeout
-  val proxy: ActorRef = context.actorOf( ReliableProxy.props( targetPath = registerPath, retryAfter = 100.millis ) )
+  val proxy: ActorRef = context.actorOf(
+    ReliableProxy.props( targetPath = registerAggregatePath, retryAfter = 100.millis )
+  )
 
   override val receive: Receive = LoggingReceive {
     case event if extractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
       val (key, id) = extractor( event )
-      val registered = RegisterAggregate.RecordAggregate( key = key, id = id )
-      proxy ! registered
-      log info s"relayed to aggregate register: ${registered}"
+      val recordAggregate = RegisterAggregate.Record( key = key, id = id )
+      proxy ! recordAggregate
+      log info s"relayed to aggregate register: ${recordAggregate}"
     }
   }
 

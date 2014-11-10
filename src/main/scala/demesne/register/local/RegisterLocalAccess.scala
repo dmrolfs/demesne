@@ -4,7 +4,8 @@ import akka.actor.{Actor, ActorLogging, Props}
 import akka.agent.Agent
 import akka.contrib.pattern.DistributedPubSubExtension
 import akka.event.LoggingReceive
-import demesne.register.{GetRegister, Register, RegisterAggregate, RegisterEnvelope}
+import demesne.AggregateRootType
+import demesne.register._
 import peds.commons.log.Trace
 import peds.commons.util._
 
@@ -13,8 +14,21 @@ import scala.reflect.ClassTag
 import scala.util.Try
 
 
-object RegisterLocalSummary {
-  def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterLocalSummary[K, I]( topic ) )
+object RegisterLocalAccess {
+  def spec[K: ClassTag, I: ClassTag](
+    specName: Symbol,
+    specRootType: AggregateRootType
+  )(
+    extractor: KeyIdExtractor[K, I]
+  ): FinderSpec[K, I] = new FinderSpec[K, I] {
+    override val name: Symbol = specName
+    override val rootType: AggregateRootType = specRootType
+    override def keyIdExtractor: KeyIdExtractor[K, I] = extractor
+    override def accessProps: Props = props[K, I]( topic )
+    override def toString: String = "RegisterLocalAccessFinderSpec"
+  }
+
+  def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterLocalAccess[K, I]( topic ) )
 
   import scala.language.existentials
   type RegisterAgent[K, I] = Agent[RegisterAggregate.Register[K, I]]
@@ -32,9 +46,9 @@ object RegisterLocalSummary {
 /**
  * Created by damonrolfs on 10/27/14.
  */
-class RegisterLocalSummary[K: ClassTag, I: ClassTag]( topic: String ) extends Actor with ActorLogging {
+class RegisterLocalAccess[K: ClassTag, I: ClassTag]( topic: String ) extends Actor with ActorLogging {
   import akka.contrib.pattern.DistributedPubSubMediator.{Subscribe, SubscribeAck}
-  import demesne.register.local.RegisterLocalSummary._
+  import demesne.register.local.RegisterLocalAccess._
 
   val trace = Trace( getClass.safeSimpleName, log )
 
@@ -50,7 +64,7 @@ class RegisterLocalSummary[K: ClassTag, I: ClassTag]( topic: String ) extends Ac
   }
 
   type Register = RegisterAggregate.Register[K, I]
-  type RegisterAgent = RegisterLocalSummary.RegisterAgent[K, I]
+  type RegisterAgent = RegisterLocalAccess.RegisterAgent[K, I]
 
   val register: RegisterAgent = trace.block( "register" ) { Agent( Map[K, I]() )( dispatcher ) }
 
@@ -59,7 +73,7 @@ class RegisterLocalSummary[K: ClassTag, I: ClassTag]( topic: String ) extends Ac
   }
 
   val ready: Receive = LoggingReceive {
-    case e @ RegisterAggregate.AggregateRecorded( key: K, _, _, _ ) => trace.block( s"receive:${e}" ) {
+    case e @ RegisterAggregate.Recorded( key: K, _, _, _ ) => trace.block( s"receive:${e}" ) {
       val id = e.mapIdTo[I] // cast here to handled boxed primitive cases
       register send { r => r + ( key -> id ) }
     }

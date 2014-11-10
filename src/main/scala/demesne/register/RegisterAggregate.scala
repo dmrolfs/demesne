@@ -20,10 +20,10 @@ object RegisterAggregate {
 
   import scala.language.existentials
   sealed trait Command
-  case class RecordAggregate( key: Any, id: Any ) extends Command
+  case class Record( key: Any, id: Any ) extends Command
 
   sealed trait Event
-  case class AggregateRecorded( key: Any, keyType: Class[_], id: Any, idType: Class[_] ) extends Event {
+  case class Recorded( key: Any, keyType: Class[_], id: Any, idType: Class[_] ) extends Event {
     def mapIdTo[T]( implicit tag: ClassTag[T] ): T = {
       val boxedClass = {
         val c = tag.runtimeClass
@@ -86,7 +86,7 @@ with ActorLogging {
 
   private def updateState( event: Any ): Unit = trace.block( s"updateState(${event}})" ) {
     event match {
-      case e @ AggregateRecorded( key: K, _, _, _ ) => {
+      case e @ Recorded( key: K, _, _, _ ) => {
         val id = e.mapIdTo[I]
         state += ( key -> id )
         log info s"aggregate recorded in register: ${key} -> ${id}"
@@ -95,15 +95,15 @@ with ActorLogging {
   }
 
   override val receiveRecover: Receive = LoggingReceive {
-    case e: AggregateRecorded => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
+    case e: Recorded => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
     case SnapshotOffer( _, snapshot ) => trace.block( s"receiveRecover:SnapshotOffer(_, ${snapshot})" ) {
       state = snapshot.asInstanceOf[RegisterAggregate.Register[K, I]]
     }
   }
 
   override def receiveCommand: Receive = LoggingReceive {
-    case RecordAggregate( key: K, id: I ) => trace.block( s"receiveCommand:RecordAggregate($key, $id)" ) {
-      persistAsync( AggregateRecorded( key = key, keyType = keyType, id = id, idType = idType ) ) { e =>
+    case Record( key: K, id: I ) => trace.block( s"receiveCommand:RecordAggregate($key, $id)" ) {
+      persistAsync( Recorded( key = key, keyType = keyType, id = id, idType = idType ) ) { e =>
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }
