@@ -7,16 +7,16 @@ import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ StartChild, ChildStar
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
 
-import scala.concurrent.Await
+import scala.concurrent.{Future, Await}
 import scala.concurrent.duration._
 
 
 trait DomainModel {
   def name: String
   def system: ActorSystem
-  def aggregateOf( rootType: AggregateRootType, id: Any ): AggregateRootRef = aggregateOf( rootType.name, id )
-  def aggregateOf( name: String, id: Any ): AggregateRootRef
-  def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Unit
+  def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = aggregateOf( rootType.name, id )
+  def aggregateOf( name: String, id: Any ): ActorRef
+  def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Future[Unit]
   def shutdown(): Unit
 }
 
@@ -90,22 +90,22 @@ object DomainModel {
       "AggregateRegisters"
     )
 
-    override def aggregateOf( name: String, id: Any ): AggregateRootRef = trace.block( s"aggregateOf($name, $id)" ) {
+    override def aggregateOf( name: String, id: Any ): ActorRef = trace.block( s"aggregateOf($name, $id)" ) {
       trace( s"""name = $name; system = $system; id = $id; aggregateTypeRegistry = ${registry().mkString("[", ",", "]")} """ )
 
       registry().get( name ) map { rr =>
-        val (aggregateRepository, rootType) = rr
-        AggregateRootRef( rootType, id, aggregateRepository )
+        val (aggregateRepository, _) = rr
+        aggregateRepository
       } getOrElse {
-        throw new IllegalStateException(s"DomainModel type registry does not have root type:${name}")
+        throw new IllegalStateException(s"""DomainModel type registry does not have root type:${name}:: registry=${registry().mkString("[",",","]")}""")
       }
     }
 
-    override def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Unit = trace.block( "registerAggregateType" ) {
+    override def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Future[Unit] = trace.block( "registerAggregateType" ) {
       import akka.pattern.ask
       implicit val ec = system.dispatcher
 
-      registry send { r =>
+      registry alter { r =>
         trace.block(s"[name=${name}, system=${system}] registry send ${rootType}") {
           trace( s"DomainModel.name= $name" )
           if (r.contains(rootType.name)) r
@@ -122,7 +122,7 @@ object DomainModel {
             r + e
           }
         }
-      }
+      } map { r => {} }
     }
 
     override def shutdown(): Unit = system.shutdown()

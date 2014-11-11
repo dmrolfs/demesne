@@ -4,7 +4,6 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
-import peds.akka.creation.CreationSupport
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier._
@@ -106,7 +105,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     import peds.akka.envelope._
 
     val quiescent: Receive = LoggingReceive {
-      case GetContent(_)  => sender() send state.content
+      case GetContent(_)  => sender() !! state.content
       case AddPost( id, content ) if !content.isIncomplete  => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
         persist( PostAdded( id, content ) ) { event =>
           trace.block( s"persist(${event})" ) {
@@ -121,7 +120,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     }
 
     val created: Receive = LoggingReceive {
-      case GetContent( id ) => sender() send state.content
+      case GetContent( id ) => sender() !! state.content
 
       case ChangeBody( id, body ) => persist( BodyChanged( id, body ) ) { event =>
         state = accept( event )
@@ -139,7 +138,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     }
 
     val published: Receive = LoggingReceive {
-      case GetContent(_) => sender() send state.content
+      case GetContent(_) => sender() !! state.content
     }
   }
 }

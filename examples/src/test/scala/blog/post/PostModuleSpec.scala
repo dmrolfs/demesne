@@ -4,7 +4,7 @@ import akka.testkit.TestProbe
 import demesne._
 import demesne.testkit.AggregateRootSpec
 import org.scalatest.Tag
-import peds.akka.envelope.{Envelope, MessageNumber, WorkId}
+import peds.akka.envelope._
 import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.log.Trace
 
@@ -49,7 +49,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
-      post ! AddPost( id, content )
+      post !! AddPost( id, content )
       bus.expectMsgPF( max = 800.millis, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
@@ -87,14 +87,14 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       trace( "<<<<<<<< not respond to incomplete content <<<<<<<<" )
     }
 
-    "have empty contents before use" in { fixture: Fixture =>
+    "have empty contents before use" taggedAs( WIP ) in { fixture: Fixture =>
       import fixture._
       trace( ">>>>>>>> have empty contents before use >>>>>>>>" )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
-      post.tell( GetContent( id ), author.ref )
-      author.expectMsgPF( max = 200.millis, hint = "empty contents" ){
+      post.send( GetContent( id ) )( author.ref )
+      author.expectMsgPF( max = 600.millis, hint = "empty contents" ){
         case Envelope( payload: PostContent, h ) => {
           payload mustBe PostContent( "", "", "" )
           h.messageNumber mustBe MessageNumber( 2 )
@@ -152,7 +152,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       trace( "<<<<<<<< have changed contents after change <<<<<<<<" )
     }
 
-    "have changed contents after change and published" taggedAs( WIP ) in { fixture: Fixture =>
+    "have changed contents after change and published" in { fixture: Fixture =>
       import fixture._
       trace( ">>>>>>>> have changed contents after change and published >>>>>>>>" )
 

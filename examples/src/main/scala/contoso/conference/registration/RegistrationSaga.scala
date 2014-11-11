@@ -160,9 +160,9 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
     }
 
 
-    def order( id: Option[OrderModule.TID] ): AggregateRootRef = OrderModule.aggregateOf( id )( model )
+    def order( id: Option[OrderModule.TID] ): ActorRef = OrderModule.aggregateOf( id )( model )
 
-    def seatsAvailability( id: Option[SeatsAvailabilityModule.TID] ): AggregateRootRef = {
+    def seatsAvailability( id: Option[SeatsAvailabilityModule.TID] ): ActorRef = {
       SeatsAvailabilityModule.aggregateOf( id )( model )
     }
 
@@ -244,7 +244,7 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
       expiration foreach { exp =>
         val timeout = FiniteDuration( exp.getMillis - joda.DateTime.now.getMillis, MILLISECONDS )
         expirationMessager = context.system.scheduler.scheduleOnce( timeout ) {
-          self send ExpireRegistrationProcess( state.id )
+          self !! ExpireRegistrationProcess( state.id )
         }
       }
       seatsAvailability( Some(conferenceId) ) ! reservation

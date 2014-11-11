@@ -22,7 +22,7 @@ class EnvelopingAggregateRootRepository(
 
   override def receive: Actor.Receive = LoggingReceive {
     case message => {
-      val originalSender = sender
+      val originalSender = sender()
       trace( s"in EnvelopingAggregateRootRepository RECEIVE" )
       aggregateFor( message ).send( message )( originalSender )
     }

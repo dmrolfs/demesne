@@ -1,12 +1,15 @@
 package demesne
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import akka.contrib.pattern.ClusterSharding
 import com.typesafe.scalalogging.LazyLogging
 import demesne.factory.ActorFactory
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import peds.commons.module.ModuleLifecycle
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 
 trait AggregateModuleInitializationExtension {
@@ -38,9 +41,9 @@ trait AggregateRootModuleCompanion extends LazyLogging {
   def shardName: String = _shardName
   def aggregateRootType: AggregateRootType
 
-  def aggregateOf( id: TID )( implicit model: DomainModel ): AggregateRootRef = aggregateOf( Some(id) )
+  def aggregateOf( id: TID )( implicit model: DomainModel ): ActorRef = aggregateOf( Some(id) )
 
-  def aggregateOf( id: Option[TID] )( implicit model: DomainModel ): AggregateRootRef = trace.block( s"aggregateOf($id)($model)" ) {
+  def aggregateOf( id: Option[TID] )( implicit model: DomainModel ): ActorRef = trace.block( s"aggregateOf($id)($model)" ) {
     val effId = id getOrElse nextId
     model.aggregateOf( rootType = aggregateRootType, id = effId )
   }
@@ -58,7 +61,8 @@ trait AggregateRootModuleCompanion extends LazyLogging {
     trace( s"model = $m" )
     val rootType = aggregateRootType
     module.initialize( rootType )
-    m.registerAggregateType( rootType, f )
+    val reg = m.registerAggregateType( rootType, f )
+    Await.result( reg, 3.seconds ) //todo: move into configuration
   }
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
