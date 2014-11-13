@@ -14,7 +14,7 @@ import scala.concurrent.duration._
 
 
 object RegisterSupervisor {
-  def props: Props = Props[RegisterSupervisor]
+  def props( bus: RegisterBus ): Props = Props( new RegisterSupervisor( bus ) )
 
   import scala.language.existentials
   sealed trait Message
@@ -22,16 +22,38 @@ object RegisterSupervisor {
   case class FinderRegistered( spec: FinderSpec[_, _] ) extends Message
 
 
+  type ContextClassifier = (ActorContext, Class[_])
+  type BusClassifier = (RegisterBus, String)
+  type SubscriptionClassifier = Either[ContextClassifier, BusClassifier]
+
+
   object FinderRegistration {
     def props(
       supervisor: ActorRef,
+      subscription: SubscriptionClassifier,
       spec: FinderSpec[_, _],
       registrant: ActorRef
-    ): Props = Props( new FinderRegistration( supervisor, spec, registrant ) )
+    ): Props = Props( new FinderRegistration( supervisor, subscription, spec, registrant ) )
 
+
+//    object RegisterConstituent {
+//      sealed trait PostStartMagnet {
+//        type Result
+//        def apply( relay: ActorRef ): Result
+//      }
+//
+//      implicit val nilPostStartMagnet = new PostStartMagnet {
+//        override type Result = Unit
+//        override def apply( relay: ActorRef ): Result = { }
+//      }
+//    }
+//
+//    import RegisterConstituent._
 
     sealed trait RegisterConstituent {
       def category: Symbol
+//      def postStart( relay: ActorRef,  magnet: PostStartMagnet = nilPostStartMagnet ): magnet.Result = magnet( relay )
+      def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = true
     }
 
     case object Access extends RegisterConstituent {
@@ -40,7 +62,32 @@ object RegisterSupervisor {
 
     case object Relay extends RegisterConstituent {
       override def category: Symbol = 'RegisterRelay
+
+      override def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = {
+        subscription.fold(
+          classifier => { classifier._1.system.eventStream.subscribe( constituent, classifier._2 ) },
+          classifier => { classifier._1.subscribe( constituent, classifier._2 ) }
+        )
+      }
+
+//      implicit def fromActorContext( contextChannel: (ActorContext, Class[_]) ): PostStartMagnet = new PostStartMagnet {
+//        override type Result = Boolean
+//        override def apply( relay: ActorRef ): Result = {
+//          val (context, channel) = contextChannel
+//          context.system.eventStream.subscribe( relay,channel )
+//        }
+//      }
+//
+//      implicit def fromRegisterBus( busClassifier: (RegisterBus, String) ): PostStartMagnet = new PostStartMagnet {
+//        override type Result = Boolean
+//        override def apply( relay: ActorRef ): Result = {
+//          val (bus, classifier) = busClassifier
+//          bus.subscribe( relay, classifier )
+//        }
+//      }
+      //      def postStart( relay: ActorRef,  magnet: PostStartMagnet = nilPostStartMagnet ): magnet.Result = magnet( relay )
     }
+
 
     case object Aggregate extends RegisterConstituent {
       override def category: Symbol = 'RegisterAggregate
@@ -49,6 +96,7 @@ object RegisterSupervisor {
 
   class FinderRegistration(
     supervisor: ActorRef,
+    subscription: SubscriptionClassifier,
     spec: FinderSpec[_, _],
     registrant: ActorRef
   ) extends Actor with ActorLogging {
@@ -82,7 +130,7 @@ object RegisterSupervisor {
 
     val survey: Receive = LoggingReceive {
       case Survey(Nil, toStart) => trace.block( s"FinderRegistration.survey::Survey(Nil, $toStart)" ) {
-        context become startup( toStart )
+        context become startup
         self ! Startup(toStart)
       }
 
@@ -102,9 +150,13 @@ log error s"piece found: $piece"
       }
     }
 
-    def startup( pieces: List[RegisterConstituentRef] ): Receive = LoggingReceive {
+    val startup: Receive = LoggingReceive {
       case Startup( Nil ) => trace.block( s"FinderRegistration.startup::Startup(Nil)" ) {
         registrant ! FinderRegistered( spec )
+trace.block( "#### SANITY CHECK ####" ) {
+  val check = scala.concurrent.Await.result( self ? Survey( pieces, Nil ), askTimeout.duration )
+  log error s"##### SANITY CHECK FOUND: $check"
+}
         context stop self
       }
 
@@ -112,17 +164,34 @@ log error s"piece found: $piece"
         val p = pieces.head
         val createPiece = StartChild( props = p.props, name = p.name )
         supervisor ? createPiece map {
-          case m: ChildStarted => Startup( pieces.tail )
+          case ChildStarted( child ) => {
+            p.constituent.postStart( child, subscription )
+            Startup( pieces.tail )
+          }
+
           case m => log error s"failed to create register piece: ${p}"  //todo consider retry state via ctx.become
+        } pipeTo self
+      }
+
+      case Survey(toFind, toStart) => trace.block( s"FinderRegistration.survey::Survey($toFind, $toStart)" ) {
+        val piece = toFind.head
+        context.actorSelection(piece.path) ? Identify(piece.name) map {
+          case ActorIdentity(_, None) => trace.block( s"FinderRegistration.survey::Survey::ActorIdentity(_,None)" ) {
+            log error s"piece not found: $piece"
+            Survey(toFind.tail, piece :: toStart)
+          }
+
+          case m => trace.block( s"FinderRegistration.survey::Survey::$m" ) {
+            log error s"piece found: $piece"
+            Survey(toFind.tail, toStart)
+          }
         } pipeTo self
       }
     }
 
     def constituentsFor( spec: FinderSpec[_, _] ): List[RegisterConstituentRef] = trace.block( s"constituentsFor($spec))" ) {
-      val baseline = supervisor.path.name + "/" + spec.topic + "/"
-
       def pathFor( constituent: RegisterConstituent ): ActorPath = {
-        ActorPath.fromString( baseline + constituent.category.name )
+        ActorPath.fromString( supervisor.path + "/" + constituent.category.name + "_" + spec.name.name + "-" + spec.topic )
       }
 
       val aggregatePath = pathFor( Aggregate )
@@ -139,7 +208,8 @@ log error s"piece found: $piece"
 /**
  * Created by damonrolfs on 11/6/14.
  */
-class RegisterSupervisor extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLogging {
+class RegisterSupervisor( bus: RegisterBus )
+extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLogging {
   import demesne.register.RegisterSupervisor._
 
   val trace = Trace( getClass.safeSimpleName, log )
@@ -150,7 +220,19 @@ class RegisterSupervisor extends IsolatedDefaultSupervisor with OneForOneStrateg
 
   val register: Receive = LoggingReceive {
     case RegisterFinder( spec ) => trace.block( s"RegisterSupervisor.register:RegisterFinder($spec)" ) {
-      context.actorOf( FinderRegistration.props( supervisor = self, spec = spec, registrant = sender() ) )
+      val subscription: SubscriptionClassifier = spec.relaySubscription match {
+        case ContextChannelSubscription( channel ) => Left( (context, channel) )
+        case RegisterBusSubscription => Right( (bus, spec.relayClassifier) )
+      }
+
+      context.actorOf(
+        FinderRegistration.props(
+          supervisor = self,
+          subscription = subscription,
+          spec = spec,
+          registrant = sender()
+        )
+      )
     }
   }
 }

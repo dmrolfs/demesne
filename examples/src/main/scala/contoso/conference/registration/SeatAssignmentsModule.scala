@@ -5,6 +5,7 @@ import akka.event.LoggingReceive
 import contoso.conference.SeatType
 import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
+import demesne.register.RegisterBus
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
 
@@ -30,7 +31,7 @@ object SeatAssignmentsModule extends AggregateRootModuleCompanion { module =>
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatAssignments.props( this )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatAssignments.props( model, this )
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -143,13 +144,18 @@ object SeatAssignmentsModule extends AggregateRootModuleCompanion { module =>
 
 
   object SeatAssignments {
-    def props( meta: AggregateRootType ): Props = Props( new SeatAssignments( meta ) with EventPublisher )
+    def props( model: DomainModel, meta: AggregateRootType ): Props = {
+      Props( new SeatAssignments( model, meta ) with EventPublisher )
+    }
   }
 
-  class SeatAssignments( override val meta: AggregateRootType ) extends AggregateRoot[SeatAssignmentsState] {
-    outer: EventPublisher =>
-
+  class SeatAssignments(
+    model: DomainModel,
+    override val meta: AggregateRootType
+  ) extends AggregateRoot[SeatAssignmentsState] {  outer: EventPublisher =>
     override val trace = Trace( "SeatsAssignment", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: SeatAssignmentsState = _
 

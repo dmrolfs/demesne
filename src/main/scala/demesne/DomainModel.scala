@@ -2,7 +2,10 @@ package demesne
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.agent.Agent
+import akka.util.Timeout
 import demesne.factory._
+import demesne.register.{RegisterBus, RegisterSupervisor}
+import demesne.register.RegisterSupervisor.RegisterFinder
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ StartChild, ChildStarted }
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
@@ -17,6 +20,7 @@ trait DomainModel {
   def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = aggregateOf( rootType.name, id )
   def aggregateOf( name: String, id: Any ): ActorRef
   def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Future[Unit]
+  def registerBus: RegisterBus
   def shutdown(): Unit
 }
 
@@ -81,14 +85,8 @@ object DomainModel {
       "Repositories"
     )
 
-    val registerSupervisor: ActorRef = system.actorOf(
-      Props(
-        new IsolatedDefaultSupervisor with OneForOneStrategyFactory {
-          override def childStarter(): Unit = { }
-        }
-      ),
-      "AggregateRegisters"
-    )
+    override val registerBus: RegisterBus = new RegisterBus
+    val registerSupervisor: ActorRef = system.actorOf( RegisterSupervisor.props( registerBus ), "AggregateRegisters" )
 
     override def aggregateOf( name: String, id: Any ): ActorRef = trace.block( s"aggregateOf($name, $id)" ) {
       trace( s"""name = $name; system = $system; id = $id; aggregateTypeRegistry = ${registry().mkString("[", ",", "]")} """ )
@@ -104,8 +102,11 @@ object DomainModel {
     override def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Future[Unit] = trace.block( "registerAggregateType" ) {
       import akka.pattern.ask
       implicit val ec = system.dispatcher
+      implicit val askTimeout: Timeout = 3.seconds //todo: move into configuration
 
-      registry alter { r =>
+      val registers = rootType.finders map { s => registerSupervisor ? RegisterFinder(s) }
+
+      val aggregate = registry alter { r =>
         trace.block(s"[name=${name}, system=${system}] registry send ${rootType}") {
           trace( s"DomainModel.name= $name" )
           if (r.contains(rootType.name)) r
@@ -122,7 +123,9 @@ object DomainModel {
             r + e
           }
         }
-      } map { r => {} }
+      }
+
+      Future.sequence( registers :+ aggregate ) map { r => {} }
     }
 
     override def shutdown(): Unit = system.shutdown()

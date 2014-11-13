@@ -17,7 +17,8 @@ import scala.util.Try
 object RegisterLocalAccess {
   def spec[K: ClassTag, I: ClassTag](
     specName: Symbol,
-    specRootType: AggregateRootType
+    specRootType: AggregateRootType,
+    specRelaySubscription: RelaySubscription = RegisterBusSubscription
   )(
     extractor: KeyIdExtractor[K, I]
   ): FinderSpec[K, I] = new FinderSpec[K, I] {
@@ -25,7 +26,8 @@ object RegisterLocalAccess {
     override val rootType: AggregateRootType = specRootType
     override def keyIdExtractor: KeyIdExtractor[K, I] = extractor
     override def accessProps: Props = props[K, I]( topic )
-    override def toString: String = "RegisterLocalAccessFinderSpec"
+    override def relaySubscription: RelaySubscription = specRelaySubscription
+    override def toString: String = s"RegisterLocalAccessFinderSpec($specName, $specRootType)"
   }
 
   def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterLocalAccess[K, I]( topic ) )

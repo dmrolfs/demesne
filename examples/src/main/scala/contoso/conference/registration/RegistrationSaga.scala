@@ -10,6 +10,7 @@ import contoso.conference.registration.OrderModule._
 import contoso.conference.registration.SeatsAvailabilityModule.{CancelSeatReservation, CommitSeatReservation, MakeSeatReservation, SeatsReserved}
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
@@ -140,6 +141,8 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
     outer: EventPublisher =>
 
     override val trace = Trace( "RegistrationSaga", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: RegistrationSagaState = _
 

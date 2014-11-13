@@ -9,6 +9,7 @@ import com.typesafe.config.ConfigFactory
 import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
+import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import squants._
@@ -50,6 +51,7 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
       override val name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = {
         Order.props(
+          model,
           this,
           ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
         )
@@ -210,15 +212,19 @@ object OrderModule extends AggregateRootModuleCompanion { module =>
 
 
   object Order {
-    def props( meta: AggregateRootType, pricingRetriever: ActorRef ): Props = {
-      Props( new Order( meta, pricingRetriever ) with EventPublisher )
+    def props( model: DomainModel, meta: AggregateRootType, pricingRetriever: ActorRef ): Props = {
+      Props( new Order( model, meta, pricingRetriever ) with EventPublisher )
     }
   }
 
-  class Order( override val meta: AggregateRootType, pricingRetriever: ActorRef ) extends AggregateRoot[OrderState] {
-    outer: EventPublisher =>
-
+  class Order(
+    model: DomainModel,
+    override val meta: AggregateRootType,
+    pricingRetriever: ActorRef
+  ) extends AggregateRoot[OrderState] { outer: EventPublisher =>
     override val trace = Trace( "Order", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: OrderState = _
     var expirationMessager: Cancellable = _

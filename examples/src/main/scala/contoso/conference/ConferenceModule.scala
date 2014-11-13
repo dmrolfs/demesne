@@ -4,6 +4,7 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import com.github.nscala_time.time.{Imports => joda}
 import demesne._
+import demesne.register.RegisterBus
 import peds.akka.AskRetry._
 import peds.akka.publish._
 import peds.commons.log.Trace
@@ -39,7 +40,11 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = Conference.props( this, conferenceContext )
+
+      override def aggregateRootProps( implicit model: DomainModel ): Props = {
+        Conference.props( model, this, conferenceContext )
+      }
+
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -153,19 +158,24 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
 
 
   object Conference {
-    def props( meta: AggregateRootType, conferenceContext: ActorRef ): Props = {
-      Props( new Conference( meta, conferenceContext ) with EventPublisher )
+    def props( model: DomainModel, meta: AggregateRootType, conferenceContext: ActorRef ): Props = {
+      Props( new Conference( model, meta, conferenceContext ) with EventPublisher )
     }
 
     class ConferenceCreateException( cause: Throwable )
     extends RuntimeException( s"failed to create conference due to: ${cause}", cause )
   }
 
-  class Conference( override val meta: AggregateRootType, conferenceContext: ActorRef ) extends AggregateRoot[ConferenceState] {
-    outer: EventPublisher =>
+  class Conference(
+    model: DomainModel,
+    override val meta: AggregateRootType,
+    conferenceContext: ActorRef
+  ) extends AggregateRoot[ConferenceState] { outer: EventPublisher =>
     import contoso.conference.ConferenceModule.Conference._
 
     override val trace = Trace( "Conference", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: ConferenceState = _
 

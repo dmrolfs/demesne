@@ -4,6 +4,8 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
+import demesne.register.{RegisterBus, RegisterBusSubscription, ContextChannelSubscription, FinderSpec}
+import demesne.register.local.RegisterLocalAccess
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier._
@@ -37,7 +39,27 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props( this, makeAuthorListing )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props(model, this, makeAuthorListing)
+
+      override def finders: Seq[FinderSpec[_, _]] = {
+        Seq(
+          RegisterLocalAccess.spec[String, PostModule.TID](
+            'author,
+            aggregateRootType,
+            RegisterBusSubscription // not reqd - default
+          ) {
+            case PostAdded( sourceId, PostContent(author, _, _) ) => (author, sourceId)
+          },
+          RegisterLocalAccess.spec[String, PostModule.TID](
+            'title,
+            aggregateRootType,
+            ContextChannelSubscription( classOf[PostAdded] )
+          ) {
+            case PostAdded( sourceId, PostContent(_, title, _) ) => (title, sourceId)
+          }
+        )
+      }
+
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -64,21 +86,22 @@ object PostModule extends AggregateRootModuleCompanion { module =>
 
 
   object Post {
-    def props( meta: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = {
+    def props( model: DomainModel, meta: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = {
       import peds.akka.publish._
 
       Props(
-        new Post( meta ) with ReliablePublisher with AtLeastOnceDelivery {
+        new Post( model, meta ) with ReliablePublisher with AtLeastOnceDelivery {
           val authorListing: ActorRef = makeAuthorListing()
 
           import peds.commons.util.Chain._
 
-//          override def preStart(): Unit = {
-//            super.preStart()
-//            authorListing = makeAuthorListing()
-//          }
-
-          override def publish: Publisher = stream +> filter +> reliablePublisher( authorListing.path )
+          override def publish: Publisher = trace.block( "publish" ) {
+            val bus = RegisterBus.bus( model.registerBus ) _
+            val buses = meta.finders
+                          .filter( _.relaySubscription == RegisterBusSubscription )
+                          .foldLeft( silent ){ _ +> bus(_) }
+            buses +> stream +> filter +> reliablePublisher( authorListing.path )
+          }
 
           val filter: Publisher = {
             case e @ Envelope( _: PostPublished, _ ) => Left( e )
@@ -90,8 +113,12 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   }
 
 
-  class Post( override val meta: AggregateRootType ) extends AggregateRoot[PostState] { outer: EventPublisher =>
+  class Post( model: DomainModel, override val meta: AggregateRootType ) extends AggregateRoot[PostState] {
+    outer: EventPublisher =>
+
     override val trace = Trace( "Post", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: PostState = PostState()
 
