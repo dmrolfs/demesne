@@ -54,7 +54,7 @@ object Dependencies {
 
   val scalacache = "com.github.cb372" %% "scalacache-guava" % "0.4.0-SNAPSHOT"
 
-  val mockito = "org.mockito" % "mockito-core" % "1.9.5"
+  val mockito = "org.mockito" % "mockito-core" % "1.10.0"
   // val objectLab = "net.objectlab.kit" % "datecalc-joda" % "1.2.0"
   val pedsCommons = "com.github.dmrolfs" %% "peds-commons" % "0.1.6" % "compile" changing()
   val pedsAkka = "com.github.dmrolfs" %% "peds-akka" % "0.1.6" % "compile" changing()

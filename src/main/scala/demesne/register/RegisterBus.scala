@@ -3,6 +3,7 @@ package demesne.register
 import akka.event.{ActorEventBus, SubchannelClassification}
 import akka.util.Subclassification
 import com.typesafe.scalalogging.LazyLogging
+import demesne.AggregateRootType
 import peds.akka.envelope.Envelope
 import peds.akka.publish.Publisher
 import peds.commons.log.Trace
@@ -17,9 +18,11 @@ object RegisterBus extends LazyLogging {
   val trace = Trace[RegisterBus]
   case class RecordingEvent( topic: String, recording: Any )
 
-  def bus( b: RegisterBus )( spec: FinderSpec[_,_] ): Publisher = ( event: Envelope ) => trace.block( "bus" ) {
-    b.publish( RegisterBus.RecordingEvent( topic = spec.relayClassifier, recording = event ) )
-    Left( event )
+  def bus( b: RegisterBus, rootType: AggregateRootType )( spec: FinderSpec[_,_] ): Publisher = {
+    ( event: Envelope ) => trace.block( "bus" ) {
+      b.publish( RegisterBus.RecordingEvent( topic = spec.relayClassifier(rootType), recording = event ) )
+      Left( event )
+    }
   }
 }
 

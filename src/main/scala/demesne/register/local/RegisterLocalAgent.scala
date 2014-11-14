@@ -14,23 +14,20 @@ import scala.reflect.ClassTag
 import scala.util.Try
 
 
-object RegisterLocalAccess {
+object RegisterLocalAgent {
   def spec[K: ClassTag, I: ClassTag](
     specName: Symbol,
-    specRootType: AggregateRootType,
     specRelaySubscription: RelaySubscription = RegisterBusSubscription
   )(
     extractor: KeyIdExtractor[K, I]
   ): FinderSpec[K, I] = new FinderSpec[K, I] {
     override val name: Symbol = specName
-    override val rootType: AggregateRootType = specRootType
     override def keyIdExtractor: KeyIdExtractor[K, I] = extractor
-    override def accessProps: Props = props[K, I]( topic )
+    override def agentProps( rootType: AggregateRootType ): Props = props[K, I]( topic(rootType) )
     override def relaySubscription: RelaySubscription = specRelaySubscription
-    override def toString: String = s"RegisterLocalAccessFinderSpec($specName, $specRootType)"
   }
 
-  def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterLocalAccess[K, I]( topic ) )
+  def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterLocalAgent[K, I]( topic ) )
 
   import scala.language.existentials
   type RegisterAgent[K, I] = Agent[RegisterAggregate.Register[K, I]]
@@ -48,9 +45,9 @@ object RegisterLocalAccess {
 /**
  * Created by damonrolfs on 10/27/14.
  */
-class RegisterLocalAccess[K: ClassTag, I: ClassTag]( topic: String ) extends Actor with ActorLogging {
+class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Actor with ActorLogging {
   import akka.contrib.pattern.DistributedPubSubMediator.{Subscribe, SubscribeAck}
-  import demesne.register.local.RegisterLocalAccess._
+  import demesne.register.local.RegisterLocalAgent._
 
   val trace = Trace( getClass.safeSimpleName, log )
 
@@ -66,7 +63,7 @@ class RegisterLocalAccess[K: ClassTag, I: ClassTag]( topic: String ) extends Act
   }
 
   type Register = RegisterAggregate.Register[K, I]
-  type RegisterAgent = RegisterLocalAccess.RegisterAgent[K, I]
+  type RegisterAgent = RegisterLocalAgent.RegisterAgent[K, I]
 
   val register: RegisterAgent = trace.block( "register" ) { Agent( Map[K, I]() )( dispatcher ) }
 

@@ -104,7 +104,7 @@ object DomainModel {
       implicit val ec = system.dispatcher
       implicit val askTimeout: Timeout = 3.seconds //todo: move into configuration
 
-      val registers = rootType.finders map { s => registerSupervisor ? RegisterFinder(s) }
+      val registers = rootType.finders map { s => registerSupervisor ? RegisterFinder( rootType, s) }
 
       val aggregate = registry alter { r =>
         trace.block(s"[name=${name}, system=${system}] registry send ${rootType}") {

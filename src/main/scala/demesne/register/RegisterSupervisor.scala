@@ -4,6 +4,7 @@ import akka.actor._
 import akka.event.LoggingReceive
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
+import demesne.AggregateRootType
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
@@ -18,8 +19,8 @@ object RegisterSupervisor {
 
   import scala.language.existentials
   sealed trait Message
-  case class RegisterFinder( spec: FinderSpec[_, _] ) extends Message
-  case class FinderRegistered( spec: FinderSpec[_, _] ) extends Message
+  case class RegisterFinder( rootType: AggregateRootType, spec: FinderSpec[_, _] ) extends Message
+  case class FinderRegistered( rootType: AggregateRootType, spec: FinderSpec[_, _] ) extends Message
 
 
   type ContextClassifier = (ActorContext, Class[_])
@@ -32,8 +33,9 @@ object RegisterSupervisor {
       supervisor: ActorRef,
       subscription: SubscriptionClassifier,
       spec: FinderSpec[_, _],
-      registrant: ActorRef
-    ): Props = Props( new FinderRegistration( supervisor, subscription, spec, registrant ) )
+      registrant: ActorRef,
+      registrantType: AggregateRootType
+    ): Props = Props( new FinderRegistration( supervisor, subscription, spec, registrant, registrantType ) )
 
 
 //    object RegisterConstituent {
@@ -56,8 +58,8 @@ object RegisterSupervisor {
       def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = true
     }
 
-    case object Access extends RegisterConstituent {
-      override def category: Symbol = 'RegisterAccess
+    case object Agent extends RegisterConstituent {
+      override def category: Symbol = 'RegisterAgent
     }
 
     case object Relay extends RegisterConstituent {
@@ -98,14 +100,15 @@ object RegisterSupervisor {
     supervisor: ActorRef,
     subscription: SubscriptionClassifier,
     spec: FinderSpec[_, _],
-    registrant: ActorRef
+    registrant: ActorRef,
+    registrantType: AggregateRootType
   ) extends Actor with ActorLogging {
     import demesne.register.RegisterSupervisor.FinderRegistration._
 
     val trace = Trace( getClass.safeSimpleName, log )
 
     implicit val ec: ExecutionContext = context.dispatcher //okay to use actor's dispatcher
-    implicit val askTimeout: Timeout = 3.seconds
+    implicit val askTimeout: Timeout = 3.seconds //todo move into configuration
 
     case class RegisterConstituentRef( constituent: RegisterConstituent, path: ActorPath, props: Props ) {
       def name: String = path.name
@@ -152,11 +155,11 @@ log error s"piece found: $piece"
 
     val startup: Receive = LoggingReceive {
       case Startup( Nil ) => trace.block( s"FinderRegistration.startup::Startup(Nil)" ) {
-        registrant ! FinderRegistered( spec )
-trace.block( "#### SANITY CHECK ####" ) {
-  val check = scala.concurrent.Await.result( self ? Survey( pieces, Nil ), askTimeout.duration )
-  log error s"##### SANITY CHECK FOUND: $check"
-}
+        registrant ! FinderRegistered( registrantType, spec )
+//trace.block( "#### SANITY CHECK ####" ) {
+//  val check = scala.concurrent.Await.result( self ? Survey( pieces, Nil ), askTimeout.duration )
+//  log error s"##### SANITY CHECK FOUND: $check"
+//}
         context stop self
       }
 
@@ -191,14 +194,16 @@ trace.block( "#### SANITY CHECK ####" ) {
 
     def constituentsFor( spec: FinderSpec[_, _] ): List[RegisterConstituentRef] = trace.block( s"constituentsFor($spec))" ) {
       def pathFor( constituent: RegisterConstituent ): ActorPath = {
-        ActorPath.fromString( supervisor.path + "/" + constituent.category.name + "_" + spec.name.name + "-" + spec.topic )
+        ActorPath.fromString(
+          supervisor.path + "/" + constituent.category.name + "_" + spec.name.name + "-" + spec.topic(registrantType)
+        )
       }
 
       val aggregatePath = pathFor( Aggregate )
 
       List(
-        RegisterConstituentRef( Access, pathFor( Access ), spec.accessProps ),
-        RegisterConstituentRef( Aggregate, aggregatePath, spec.aggregateProps ),
+        RegisterConstituentRef( Agent, pathFor( Agent ), spec agentProps registrantType ),
+        RegisterConstituentRef( Aggregate, aggregatePath, spec aggregateProps registrantType ),
         RegisterConstituentRef( Relay, pathFor( Relay ), spec relayProps aggregatePath )
       )
     }
@@ -219,10 +224,10 @@ extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLoggin
   override def receive: Receive = super.receive orElse register
 
   val register: Receive = LoggingReceive {
-    case RegisterFinder( spec ) => trace.block( s"RegisterSupervisor.register:RegisterFinder($spec)" ) {
+    case RegisterFinder( rootType, spec ) => trace.block( s"RegisterSupervisor.register:RegisterFinder($rootType, $spec)" ) {
       val subscription: SubscriptionClassifier = spec.relaySubscription match {
         case ContextChannelSubscription( channel ) => Left( (context, channel) )
-        case RegisterBusSubscription => Right( (bus, spec.relayClassifier) )
+        case RegisterBusSubscription => Right( (bus, spec.relayClassifier(rootType) ) )
       }
 
       context.actorOf(
@@ -230,7 +235,8 @@ extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLoggin
           supervisor = self,
           subscription = subscription,
           spec = spec,
-          registrant = sender()
+          registrant = sender(),
+          registrantType = rootType
         )
       )
     }

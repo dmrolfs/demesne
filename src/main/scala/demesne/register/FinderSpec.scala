@@ -2,6 +2,7 @@ package demesne.register
 
 import akka.actor.{ActorPath, Props}
 import demesne.AggregateRootType
+import peds.commons.util._
 
 import scala.language.existentials
 import scala.reflect.ClassTag
@@ -14,15 +15,22 @@ case object RegisterBusSubscription extends RelaySubscription
 
 abstract class FinderSpec[K: ClassTag, I: ClassTag] {
   def name: Symbol
-  def rootType: AggregateRootType
   def keyIdExtractor: KeyIdExtractor[K, I]
-  def accessProps: Props
+  def agentProps( rootType: AggregateRootType ): Props
   def relaySubscription: RelaySubscription = RegisterBusSubscription
 
-  def topic: String = makeTopic( name.name, rootType, key, id )
   def key: Class[_] = implicitly[ClassTag[K]].runtimeClass
   def id: Class[_] = implicitly[ClassTag[I]].runtimeClass
-  def aggregateProps: Props = RegisterAggregate.props[K, I]( topic )
+  def topic( rootType: AggregateRootType ): String = makeTopic( name.name, rootType, key, id )
+
+  def aggregateProps( rootType: AggregateRootType ): Props = RegisterAggregate.props[K, I]( topic( rootType ) )
   def relayProps( registerPath: ActorPath ): Props = RegisterRelay.props[K, I]( registerPath, keyIdExtractor )
-  def relayClassifier: String = rootType.name
+  def relayClassifier( rootType: AggregateRootType ): String = rootType.name
+
+  override def toString: String = {
+    val clazzName = getClass.safeSimpleName
+    val kname = implicitly[ClassTag[K]].runtimeClass.safeSimpleName
+    val iname = implicitly[ClassTag[I]].runtimeClass.safeSimpleName
+    s"${clazzName}(${name.name}, ${kname}:${iname})"
+  }
 }

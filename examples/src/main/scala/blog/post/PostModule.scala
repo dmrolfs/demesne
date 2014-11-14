@@ -5,7 +5,7 @@ import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
 import demesne.register.{RegisterBus, RegisterBusSubscription, ContextChannelSubscription, FinderSpec}
-import demesne.register.local.RegisterLocalAccess
+import demesne.register.local.RegisterLocalAgent
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier._
@@ -43,18 +43,10 @@ object PostModule extends AggregateRootModuleCompanion { module =>
 
       override def finders: Seq[FinderSpec[_, _]] = {
         Seq(
-          RegisterLocalAccess.spec[String, PostModule.TID](
-            'author,
-            aggregateRootType,
-            RegisterBusSubscription // not reqd - default
-          ) {
+          RegisterLocalAgent.spec[String, PostModule.TID]( 'author, RegisterBusSubscription /* not reqd - default */ ) {
             case PostAdded( sourceId, PostContent(author, _, _) ) => (author, sourceId)
           },
-          RegisterLocalAccess.spec[String, PostModule.TID](
-            'title,
-            aggregateRootType,
-            ContextChannelSubscription( classOf[PostAdded] )
-          ) {
+          RegisterLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[PostAdded] ) ) {
             case PostAdded( sourceId, PostContent(_, title, _) ) => (title, sourceId)
           }
         )
@@ -96,7 +88,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
           import peds.commons.util.Chain._
 
           override def publish: Publisher = trace.block( "publish" ) {
-            val bus = RegisterBus.bus( model.registerBus ) _
+            val bus = RegisterBus.bus( model.registerBus, meta ) _
             val buses = meta.finders
                           .filter( _.relaySubscription == RegisterBusSubscription )
                           .foldLeft( silent ){ _ +> bus(_) }
