@@ -4,7 +4,9 @@ import akka.actor._
 import akka.event.LoggingReceive
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
+import com.typesafe.scalalogging.StrictLogging
 import demesne.AggregateRootType
+import demesne.register.RegisterSupervisor.ConstituencyProvider
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
@@ -14,8 +16,10 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 
-object RegisterSupervisor {
-  def props( bus: RegisterBus ): Props = Props( new RegisterSupervisor( bus ) )
+object RegisterSupervisor extends StrictLogging {
+  val trace = Trace[RegisterSupervisor]
+
+  def props( bus: RegisterBus ): Props = Props( new RegisterSupervisor( bus ) with ConstituencyProvider )
 
   import scala.language.existentials
   sealed trait Message
@@ -28,91 +32,78 @@ object RegisterSupervisor {
   type SubscriptionClassifier = Either[ContextClassifier, BusClassifier]
 
 
+  sealed trait RegisterConstituent {
+    def category: Symbol
+    def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = true
+  }
+
+  case object Agent extends RegisterConstituent {
+    override val category: Symbol = 'RegisterAgent
+  }
+
+  case object Relay extends RegisterConstituent {
+    override val category: Symbol = 'RegisterRelay
+
+    override def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = {
+      subscription.fold(
+        classifier => { classifier._1.system.eventStream.subscribe( constituent, classifier._2 ) },
+        classifier => { classifier._1.subscribe( constituent, classifier._2 ) }
+      )
+    }
+  }
+
+  case object Aggregate extends RegisterConstituent {
+    override val category: Symbol = 'RegisterAggregate
+  }
+
+
+  case class RegisterConstituentRef( constituent: RegisterConstituent, path: ActorPath, props: Props ) {
+    def name: String = path.name
+  }
+
+  trait ConstituencyProvider { outer: Actor =>
+    def constituencyFor( registrantType: AggregateRootType, spec: FinderSpec[_, _] ): List[RegisterConstituentRef] = trace.block( s"constituentsFor($spec))" ) {
+      def pathFor( constituent: RegisterConstituent ): ActorPath = {
+        ActorPath.fromString(
+          self.path + "/" + constituent.category.name + "_" + spec.name.name + "-" + spec.topic(registrantType)
+        )
+      }
+
+      val aggregatePath = pathFor( Aggregate )
+
+      List(
+        RegisterConstituentRef( Agent, pathFor( Agent ), spec agentProps registrantType ),
+        RegisterConstituentRef( Aggregate, aggregatePath, spec aggregateProps registrantType ),
+        RegisterConstituentRef( Relay, pathFor( Relay ), spec relayProps aggregatePath )
+      )
+    }
+  }
+
+
   object FinderRegistration {
     def props(
       supervisor: ActorRef,
+      constituency: List[RegisterConstituentRef],
       subscription: SubscriptionClassifier,
       spec: FinderSpec[_, _],
       registrant: ActorRef,
       registrantType: AggregateRootType
-    ): Props = Props( new FinderRegistration( supervisor, subscription, spec, registrant, registrantType ) )
-
-
-//    object RegisterConstituent {
-//      sealed trait PostStartMagnet {
-//        type Result
-//        def apply( relay: ActorRef ): Result
-//      }
-//
-//      implicit val nilPostStartMagnet = new PostStartMagnet {
-//        override type Result = Unit
-//        override def apply( relay: ActorRef ): Result = { }
-//      }
-//    }
-//
-//    import RegisterConstituent._
-
-    sealed trait RegisterConstituent {
-      def category: Symbol
-//      def postStart( relay: ActorRef,  magnet: PostStartMagnet = nilPostStartMagnet ): magnet.Result = magnet( relay )
-      def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = true
-    }
-
-    case object Agent extends RegisterConstituent {
-      override def category: Symbol = 'RegisterAgent
-    }
-
-    case object Relay extends RegisterConstituent {
-      override def category: Symbol = 'RegisterRelay
-
-      override def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = {
-        subscription.fold(
-          classifier => { classifier._1.system.eventStream.subscribe( constituent, classifier._2 ) },
-          classifier => { classifier._1.subscribe( constituent, classifier._2 ) }
-        )
-      }
-
-//      implicit def fromActorContext( contextChannel: (ActorContext, Class[_]) ): PostStartMagnet = new PostStartMagnet {
-//        override type Result = Boolean
-//        override def apply( relay: ActorRef ): Result = {
-//          val (context, channel) = contextChannel
-//          context.system.eventStream.subscribe( relay,channel )
-//        }
-//      }
-//
-//      implicit def fromRegisterBus( busClassifier: (RegisterBus, String) ): PostStartMagnet = new PostStartMagnet {
-//        override type Result = Boolean
-//        override def apply( relay: ActorRef ): Result = {
-//          val (bus, classifier) = busClassifier
-//          bus.subscribe( relay, classifier )
-//        }
-//      }
-      //      def postStart( relay: ActorRef,  magnet: PostStartMagnet = nilPostStartMagnet ): magnet.Result = magnet( relay )
-    }
-
-
-    case object Aggregate extends RegisterConstituent {
-      override def category: Symbol = 'RegisterAggregate
-    }
+    ): Props = Props( new FinderRegistration( supervisor, constituency, subscription, spec, registrant, registrantType ) )
   }
 
   class FinderRegistration(
     supervisor: ActorRef,
+    constituency: List[RegisterConstituentRef],
     subscription: SubscriptionClassifier,
     spec: FinderSpec[_, _],
     registrant: ActorRef,
     registrantType: AggregateRootType
   ) extends Actor with ActorLogging {
-    import demesne.register.RegisterSupervisor.FinderRegistration._
 
     val trace = Trace( getClass.safeSimpleName, log )
 
     implicit val ec: ExecutionContext = context.dispatcher //okay to use actor's dispatcher
     implicit val askTimeout: Timeout = 3.seconds //todo move into configuration
-
-    case class RegisterConstituentRef( constituent: RegisterConstituent, path: ActorPath, props: Props ) {
-      def name: String = path.name
-    }
 
 
     sealed trait RegistrationWorkflow
@@ -125,9 +116,8 @@ object RegisterSupervisor {
     case class Startup( pieces: List[RegisterConstituentRef] ) extends RegistrationWorkflow
 
 
-    val pieces: List[RegisterConstituentRef] = constituentsFor( spec )
-    self ! Survey( toFind = pieces, toStart = List() )
-    pieces foreach { p => context.actorSelection( p.path ) ! Identify( p.name ) }
+    self ! Survey( toFind = constituency, toStart = List() )
+    constituency foreach { c => context.actorSelection( c.path ) ! Identify( c.name ) }
 
     override def receive: Receive = survey
 
@@ -155,6 +145,7 @@ log error s"piece found: $piece"
 
     val startup: Receive = LoggingReceive {
       case Startup( Nil ) => trace.block( s"FinderRegistration.startup::Startup(Nil)" ) {
+        log warning s">>>> sending: $registrant ! FinderRegistered($registrantType, $spec)"
         registrant ! FinderRegistered( registrantType, spec )
 //trace.block( "#### SANITY CHECK ####" ) {
 //  val check = scala.concurrent.Await.result( self ? Survey( pieces, Nil ), askTimeout.duration )
@@ -191,22 +182,6 @@ log error s"piece found: $piece"
         } pipeTo self
       }
     }
-
-    def constituentsFor( spec: FinderSpec[_, _] ): List[RegisterConstituentRef] = trace.block( s"constituentsFor($spec))" ) {
-      def pathFor( constituent: RegisterConstituent ): ActorPath = {
-        ActorPath.fromString(
-          supervisor.path + "/" + constituent.category.name + "_" + spec.name.name + "-" + spec.topic(registrantType)
-        )
-      }
-
-      val aggregatePath = pathFor( Aggregate )
-
-      List(
-        RegisterConstituentRef( Agent, pathFor( Agent ), spec agentProps registrantType ),
-        RegisterConstituentRef( Aggregate, aggregatePath, spec aggregateProps registrantType ),
-        RegisterConstituentRef( Relay, pathFor( Relay ), spec relayProps aggregatePath )
-      )
-    }
   }
 }
 
@@ -215,6 +190,8 @@ log error s"piece found: $piece"
  */
 class RegisterSupervisor( bus: RegisterBus )
 extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLogging {
+  outer: ConstituencyProvider =>
+
   import demesne.register.RegisterSupervisor._
 
   val trace = Trace( getClass.safeSimpleName, log )
@@ -233,6 +210,7 @@ extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLoggin
       context.actorOf(
         FinderRegistration.props(
           supervisor = self,
+          constituency = constituencyFor( rootType, spec ),
           subscription = subscription,
           spec = spec,
           registrant = sender(),

@@ -2,11 +2,10 @@ package demesne.register
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.actor.Props
-import akka.testkit.{TestActorRef, TestProbe}
+import akka.actor._
+import akka.testkit._
 import demesne._
-import demesne.register.RegisterSupervisor.FinderRegistered
-import demesne.register.RegisterSupervisor.FinderRegistration.{Agent, Aggregate, Relay, RegisterConstituent}
+import demesne.register.RegisterSupervisor._
 import demesne.register.local.RegisterLocalAgent
 import demesne.testkit.ParallelAkkaSpec
 import org.scalatest.mock.MockitoSugar
@@ -39,7 +38,9 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
 
     val supervisor = TestProbe()
     val registrant = TestProbe()
+    val constituent = TestProbe()
     val bus = mock[RegisterBus]
+
     def rootType( specs: FinderSpec[_,_]* ): AggregateRootType = new AggregateRootType {
       override def name: String = "foo"
       override def finders: Seq[FinderSpec[_, _]] = specs
@@ -69,45 +70,116 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
     s"${prefix}_${rootType.name}-${spec topic rootType}"
   }
 
-  "FinderRegistration should" should {
-    import demesne.register.RegisterSupervisor.FinderRegistration
+  def constituencyFor(
+    probes: Map[RegisterConstituent, ActorRef],
+    registrantType: AggregateRootType,
+    spec: FinderSpec[_, _]
+  ): List[RegisterConstituentRef] = {
+    val aggregatePath = probes( Aggregate ).path
+    List(
+      RegisterConstituentRef( Agent, probes( Agent ).path, spec agentProps registrantType ),
+      RegisterConstituentRef( Aggregate, aggregatePath, spec aggregateProps registrantType ),
+      RegisterConstituentRef( Relay, probes( Relay ).path, spec relayProps aggregatePath )
+    )
+  }
 
-    "survey upon create" in { f: Fixture =>
+  def finderRegistrationFor(
+    rootType: AggregateRootType,
+    spec: FinderSpec[_,_],
+    constituency: List[RegisterConstituentRef]
+  )(
+    implicit system: ActorSystem, f: Fixture
+  ): TestActorRef[FinderRegistration] = TestActorRef[FinderRegistration](
+    FinderRegistration.props(
+      supervisor = f.supervisor.ref,
+      constituency = constituency,
+      subscription = Right( (f.bus, spec.relayClassifier(rootType)) ),
+      spec = spec,
+      registrant = f.registrant.ref,
+      registrantType = rootType
+    )
+  )
+
+  def expectStartWorkflow(
+    rootType: AggregateRootType,
+    spec: FinderSpec[_,_],
+    pieces: Seq[RegisterConstituent]
+  )(
+    implicit system: ActorSystem, f: Fixture
+  ): Unit = {
+    pieces foreach { p =>
+      f.supervisor.expectMsgPF( hint="Start "+p.category.name ) {
+        case StartChild( _, name ) => true
+      }
+      f.supervisor reply ChildStarted( f.constituent.ref )
+    }
+
+    f.registrant.expectMsg[FinderRegistered](
+      3.seconds.dilated,
+      s"registered[${pieces.size}]",
+      FinderRegistered( rootType = rootType, spec = spec )
+    )
+  }
+
+
+  "FinderRegistration should" should {
+
+    "survey upon first create" in { implicit f: Fixture =>
       implicit val system = f.system
       val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
         case FooAdded( name ) => (name, name.hashCode)
       }
       val rt = f.rootType( spec )
-      val real = TestActorRef[FinderRegistration](
-        FinderRegistration.props(
-          supervisor = f.supervisor.ref,
-          subscription = Right( (f.bus, spec.relayClassifier(rt)) ),
-          spec = spec,
-          registrant = f.registrant.ref,
-          registrantType = rt
-        )
+      val probes = Seq.fill( 3 ){ TestProbe() }
+      val keys = Seq( Relay, Aggregate, Agent )
+      val constituency = constituencyFor(
+        Map( keys.zip( probes map { _.ref } ):_* ),
+        rt,
+        spec
       )
+      probes foreach { _.ref ! PoisonPill }
 
-      def expectStartWorkflow(
-        rootType: AggregateRootType,
-        spec: FinderSpec[_,_],
-        pieces: Seq[RegisterConstituent]
-      ): Unit = {
-        val child = TestProbe()
-        pieces foreach { p =>
-          f.supervisor.expectMsgPF( hint="Start "+p.category.name ) {
-            case StartChild( _, name ) => name mustBe childNameFor( p.category.name, rootType, spec )
-          }
-          f.supervisor reply ChildStarted( child.ref )
-        }
-
-        f.registrant.expectMsg[FinderRegistered]( FinderRegistered( rootType = rt, spec = spec ) )
-      }
-
-      expectStartWorkflow( rt, spec, Seq( Relay, Aggregate, Agent ) )
+      val real = finderRegistrationFor( rt, spec, constituency )
+      expectStartWorkflow( rt, spec, keys )
     }
 
-//    "handle PostPublished event" in { fixture: Fixture =>
+    "no startups after initial create in node" in { implicit f: Fixture =>
+      implicit val system = f.system
+      val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
+        case FooAdded( name ) => (name, name.hashCode)
+      }
+      val rt = f.rootType( spec )
+      val probes = Seq.fill( 3 ){ TestProbe() }
+      val constituency = constituencyFor(
+        Map( Seq( Relay, Aggregate, Agent ).zip( probes map { _.ref } ):_* ),
+        rt,
+        spec
+      )
+
+      val real = finderRegistrationFor( rt, spec, constituency )
+      expectStartWorkflow( rt, spec, Seq() )
+    }
+
+    "relay startup after initial create in node" in { implicit f: Fixture =>
+      implicit val system = f.system
+      val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
+        case FooAdded( name ) => (name, name.hashCode)
+      }
+      val rt = f.rootType( spec )
+      val probes = Seq.fill( 3 ){ TestProbe() }
+      val constituency = constituencyFor(
+        Map( Seq( Relay, Aggregate, Agent ).zip( probes map { _.ref } ):_* ),
+        rt,
+        spec
+      )
+
+      probes.head.ref ! PoisonPill
+
+      val real = finderRegistrationFor( rt, spec, constituency )
+      expectStartWorkflow( rt, spec, Seq( Relay ) )
+    }
+
+    //    "handle PostPublished event" in { fixture: Fixture =>
 //      import fixture._
 //
 //      val pp = PostPublished( sourceId = nextPostId, author = "Damon", title = "Handle Publishing" )
