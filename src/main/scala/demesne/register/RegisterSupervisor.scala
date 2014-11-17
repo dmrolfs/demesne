@@ -65,7 +65,7 @@ object RegisterSupervisor extends StrictLogging {
     def constituencyFor( registrantType: AggregateRootType, spec: FinderSpec[_, _] ): List[RegisterConstituentRef] = trace.block( s"constituentsFor($spec))" ) {
       def pathFor( constituent: RegisterConstituent ): ActorPath = {
         ActorPath.fromString(
-          self.path + "/" + constituent.category.name + "_" + spec.name.name + "-" + spec.topic(registrantType)
+          self.path + "/" + constituent.category.name + "-" + spec.topic( registrantType )
         )
       }
 
@@ -147,10 +147,6 @@ log error s"piece found: $piece"
       case Startup( Nil ) => trace.block( s"FinderRegistration.startup::Startup(Nil)" ) {
         log warning s">>>> sending: $registrant ! FinderRegistered($registrantType, $spec)"
         registrant ! FinderRegistered( registrantType, spec )
-//trace.block( "#### SANITY CHECK ####" ) {
-//  val check = scala.concurrent.Await.result( self ? Survey( pieces, Nil ), askTimeout.duration )
-//  log error s"##### SANITY CHECK FOUND: $check"
-//}
         context stop self
       }
 

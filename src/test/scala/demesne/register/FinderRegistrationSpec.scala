@@ -178,35 +178,5 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
       val real = finderRegistrationFor( rt, spec, constituency )
       expectStartWorkflow( rt, spec, Seq( Relay ) )
     }
-
-    //    "handle PostPublished event" in { fixture: Fixture =>
-//      import fixture._
-//
-//      val pp = PostPublished( sourceId = nextPostId, author = "Damon", title = "Handle Publishing" )
-//      val real = TestActorRef[AuthorListingModule.AuthorListing].underlyingActor
-//      real.posts mustBe Vector.empty
-//      real.receive( pp )
-//      real.posts mustBe IndexedSeq( pp )
-//    }
-//
-//    "respond to GetPosts requests" in { fixture: Fixture =>
-//      import akka.pattern.ask
-//      import fixture._
-//      implicit val timeout = Timeout( 5.seconds )
-//
-//      val pp = PostPublished( sourceId = nextPostId, author = "Damon", title = "Handle Publishing" )
-//      val ref = TestActorRef[AuthorListingModule.AuthorListing]
-//      val real = ref.underlyingActor
-//      val expected: immutable.IndexedSeq[PostPublished] = immutable.IndexedSeq( pp )
-//      real.posts mustBe Vector.empty
-//      val r1 = ref ? GetPosts("Damon")
-//      val Success(Posts(a1)) = r1.value.get
-//      a1 mustBe immutable.IndexedSeq.empty
-//
-//      real.receive( pp )
-//      val r2 = ref ? GetPosts( "Damon" )
-//      val Success(Posts(a2)) = r2.value.get
-//      a2 mustBe immutable.IndexedSeq( pp )
-//    }
   }
 }
