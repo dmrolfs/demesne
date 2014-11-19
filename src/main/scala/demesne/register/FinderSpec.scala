@@ -24,11 +24,11 @@ abstract class FinderSpec[K: ClassTag, I: ClassTag] {
   def topic( rootType: AggregateRootType ): String = makeTopic( name.name, rootType, key, id )
 
   def aggregateProps( rootType: AggregateRootType ): Props = RegisterAggregate.props[K, I]( topic( rootType ) )
-  def relayProps( registerPath: ActorPath ): Props = RegisterRelay.props[K, I]( registerPath, keyIdExtractor )
+  def relayProps( aggregatePath: ActorPath ): Props = RegisterRelay.props[K, I]( aggregatePath, keyIdExtractor )
   def relayClassifier( rootType: AggregateRootType ): String = rootType.name
 
   override def toString: String = {
-    val clazzName = getClass.safeSimpleName
+    val clazzName = getClass.getSimpleName
     val kname = implicitly[ClassTag[K]].runtimeClass.safeSimpleName
     val iname = implicitly[ClassTag[I]].runtimeClass.safeSimpleName
     s"${clazzName}(${name.name}, ${kname}:${iname})"

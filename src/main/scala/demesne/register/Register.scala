@@ -4,6 +4,11 @@ package demesne.register
  * Created by damonrolfs on 11/5/14.
  */
 trait Register[K, I] {
+  //todo: path dependent types for local and shared (via Future[]) work? PredicateResult seems to be the difficult part
+  type Result
+  type OptionalResult = Option[Result]
+  type PredicateResult
+
   /** Optionally returns the aggregate id associated with a key.
    * @param key the key aggregate id
    * @return an option value containing the aggregate id associated with key in this map, or None if none exists.

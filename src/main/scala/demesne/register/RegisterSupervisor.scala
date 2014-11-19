@@ -59,22 +59,28 @@ object RegisterSupervisor extends StrictLogging {
 
   case class RegisterConstituentRef( constituent: RegisterConstituent, path: ActorPath, props: Props ) {
     def name: String = path.name
+    override def toString: String = s"${getClass.safeSimpleName}(${constituent}, ${path})"
   }
 
-  trait ConstituencyProvider { outer: Actor =>
-    def constituencyFor( registrantType: AggregateRootType, spec: FinderSpec[_, _] ): List[RegisterConstituentRef] = trace.block( s"constituentsFor($spec))" ) {
-      def pathFor( constituent: RegisterConstituent ): ActorPath = {
-        ActorPath.fromString(
-          self.path + "/" + constituent.category.name + "-" + spec.topic( registrantType )
-        )
-      }
 
-      val aggregatePath = pathFor( Aggregate )
+  trait ConstituencyProvider { outer: Actor =>
+    def pathFor(
+      registrantType: AggregateRootType,
+      spec: FinderSpec[_,_]
+    )(
+      constituent: RegisterConstituent
+    ): ActorPath = ActorPath.fromString(
+      self.path + "/" + constituent.category.name + "-" + spec.topic( registrantType )
+    )
+
+    def constituencyFor( registrantType: AggregateRootType, spec: FinderSpec[_, _] ): List[RegisterConstituentRef] = {
+      val p = pathFor( registrantType, spec ) _
+      val aggregatePath = p( Aggregate )
 
       List(
-        RegisterConstituentRef( Agent, pathFor( Agent ), spec agentProps registrantType ),
+        RegisterConstituentRef( Agent, p( Agent ), spec agentProps registrantType ),
         RegisterConstituentRef( Aggregate, aggregatePath, spec aggregateProps registrantType ),
-        RegisterConstituentRef( Relay, pathFor( Relay ), spec relayProps aggregatePath )
+        RegisterConstituentRef( Relay, p( Relay ), spec relayProps aggregatePath )
       )
     }
   }
@@ -123,21 +129,19 @@ object RegisterSupervisor extends StrictLogging {
 
     val survey: Receive = LoggingReceive {
       case Survey(Nil, toStart) => trace.block( s"FinderRegistration.survey::Survey(Nil, $toStart)" ) {
-        context become startup
         self ! Startup(toStart)
+        context become startup
       }
 
       case Survey(toFind, toStart) => trace.block( s"FinderRegistration.survey::Survey($toFind, $toStart)" ) {
         val piece = toFind.head
         context.actorSelection(piece.path) ? Identify(piece.name) map {
           case ActorIdentity(_, None) => trace.block( s"FinderRegistration.survey::Survey::ActorIdentity(_,None)" ) {
-log error s"piece not found: $piece"
-            Survey(toFind.tail, piece :: toStart)
+            Survey( toFind.tail, piece :: toStart )
           }
 
           case m => trace.block( s"FinderRegistration.survey::Survey::$m" ) {
-log error s"piece found: $piece"
-            Survey(toFind.tail, toStart)
+            Survey( toFind.tail, toStart )
           }
         } pipeTo self
       }
@@ -145,7 +149,7 @@ log error s"piece found: $piece"
 
     val startup: Receive = LoggingReceive {
       case Startup( Nil ) => trace.block( s"FinderRegistration.startup::Startup(Nil)" ) {
-        log warning s">>>> sending: $registrant ! FinderRegistered($registrantType, $spec)"
+        log info s"sending: $registrant ! FinderRegistered($registrantType, $spec)"
         registrant ! FinderRegistered( registrantType, spec )
         context stop self
       }
@@ -160,21 +164,6 @@ log error s"piece found: $piece"
           }
 
           case m => log error s"failed to create register piece: ${p}"  //todo consider retry state via ctx.become
-        } pipeTo self
-      }
-
-      case Survey(toFind, toStart) => trace.block( s"FinderRegistration.survey::Survey($toFind, $toStart)" ) {
-        val piece = toFind.head
-        context.actorSelection(piece.path) ? Identify(piece.name) map {
-          case ActorIdentity(_, None) => trace.block( s"FinderRegistration.survey::Survey::ActorIdentity(_,None)" ) {
-            log error s"piece not found: $piece"
-            Survey(toFind.tail, piece :: toStart)
-          }
-
-          case m => trace.block( s"FinderRegistration.survey::Survey::$m" ) {
-            log error s"piece found: $piece"
-            Survey(toFind.tail, toStart)
-          }
         } pipeTo self
       }
     }

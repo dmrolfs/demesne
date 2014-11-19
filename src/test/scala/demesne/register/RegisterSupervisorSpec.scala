@@ -3,6 +3,7 @@ package demesne.register
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor._
+import akka.event.LoggingReceive
 import akka.testkit._
 import demesne._
 import demesne.register.RegisterSupervisor._
@@ -10,7 +11,6 @@ import demesne.register.local.RegisterLocalAgent
 import demesne.testkit.ParallelAkkaSpec
 import org.scalatest.mock.MockitoSugar
 import org.scalatest.{Outcome, Tag}
-import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.commons.log.Trace
 
 import scala.concurrent.duration._
@@ -32,8 +32,8 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
   class Fixture extends AkkaFixture {
     private val trace = Trace[Fixture]
 
-    def before(): Unit = trace.block( "before" ) { }
-    def after(): Unit = trace.block( "after" ) { }
+    def before(): Unit = { }
+    def after(): Unit = { }
 
     def rootType( specs: FinderSpec[_,_]* ): AggregateRootType = new AggregateRootType {
       override def name: String = "foo"
@@ -41,6 +41,29 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       override def aggregateRootProps(implicit model: DomainModel): Props = {
         throw new Exception( "rootType.aggregateRootProps should not be invoked" )
       }
+
+      override def toString: String = "FooAggregateRootType"
+    }
+
+    val fooIdExtractor: KeyIdExtractor[String, Int] = {
+      case FooAdded(value) => (value, value.hashCode)
+    }
+
+    def testSpec(
+      specName: Symbol,
+      specRelaySubscription: RelaySubscription = RegisterBusSubscription
+    )(
+      specAgentProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterLocalAgent.props( makeTopic( specName.name, rt, classOf[String], classOf[Int]) ),
+      specAggregateProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterAggregate.props( makeTopic(specName.name, rt, classOf[String], classOf[Int]) ),
+      specRelayProps: ActorPath => Props = (ap: ActorPath) => RegisterRelay.props[String, Int](ap, fooIdExtractor )
+    ): FinderSpec[String, Int] = new FinderSpec[String, Int] {
+      override val name: Symbol = specName
+      override val keyIdExtractor: KeyIdExtractor[String, Int] = fooIdExtractor
+      override val relaySubscription: RelaySubscription = specRelaySubscription
+      override def agentProps(rootType: AggregateRootType): Props = specAgentProps(rootType)
+      override def aggregateProps(rootType: AggregateRootType): Props = specAggregateProps(rootType)
+      override def relayProps(aggregatePath: ActorPath): Props = specRelayProps(aggregatePath)
+      override def toString: String = s"TestFinderSpec(${name.name}, ${classOf[String]}:${classOf[Int]})"
     }
 
     val constituents = Seq( Agent, Aggregate, Relay )
@@ -48,19 +71,14 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
     val bus = mock[RegisterBus]
 
-    val busSpec = RegisterLocalAgent.spec[String, Int]( 'busFoo ){
-      case FooAdded( name ) => (name, name.hashCode)
-    }
-
-    val contextSpec = RegisterLocalAgent.spec[String, Int]( 'contextFoo, ContextChannelSubscription( classOf[FooAdded] ) ) {
-      case FooAdded( name ) => (name, name.hashCode)
-    }
-
+    val busSpec = testSpec( 'busFoo )()
     val busRoot = rootType( busSpec )
+
+    val contextSpec = testSpec( 'contextFoo, ContextChannelSubscription(classOf[FooAdded]) )()
     val contextRoot = rootType( contextSpec )
   }
 
-  override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
+  override def withFixture( test: OneArgTest ): Outcome = {
     val sys = createAkkaFixture()
 
     try {
@@ -93,43 +111,49 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     )
   }
 
-//  def finderRegistrationFor(
-//    rootType: AggregateRootType,
-//    spec: FinderSpec[_,_],
-//    constituency: List[RegisterConstituentRef]
-//  )(
-//    implicit system: ActorSystem, f: Fixture
-//  ): TestActorRef[FinderRegistration] = TestActorRef[FinderRegistration](
-//    FinderRegistration.props(
-//      supervisor = f.supervisor.ref,
-//      constituency = constituency,
-//      subscription = Right( (f.bus, spec.relayClassifier(rootType)) ),
-//      spec = spec,
-//      registrant = f.registrant.ref,
-//      registrantType = rootType
-//    )
-//  )
+  def nameFor( constituent: RegisterConstituent, rootType: AggregateRootType, spec: FinderSpec[_,_] ): String = {
+    constituent.category.name + "-" + spec.topic( rootType )
+  }
 
-//  def expectStartWorkflow(
-//    rootType: AggregateRootType,
-//    spec: FinderSpec[_,_],
-//    pieces: Seq[RegisterConstituent]
-//  )(
-//    implicit system: ActorSystem, f: Fixture
-//  ): Unit = {
-//    pieces foreach { p =>
-//      f.supervisor.expectMsgPF( hint="Start "+p.category.name ) {
-//        case StartChild( _, name ) => true
-//      }
-//      f.supervisor reply ChildStarted( f.constituent.ref )
-//    }
-//
-//    f.registrant.expectMsg[FinderRegistered](
-//      3.seconds.dilated,
-//      s"registered[${pieces.size}]",
-//      FinderRegistered( rootType = rootType, spec = spec )
-//    )
-//  }
+  trait TestConstituencyProviders extends ConstituencyProvider { outer: Actor =>
+    def paths: Map[RegisterConstituent, ActorPath]
+
+    override def pathFor(
+      registrantType: AggregateRootType,
+      spec: FinderSpec[_, _]
+    )(
+      constituent: RegisterConstituent
+    ): ActorPath = paths.get( constituent ) getOrElse super.pathFor(registrantType, spec)( constituent )
+
+    override def constituencyFor(
+      registrantType: AggregateRootType,
+      spec: FinderSpec[_, _]
+    ): List[RegisterConstituentRef] = {
+      val p = pathFor( registrantType, spec ) _
+      List(
+        RegisterConstituentRef( Agent, p(Agent), spec agentProps registrantType ),
+        RegisterConstituentRef( Aggregate, p(Aggregate), spec aggregateProps  registrantType ),
+        RegisterConstituentRef( Relay, p(Relay), spec relayProps p(Aggregate) )
+      )
+    }
+  }
+
+  def registerSupervisorProps( bus: RegisterBus, constituentPaths: Map[RegisterConstituent, ActorPath] ): Props = {
+    Props(
+      new RegisterSupervisor( bus ) with TestConstituencyProviders {
+        override val paths: Map[RegisterConstituent, ActorPath] = constituentPaths
+      }
+    )
+  }
+
+  class TestConstituent extends Actor with ActorLogging {
+    override def receive: Actor.Receive = {
+      case "stop" => LoggingReceive {
+        log info s"KILLING TestConstituent: ${self.path}"
+        throw new Exception( s"KILLING constituent: ${self.path}" )
+      }
+    }
+  }
 
 
   "RegisterSupervisor should" should {
@@ -145,8 +169,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
         FinderRegistered( rootType = f.busRoot, spec = f.busSpec )
       )
 
-      val suffix = "-" + f.busSpec.topic( f.busRoot )
-      val expected = f.constituents.map( _.category.name + suffix ).toSet
+      val expected = f.constituents.map{ nameFor( _, f.busRoot, f.busSpec ) }.toSet
       val actual: Set[String] = real.children.map( _.path.name ).toSet
 
       actual must be (expected)
@@ -163,12 +186,32 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
         FinderRegistered( rootType = f.contextRoot, spec = f.contextSpec)
       )
 
-      val suffix = "-" + f.contextSpec.topic( f.contextRoot )
-      val expected = f.constituents.map( _.category.name + suffix ).toSet
+      val expected = f.constituents.map{ nameFor( _, f.contextRoot, f.contextSpec) }.toSet
       val actual: Set[String] = real.children.map( _.path.name ).toSet
 
       actual must be (expected)
     }
+
+    "supervisor restarts register constituent upon failure" taggedAs( WIP ) in { implicit f: Fixture =>
+      implicit val system = f.system
+      val aggregateProbe = TestProbe()
+      val relayProbe = TestProbe()
+      val constituentPaths: Map[RegisterConstituent, ActorPath] = Map(
+        Aggregate -> aggregateProbe.ref.path,
+        Relay -> relayProbe.ref.path
+      )
+      val restartSpec = f.testSpec( 'testFoo )( specAgentProps = (rt: AggregateRootType) => Props(new TestConstituent) )
+      val restartRoot = f.rootType( restartSpec )
+      val real = TestActorRef( registerSupervisorProps( f.bus, constituentPaths ) )
+      real.receive( RegisterSupervisor.RegisterFinder( restartRoot, restartSpec), f.registrant.ref )
+      f.registrant.expectMsg( FinderRegistered( restartRoot, restartSpec) )
+      val agent = real.getSingleChild( nameFor( Agent, restartRoot, restartSpec) )
+      val monitor = TestProbe()
+      monitor watch agent
+      agent ! "stop"
+      monitor.expectNoMsg( 200.millis.dilated )
+    }
+
 
     //    "no startups after initial create in node" in { implicit f: Fixture =>
 //      implicit val system = f.system
