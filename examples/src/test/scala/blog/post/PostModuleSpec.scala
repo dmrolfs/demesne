@@ -1,6 +1,6 @@
 package sample.blog.post
 
-import akka.testkit.TestProbe
+import akka.testkit._
 import demesne._
 import demesne.testkit.AggregateRootSpec
 import org.scalatest.Tag
@@ -37,12 +37,12 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
   override def createAkkaFixture(): Fixture = new PostFixture
 
   object WIP extends Tag( "wip" )
+  object GOOD extends Tag( "good" )
 
   "Post Module should" should {
-    "add content" in { fixture: Fixture =>
+    "add content" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
-      trace( ">>>>>>>>  add content >>>>>>>>" )
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
@@ -50,51 +50,45 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
       post !! AddPost( id, content )
-      bus.expectMsgPF( max = 800.millis, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 600.millis.dilated, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
-      trace( "<<<<<<<< add content <<<<<<<<" )
     }
 
     "not respond before added" in { fixture: Fixture =>
       import fixture._
-      trace( ">>>>>>>> not respond before added >>>>>>>>" )
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
-      post ! ChangeBody( id, "dummy content" )
-      post ! Publish( id )
-      bus.expectNoMsg( 200.millis )
-      trace( "<<<<<<<< not respond before added <<<<<<<<" )
+      post !! ChangeBody( id, "dummy content" )
+      post !! Publish( id )
+      bus.expectNoMsg( 200.millis.dilated )
     }
 
-    "not respond to incomplete content" in { fixture: Fixture =>
+    "not respond to incomplete content" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
-      trace( ">>>>>>>> not respond to incomplete content >>>>>>>>" )
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
-      post ! AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
-      bus.expectNoMsg( 200.millis )
-      post ! AddPost( id, PostContent( author = "", title = "Incomplete Content", body = "no author" ) )
-      bus.expectNoMsg( 200.millis )
-      trace( "<<<<<<<< not respond to incomplete content <<<<<<<<" )
+      post !! AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
+      bus.expectNoMsg( 200.millis.dilated )
+      post !! AddPost( id, PostContent( author = "", title = "Incomplete Content", body = "no author" ) )
+      bus.expectNoMsg( 200.millis.dilated )
     }
 
-    "have empty contents before use" taggedAs( WIP ) in { fixture: Fixture =>
+    "have empty contents before use" in { fixture: Fixture =>
       import fixture._
-      trace( ">>>>>>>> have empty contents before use >>>>>>>>" )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
       post.send( GetContent( id ) )( author.ref )
-      author.expectMsgPF( max = 600.millis, hint = "empty contents" ){
+      author.expectMsgPF( max = 200.millis.dilated, hint = "empty contents" ){
         case Envelope( payload: PostContent, h ) => {
           payload mustBe PostContent( "", "", "" )
           h.messageNumber mustBe MessageNumber( 2 )
@@ -102,29 +96,25 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
 
         }
       }
-      trace( "<<<<<<<< have empty contents before use <<<<<<<<" )
     }
 
     "have contents after posting" in { fixture: Fixture =>
       import fixture._
-      trace( ">>>>>>>> have contents after posting >>>>>>>>" )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
       val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
 
       val clientProbe = TestProbe()
-      post ! AddPost( id, content )
-      post.tell( GetContent( id ), clientProbe.ref )
-      clientProbe.expectMsgPF( max = 200.millis, hint = "initial contents" ){
+      post !! AddPost( id, content )
+      post.send( GetContent( id ))( clientProbe.ref )
+      clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "initial contents" ){
         case Envelope( payload: PostContent, h ) if payload == content => true
       }
-      trace( "<<<<<<<< have contents after posting <<<<<<<<" )
     }
 
     "have changed contents after change" in { fixture: Fixture =>
       import fixture._
-      trace( ">>>>>>>> have changed contents after change >>>>>>>>" )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
@@ -135,26 +125,24 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
       val clientProbe = TestProbe()
-      post ! AddPost( id, content )
+      post !! AddPost( id, content )
       bus.expectMsgPF( hint = "PostAdded" ) {
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
 
-      post ! ChangeBody( id, updated )
+      post !! ChangeBody( id, updated )
       bus.expectMsgPF( hint = "BodyChanged" ) {
         case Envelope( payload: BodyChanged, _ ) => payload.body mustBe updated
       }
 
-      post.tell( GetContent( id ), clientProbe.ref )
-      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
+      post.send( GetContent( id ) )( clientProbe.ref )
+      clientProbe.expectMsgPF( max = 200.millis.dilated, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
       }
-      trace( "<<<<<<<< have changed contents after change <<<<<<<<" )
     }
 
     "have changed contents after change and published" in { fixture: Fixture =>
       import fixture._
-      trace( ">>>>>>>> have changed contents after change and published >>>>>>>>" )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
@@ -162,19 +150,17 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       val updated = "updated contents"
 
       val clientProbe = TestProbe()
-      post ! AddPost( id, content )
-      post ! ChangeBody( id, updated )
-      post ! Publish( id )
-      post.tell( GetContent( id ), clientProbe.ref )
-      clientProbe.expectMsgPF( max = 400.millis, hint = "changed contents" ){
+      post !! AddPost( id, content )
+      post !! ChangeBody( id, updated )
+      post !! Publish( id )
+      post.send( GetContent( id ) )( clientProbe.ref )
+      clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
       }
-      trace( "<<<<<<<< have changed contents after change and published <<<<<<<<" )
     }
 
     "dont change contents after published" in { fixture: Fixture =>
       import fixture._
-      trace( ">>>>>>>> dont change contents after published >>>>>>>>" )
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
@@ -182,20 +168,18 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       val updated = "updated contents"
 
       val clientProbe = TestProbe()
-      post ! AddPost( id, content )
-      post ! ChangeBody( id, updated )
-      post ! Publish( id )
-      post ! ChangeBody( id, "BAD CONTENT" )
-      post.tell( GetContent( id ), clientProbe.ref )
-      clientProbe.expectMsgPF( max = 200.millis, hint = "changed contents" ){
+      post !! AddPost( id, content )
+      post !! ChangeBody( id, updated )
+      post !! Publish( id )
+      post !! ChangeBody( id, "BAD CONTENT" )
+      post.send( GetContent( id ) )( clientProbe.ref )
+      clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
       }
-      trace( "<<<<<<<< dont change contents after published <<<<<<<<" )
     }
 
     "follow happy path" in { fixture: Fixture =>
       import fixture._
-      trace( ">>>>>>>> follow happy path >>>>>>>>" )
 
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Test Add", body = "testing happy path" )
@@ -203,9 +187,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      PostModule.aggregateOf( id ) ! AddPost( id, content )
-      PostModule.aggregateOf( id ) ! ChangeBody( id, "new content" )
-      PostModule.aggregateOf( id ) ! Publish( id )
+      PostModule.aggregateOf( id ) !! AddPost( id, content )
+      PostModule.aggregateOf( id ) !! ChangeBody( id, "new content" )
+      PostModule.aggregateOf( id ) !! Publish( id )
 
       bus.expectMsgPF( hint = "post-added" ) {
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
@@ -228,7 +212,6 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
           title mustBe "Test Add"
         }
       }
-      trace( "<<<<<<<< follow happy path <<<<<<<<" )
     }
   }
 }

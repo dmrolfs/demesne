@@ -28,9 +28,8 @@ abstract class FinderSpec[K: ClassTag, I: ClassTag] {
   def relayClassifier( rootType: AggregateRootType ): String = rootType.name
 
   override def toString: String = {
-    val clazzName = getClass.getSimpleName
     val kname = implicitly[ClassTag[K]].runtimeClass.safeSimpleName
     val iname = implicitly[ClassTag[I]].runtimeClass.safeSimpleName
-    s"${clazzName}(${name.name}, ${kname}:${iname})"
+    s"FinderSpec(${name.name}, ${kname}:${iname})"
   }
 }

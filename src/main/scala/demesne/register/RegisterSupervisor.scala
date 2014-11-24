@@ -5,7 +5,7 @@ import akka.event.LoggingReceive
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import com.typesafe.scalalogging.StrictLogging
-import demesne.AggregateRootType
+import demesne.{register, AggregateRootType}
 import demesne.register.RegisterSupervisor.ConstituencyProvider
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
@@ -16,15 +16,51 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 
+/**
+ * Created by damonrolfs on 11/6/14.
+ */
+class RegisterSupervisor( bus: RegisterBus )
+  extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLogging {
+  outer: ConstituencyProvider =>
+
+  import demesne.register.RegisterSupervisor._
+
+  val trace = Trace( "RegisterSupervisor", log )
+
+  override def childStarter(): Unit = { }
+
+  override def receive: Receive = super.receive orElse register
+
+  val register: Receive = LoggingReceive {
+    case RegisterFinder( rootType, spec ) => trace.block( s"register:RegisterFinder($rootType, $spec)" ) {
+      val subscription: SubscriptionClassifier = spec.relaySubscription match {
+        case ContextChannelSubscription( channel ) => Left( (context, channel) )
+        case RegisterBusSubscription => Right( (bus, spec.relayClassifier(rootType) ) )
+      }
+
+      context.actorOf(
+        FinderRegistration.props(
+          supervisor = self,
+          constituency = constituencyFor( rootType, spec ),
+          subscription = subscription,
+          spec = spec,
+          registrant = sender(),
+          registrantType = rootType
+        )
+      )
+    }
+  }
+}
+
 object RegisterSupervisor extends StrictLogging {
-  val trace = Trace[RegisterSupervisor]
+  val trace = Trace( "RegisterSupervisor", logger )
 
   def props( bus: RegisterBus ): Props = Props( new RegisterSupervisor( bus ) with ConstituencyProvider )
 
   import scala.language.existentials
   sealed trait Message
   case class RegisterFinder( rootType: AggregateRootType, spec: FinderSpec[_, _] ) extends Message
-  case class FinderRegistered( rootType: AggregateRootType, spec: FinderSpec[_, _] ) extends Message
+  case class FinderRegistered( agentRef: ActorRef, rootType: AggregateRootType, spec: FinderSpec[_, _] ) extends Message
 
 
   type ContextClassifier = (ActorContext, Class[_])
@@ -78,9 +114,9 @@ object RegisterSupervisor extends StrictLogging {
       val aggregatePath = p( Aggregate )
 
       List(
+        RegisterConstituentRef( Relay, p( Relay ), spec relayProps aggregatePath ),
         RegisterConstituentRef( Agent, p( Agent ), spec agentProps registrantType ),
-        RegisterConstituentRef( Aggregate, aggregatePath, spec aggregateProps registrantType ),
-        RegisterConstituentRef( Relay, p( Relay ), spec relayProps aggregatePath )
+        RegisterConstituentRef( Aggregate, aggregatePath, spec aggregateProps registrantType )
       )
     }
   }
@@ -125,22 +161,28 @@ object RegisterSupervisor extends StrictLogging {
     self ! Survey( toFind = constituency, toStart = List() )
     constituency foreach { c => context.actorSelection( c.path ) ! Identify( c.name ) }
 
+    var constituentRefs: Map[RegisterConstituent, ActorRef] = Map()
+
     override def receive: Receive = survey
 
     val survey: Receive = LoggingReceive {
-      case Survey(Nil, toStart) => trace.block( s"FinderRegistration.survey::Survey(Nil, $toStart)" ) {
+      case Survey(Nil, toStart) => {
+        log info s"""starting for spec[${spec}]: ${toStart.map(_.name).mkString("[",",","]")}"""
         self ! Startup(toStart)
         context become startup
       }
 
-      case Survey(toFind, toStart) => trace.block( s"FinderRegistration.survey::Survey($toFind, $toStart)" ) {
+      case Survey(toFind, toStart) => {
         val piece = toFind.head
         context.actorSelection(piece.path) ? Identify(piece.name) map {
-          case ActorIdentity(_, None) => trace.block( s"FinderRegistration.survey::Survey::ActorIdentity(_,None)" ) {
+          case ActorIdentity(_, None) => {
+            log info s"${piece.name} not found for ${spec}"
             Survey( toFind.tail, piece :: toStart )
           }
 
-          case m => trace.block( s"FinderRegistration.survey::Survey::$m" ) {
+          case ActorIdentity(_, Some(ref) ) => {
+            log info s"${piece.name} found for ${spec}"
+            constituentRefs += (piece.constituent -> ref)
             Survey( toFind.tail, toStart )
           }
         } pipeTo self
@@ -148,18 +190,24 @@ object RegisterSupervisor extends StrictLogging {
     }
 
     val startup: Receive = LoggingReceive {
-      case Startup( Nil ) => trace.block( s"FinderRegistration.startup::Startup(Nil)" ) {
-        log info s"sending: $registrant ! FinderRegistered($registrantType, $spec)"
-        registrant ! FinderRegistered( registrantType, spec )
-        context stop self
+//after startup move into verify (waits until it's all setup before ultimately returning from registration)
+//ref akka concurrency for controlled startup pattern
+      case Startup( Nil ) => {
+        constituentRefs.values foreach { cref =>
+          log info s"sending WaitingForStart to $cref"
+          cref ! register.WaitingForStart
+        }
+        context become verify( constituentRefs )
       }
 
-      case Startup( pieces ) => trace.block( s"FinderRegistration.startup::Startup($pieces)" ) {
+      case Startup( pieces ) => {
         val p = pieces.head
+        log info s"starting for spec[${spec}]: ${p.name}"
         val createPiece = StartChild( props = p.props, name = p.name )
         supervisor ? createPiece map {
           case ChildStarted( child ) => {
             p.constituent.postStart( child, subscription )
+            constituentRefs += (p.constituent -> child )
             Startup( pieces.tail )
           }
 
@@ -167,41 +215,30 @@ object RegisterSupervisor extends StrictLogging {
         } pipeTo self
       }
     }
-  }
-}
 
-/**
- * Created by damonrolfs on 11/6/14.
- */
-class RegisterSupervisor( bus: RegisterBus )
-extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLogging {
-  outer: ConstituencyProvider =>
+    def verify( toCheck: Map[RegisterConstituent, ActorRef] ): Receive = LoggingReceive {
+      case register.Started => {
+        val c = sender()
+        val verified = toCheck find {
+          _._2 == c
+        } getOrElse {
+          throw new IllegalStateException(s"failed to recognize register constituent[$c] in toCheck[${toCheck}}]")
+        }
 
-  import demesne.register.RegisterSupervisor._
-
-  val trace = Trace( getClass.safeSimpleName, log )
-
-  override def childStarter(): Unit = { }
-
-  override def receive: Receive = super.receive orElse register
-
-  val register: Receive = LoggingReceive {
-    case RegisterFinder( rootType, spec ) => trace.block( s"RegisterSupervisor.register:RegisterFinder($rootType, $spec)" ) {
-      val subscription: SubscriptionClassifier = spec.relaySubscription match {
-        case ContextChannelSubscription( channel ) => Left( (context, channel) )
-        case RegisterBusSubscription => Right( (bus, spec.relayClassifier(rootType) ) )
+        log info s"verified constituent: ${verified}"
+        val next = toCheck - verified._1
+        handleNext(toCheck - verified._1)
       }
+    }
 
-      context.actorOf(
-        FinderRegistration.props(
-          supervisor = self,
-          constituency = constituencyFor( rootType, spec ),
-          subscription = subscription,
-          spec = spec,
-          registrant = sender(),
-          registrantType = rootType
-        )
-      )
+    def handleNext( next: Map[RegisterConstituent, ActorRef] ): Unit = {
+      if ( !next.isEmpty ) context become verify( next )
+      else {
+        val msg = FinderRegistered( constituentRefs( Agent ), registrantType, spec )
+        log info s"sending: $registrant ! $msg"
+        registrant ! msg
+        context stop self
+      }
     }
   }
 }

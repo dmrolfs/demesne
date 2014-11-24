@@ -18,6 +18,7 @@ trait AggregateRootType {
 
   def aggregateIdOf( aggregateRoot: ActorRef ): String = aggregateRoot.path.name
 
+  //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.IdExtractor = {
     case cmd: CommandLike => ( cmd.targetId.toString, cmd )
     case e @ Envelope( payload, _ ) if aggregateIdFor.isDefinedAt( payload ) => ( aggregateIdFor( payload )._1, e ) // want MatchError on payload if not found

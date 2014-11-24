@@ -21,6 +21,8 @@ package object register {
 
 
   sealed trait RegisterMessage
+  case object WaitingForStart extends RegisterMessage
+  case object Started extends RegisterMessage
   case object GetRegister extends RegisterMessage
   case class RegisterEnvelope( payload: Any ) extends RegisterMessage {
     def mapTo[K, I]: Register[K, I] = payload.asInstanceOf[Register[K, I]]

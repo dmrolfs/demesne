@@ -1,6 +1,6 @@
 package demesne.register.local
 
-import akka.actor.{Actor, ActorLogging, Props}
+import akka.actor.{ActorRef, Actor, ActorLogging, Props}
 import akka.agent.Agent
 import akka.contrib.pattern.DistributedPubSubExtension
 import akka.event.LoggingReceive
@@ -67,8 +67,19 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
 
   val register: RegisterAgent = trace.block( "register" ) { Agent( Map[K, I]() )( dispatcher ) }
 
-  override def receive: Receive = LoggingReceive {
-    case SubscribeAck( Subscribe(topic, None, `self`) ) => context become ready
+  override def receive: Receive = starting( List() )
+
+  def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
+    case SubscribeAck( Subscribe(topic, None, `self`) ) => {
+      log info s"confirmed subscription to distributed PubSub topic=$topic => activating"
+      waiting foreach { _ ! Started }
+      context become ready
+    }
+
+    case WaitingForStart => {
+      log info s"adding actor to wait stack: ${sender()}"
+      context become starting( sender() :: waiting )
+    }
   }
 
   val ready: Receive = LoggingReceive {
@@ -78,5 +89,10 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
     }
 
     case GetRegister => trace.block( "receive:GetRegister" ) { sender() ! RegisterEnvelope( new AgentRegister(register) ) }
+
+    case WaitingForStart => {
+      log info s"recd WaitingForStart: sending Started to ${sender()}"
+      sender() ! Started
+    }
   }
 }

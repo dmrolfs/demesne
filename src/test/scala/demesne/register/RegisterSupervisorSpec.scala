@@ -148,6 +148,8 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
   class TestConstituent extends Actor with ActorLogging {
     override def receive: Actor.Receive = {
+      case WaitingForStart => sender() ! Started
+
       case "stop" => LoggingReceive {
         log info s"KILLING TestConstituent: ${self.path}"
         throw new Exception( s"KILLING constituent: ${self.path}" )
@@ -163,11 +165,12 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       val real = TestActorRef[RegisterSupervisor]( RegisterSupervisor.props( f.bus ) )
       real.receive( RegisterSupervisor.RegisterFinder( f.busRoot, f.busSpec ), f.registrant.ref )
 
-      f.registrant.expectMsg(
-        200.millis.dilated,
-        s"registered[${f.busRoot}, ${f.busSpec}]",
-        FinderRegistered( rootType = f.busRoot, spec = f.busSpec )
-      )
+      f.registrant.expectMsgPF(
+        400.millis.dilated,
+        s"registered[type=${f.busRoot}, spec=${f.busSpec}]"
+      ) {
+        case FinderRegistered( _, f.busRoot, f.busSpec ) => true
+      }
 
       val expected = f.constituents.map{ nameFor( _, f.busRoot, f.busSpec ) }.toSet
       val actual: Set[String] = real.children.map( _.path.name ).toSet
@@ -175,16 +178,17 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       actual must be (expected)
     }
 
-    "register finder for spec with context subscription" in { implicit f: Fixture =>
+    "register finder for spec with context subscription" taggedAs(WIP) in { implicit f: Fixture =>
       implicit val system = f.system
       val real = TestActorRef[RegisterSupervisor]( RegisterSupervisor.props( f.bus ) )
       real.receive( RegisterSupervisor.RegisterFinder( f.contextRoot, f.contextSpec ), f.registrant.ref )
 
-      f.registrant.expectMsg(
-        200.millis.dilated,
-        s"registered[${f.contextRoot}, ${f.contextSpec}]",
-        FinderRegistered( rootType = f.contextRoot, spec = f.contextSpec)
-      )
+      f.registrant.expectMsgPF(
+        400.millis.dilated,
+        s"registered[${f.contextRoot}, ${f.contextSpec}]"
+      ) {
+        case FinderRegistered( _, f.contextRoot, f.contextSpec ) => true
+      }
 
       val expected = f.constituents.map{ nameFor( _, f.contextRoot, f.contextSpec) }.toSet
       val actual: Set[String] = real.children.map( _.path.name ).toSet
@@ -192,7 +196,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       actual must be (expected)
     }
 
-    "supervisor restarts register constituent upon failure" taggedAs( WIP ) in { implicit f: Fixture =>
+    "supervisor restarts register constituent upon failure" in { implicit f: Fixture =>
       implicit val system = f.system
       val aggregateProbe = TestProbe()
       val relayProbe = TestProbe()
@@ -204,7 +208,15 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       val restartRoot = f.rootType( restartSpec )
       val real = TestActorRef( registerSupervisorProps( f.bus, constituentPaths ) )
       real.receive( RegisterSupervisor.RegisterFinder( restartRoot, restartSpec), f.registrant.ref )
-      f.registrant.expectMsg( FinderRegistered( restartRoot, restartSpec) )
+
+      aggregateProbe expectMsg register.WaitingForStart
+      aggregateProbe reply register.Started
+
+      relayProbe expectMsg register.WaitingForStart
+      relayProbe reply register.Started
+
+      trace( s"###### LOOKING FOR = FinderRegistered( _, $restartRoot, $restartSpec )  ######")
+      f.registrant.expectMsgPF(){ case FinderRegistered( _, restartRoot, restartSpec) => true }
       val agent = real.getSingleChild( nameFor( Agent, restartRoot, restartSpec) )
       val monitor = TestProbe()
       monitor watch agent

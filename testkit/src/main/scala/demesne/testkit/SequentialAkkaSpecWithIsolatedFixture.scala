@@ -9,6 +9,9 @@ import demesne.DomainModel
 import org.scalatest.{MustMatchers, Outcome, fixture}
 import peds.commons.log.Trace
 
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 
 object SequentialAkkaSpecWithIsolatedFixture {
   val sysId = new AtomicInteger()
@@ -26,7 +29,7 @@ trait SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMa
   extends TestKit( ActorSystem( name = s"Isolated-${id}", config ) )
   with ImplicitSender {
     //todo need to figure out how to prevent x-test clobbering of DM across suites
-    implicit val model: DomainModel = DomainModel.register( s"DomainModel-Isolated-${id}" )( system )
+    implicit val model: DomainModel = Await.result( DomainModel.register( s"DomainModel-Isolated-${id}" )( system ), 1.second )
   }
 
   def createAkkaFixture(): Fixture

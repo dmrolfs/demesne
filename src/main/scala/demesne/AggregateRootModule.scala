@@ -8,7 +8,7 @@ import peds.commons.identifier._
 import peds.commons.log.Trace
 import peds.commons.module.ModuleLifecycle
 
-import scala.concurrent.Await
+import scala.concurrent.{ExecutionContext, Future, Await}
 import scala.concurrent.duration._
 
 
@@ -62,7 +62,7 @@ trait AggregateRootModuleCompanion extends LazyLogging {
     val rootType = aggregateRootType
     module.initialize( rootType )
     val reg = m.registerAggregateType( rootType, f )
-    Await.result( reg, 3.seconds ) //todo: move into configuration
+    Await.result( reg, 5.seconds ) // todo push into configuration
   }
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )

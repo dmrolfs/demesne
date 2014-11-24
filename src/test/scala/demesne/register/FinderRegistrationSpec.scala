@@ -30,6 +30,9 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
 //  override type Fixture = AuthorListingFixture
   case class FooAdded( value: String )
 
+  type ConstituentProbes = Map[RegisterConstituent, TestProbe]
+
+
   class Fixture extends AkkaFixture {
     private val trace = Trace[Fixture]
 
@@ -103,24 +106,38 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
   def expectStartWorkflow(
     rootType: AggregateRootType,
     spec: FinderSpec[_,_],
-    pieces: Seq[RegisterConstituent]
+    constituentProbes: Map[RegisterConstituent, TestProbe],
+    toCheck: Set[RegisterConstituent]
   )(
     implicit system: ActorSystem, f: Fixture
-  ): Unit = {
-    pieces foreach { p =>
-      f.supervisor.expectMsgPF( hint="Start "+p.category.name ) {
+  ): Unit = trace.block( "expectStartWorkflow" ) {
+    trace( s"rootType = $rootType" )
+    trace( s"spec = $spec" )
+    trace( s"constituentProbes = $constituentProbes" )
+    trace( s"constituentRefs = ${constituentProbes.map( cp => (cp._1 -> cp._2.ref) )}" )
+    trace( s"toCheck = $toCheck" )
+
+    toCheck foreach { c =>
+      f.supervisor.expectMsgPF( hint="Start "+c.category.name ) {
         case StartChild( _, name ) => true
       }
       f.supervisor reply ChildStarted( f.constituent.ref )
     }
 
-    f.registrant.expectMsg[FinderRegistered](
-      3.seconds.dilated,
-      s"registered[${pieces.size}]",
-      FinderRegistered( rootType = rootType, spec = spec )
-    )
-  }
+    val eff = constituentProbes ++ toCheck.map( _ -> f.constituent )
+    eff foreach { cp =>
+      val p = cp._2
+      p.expectMsg( register.WaitingForStart )
+      p.reply( register.Started )
+    }
 
+    f.registrant.expectMsgPF(
+      3.seconds.dilated,
+      s"registered[${constituentProbes.size}]"
+    ) {
+      case FinderRegistered(_, rootType, spec) => true
+    }
+  }
 
   "FinderRegistration should" should {
 
@@ -130,17 +147,17 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
         case FooAdded( name ) => (name, name.hashCode)
       }
       val rt = f.rootType( spec )
-      val probes = Seq.fill( 3 ){ TestProbe() }
-      val keys = Seq( Relay, Aggregate, Agent )
+      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
+
       val constituency = constituencyFor(
-        Map( keys.zip( probes map { _.ref } ):_* ),
+        probes map { kp => (kp._1 -> kp._2.ref) },
         rt,
         spec
       )
-      probes foreach { _.ref ! PoisonPill }
+      probes.values foreach { _.ref ! PoisonPill }
 
       val real = finderRegistrationFor( rt, spec, constituency )
-      expectStartWorkflow( rt, spec, keys )
+      expectStartWorkflow( rt, spec, probes, probes.keySet )
     }
 
     "no startups after initial create in node" in { implicit f: Fixture =>
@@ -149,34 +166,34 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
         case FooAdded( name ) => (name, name.hashCode)
       }
       val rt = f.rootType( spec )
-      val probes = Seq.fill( 3 ){ TestProbe() }
+      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
       val constituency = constituencyFor(
-        Map( Seq( Relay, Aggregate, Agent ).zip( probes map { _.ref } ):_* ),
+        probes map { kp => (kp._1 -> kp._2.ref) },
         rt,
         spec
       )
 
       val real = finderRegistrationFor( rt, spec, constituency )
-      expectStartWorkflow( rt, spec, Seq() )
+      expectStartWorkflow( rt, spec, probes, Set() )
     }
 
-    "relay startup after initial create in node" in { implicit f: Fixture =>
+    "relay startup after initial create in node" taggedAs(WIP) in { implicit f: Fixture =>
       implicit val system = f.system
       val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
         case FooAdded( name ) => (name, name.hashCode)
       }
       val rt = f.rootType( spec )
-      val probes = Seq.fill( 3 ){ TestProbe() }
+      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
       val constituency = constituencyFor(
-        Map( Seq( Relay, Aggregate, Agent ).zip( probes map { _.ref } ):_* ),
+        probes map { kp => (kp._1 -> kp._2.ref) },
         rt,
         spec
       )
 
-      probes.head.ref ! PoisonPill
+      probes.values.head.ref ! PoisonPill
 
       val real = finderRegistrationFor( rt, spec, constituency )
-      expectStartWorkflow( rt, spec, Seq( Relay ) )
+      expectStartWorkflow( rt, spec, probes, Set( Relay ) )
     }
   }
 }

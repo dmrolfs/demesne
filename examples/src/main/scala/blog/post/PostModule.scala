@@ -4,8 +4,8 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
-import demesne.register.{RegisterBus, RegisterBusSubscription, ContextChannelSubscription, FinderSpec}
 import demesne.register.local.RegisterLocalAgent
+import demesne.register.{ContextChannelSubscription, FinderSpec, RegisterBus, RegisterBusSubscription}
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier._

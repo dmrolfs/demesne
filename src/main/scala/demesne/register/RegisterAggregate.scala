@@ -109,6 +109,11 @@ with ActorLogging {
       }
     }
 
+    case WaitingForStart => {
+      log info s"recd WaitingForStart: sending Started to ${sender()}"
+      sender() ! Started
+    }
+
     case "print" => println( s"register state = ${state}" )
   }
 

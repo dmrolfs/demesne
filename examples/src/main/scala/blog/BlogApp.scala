@@ -11,6 +11,7 @@ import demesne._
 import sample.blog.author.AuthorListingModule
 import sample.blog.post.PostModule
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 
@@ -43,7 +44,7 @@ object BlogApp extends StrictLogging {
         result
       }
 
-      val model = DomainModel.register( "blog" )( clusterSystem )
+      val model = Await.result( DomainModel.register( "blog" )( clusterSystem ), 1.second )
       val context: Map[Symbol, Any] = Map(
         demesne.SystemKey -> clusterSystem,
         demesne.ModelKey -> model,
