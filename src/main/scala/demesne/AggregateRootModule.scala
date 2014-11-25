@@ -61,8 +61,9 @@ trait AggregateRootModuleCompanion extends LazyLogging {
     trace( s"model = $m" )
     val rootType = aggregateRootType
     module.initialize( rootType )
-    val reg = m.registerAggregateType( rootType, f )
-    Await.result( reg, 10.seconds ) // todo push into configuration
+    val timeout = 10.seconds
+    val reg = m.registerAggregateType( rootType, f )( timeout )
+    Await.result( reg, timeout ) // todo push into configuration
   }
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )

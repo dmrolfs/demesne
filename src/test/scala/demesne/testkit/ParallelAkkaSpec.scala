@@ -9,6 +9,9 @@ import demesne.DomainModel
 import org.scalatest.{MustMatchers, Outcome, ParallelTestExecution, fixture}
 import peds.commons.log.Trace
 
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 
 object ParallelAkkaSpec {
   val sysId = new AtomicInteger()
@@ -26,7 +29,7 @@ trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelT
   class AkkaFixture( id: Int = sysId.incrementAndGet(), config: Config = demesne.testkit.config )
   extends TestKit( ActorSystem( s"Parallel-${id}", config ) )
   with ImplicitSender {
-    implicit val model: DomainModel = DomainModel.register( s"DomainModel-Parallel-${id}" )( system )
+    implicit val model: DomainModel = Await.result( DomainModel.register( s"DomainModel-Parallel-${id}" )( system ), 1.second )
   }
 
   def createAkkaFixture(): Fixture

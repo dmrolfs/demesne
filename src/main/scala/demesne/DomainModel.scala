@@ -19,10 +19,12 @@ import scala.util.{Failure, Success}
 trait DomainModel {
   def name: String
   def system: ActorSystem
+  def registerBus: RegisterBus
+  def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory )( implicit to: Timeout ): Future[Unit]
   def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = aggregateOf( rootType.name, id )
   def aggregateOf( name: String, id: Any ): ActorRef
-  def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Future[Unit]
-  def registerBus: RegisterBus
+  def registerFor( rootType: AggregateRootType, name: Symbol ): RegisterEnvelope = registerFor( rootType.name, name )
+  def registerFor( rootName: String, registerName: Symbol ): RegisterEnvelope
   def shutdown(): Unit
 }
 
@@ -106,14 +108,38 @@ object DomainModel {
       }
     }
 
-    def establishRegister( rootType: AggregateRootType )( implicit ec: ExecutionContext ): Future[Unit] = trace.block( s"establishRegister($rootType)" ) {
+
+    override def registerFor( rootName: String, registerName: Symbol ): RegisterEnvelope = trace.block( s"registerFor($rootName, $registerName)" ) {
+      trace( s"""rootName=$rootName; registerName=$registerName => specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""" )
+
+      val result = for {
+        (_, rootType) <- aggregateRegistry() get rootName
+        spec <- rootType.finders find { _.name == registerName }
+        agent <- specAgentRegistry() get spec
+      } yield agent
+
+      result getOrElse {
+        throw new IllegalStateException(s"""DomainModel does not have register for root type:${rootName}:: specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""")
+      }
+    }
+
+    def timeoutBudgets( to: Timeout ): (Timeout, Timeout, Timeout) = {
+      //      implicit val askTimeout: Timeout = 900.millis //todo: move into configuration OR use one-time actor
+      val baseline = to.duration - 200.millis
+      ( Timeout( baseline / 2 ), Timeout( baseline / 4 ), Timeout( baseline / 4 ) )
+    }
+
+    def establishRegister( rootType: AggregateRootType )( implicit ec: ExecutionContext, to: Timeout ): Future[Unit] = trace.block( s"establishRegister($rootType)" ) {
       import akka.pattern.ask
-//      implicit val askTimeout: Timeout = 900.millis //todo: move into configuration OR use one-time actor
+      val (registrationBudget, agentBudget, _) = timeoutBudgets( to )
+      trace( s"registration timeout budget = $registrationBudget" )
+      trace( s"agent timeout budget = $agentBudget" )
+
       val registers = rootType.finders map { s =>
         for {
-          registration <- registerSupervisor.ask(RegisterFinder(rootType, s))( 9501.millis ).mapTo[FinderRegistered]
+          registration <- registerSupervisor.ask(RegisterFinder(rootType, s))(registrationBudget).mapTo[FinderRegistered]  //todo askretry
           agentRef = registration.agentRef
-          agentEnvelope <- agentRef.ask(GetRegister)( 9502.millis ).mapTo[RegisterEnvelope]
+          agentEnvelope <- agentRef.ask(GetRegister)( agentBudget ).mapTo[RegisterEnvelope]  // todo askretry
           ar <- specAgentRegistry alter { m => m + (s -> agentEnvelope)}
         } yield ar
       }
@@ -125,10 +151,13 @@ object DomainModel {
       rootType: AggregateRootType,
       factory: ActorFactory
     )(
-      implicit ex: ExecutionContext
+      implicit ex: ExecutionContext,
+      to: Timeout
     ): Future[Unit] = trace.block( s"registerAggregate($rootType,_)" ) {
       import akka.pattern.ask
-//      implicit val askTimeout: Timeout = 1100.millis //todo: move into configuration OR use one-time actor
+      val (_, _, registerBudget) = timeoutBudgets( to )
+      trace( s"register timeout budget = $registerBudget" )
+
       val aggregate = aggregateRegistry alter { r =>
         trace.block(s"[name=${name}, system=${system}] registry send ${rootType}") {
           trace( s"DomainModel.name= $name" )
@@ -136,7 +165,7 @@ object DomainModel {
           else {
             val props = EnvelopingAggregateRootRepository.props( this, rootType, factory )
             val entry = for {
-              repoStarted <- ask( repositorySupervisor, StartChild(props, rootType.repositoryName) )( 1100.millis ).mapTo[ChildStarted]
+              repoStarted <- ask( repositorySupervisor, StartChild(props, rootType.repositoryName) )( registerBudget ).mapTo[ChildStarted]
               repo = repoStarted.child
             } yield ( rootType.name, (repo, rootType) )
 
@@ -151,8 +180,12 @@ object DomainModel {
       aggregate map { r => () }
     }
 
-    override def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory ): Future[Unit] = trace.block( "registerAggregateType" ) {
-//todo: make sure establishRegister COMPLETES BEFORE registerAggregate
+    override def registerAggregateType(
+      rootType: AggregateRootType,
+      factory: ActorFactory
+    )(
+      implicit to: Timeout
+    ): Future[Unit] = trace.block( "registerAggregateType" ) {
       implicit val ec = system.dispatcher
 
       val result = for {
