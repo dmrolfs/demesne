@@ -111,9 +111,9 @@ object DomainModel {
 //      implicit val askTimeout: Timeout = 900.millis //todo: move into configuration OR use one-time actor
       val registers = rootType.finders map { s =>
         for {
-          registration <- registerSupervisor.ask(RegisterFinder(rootType, s))( 925.millis ).mapTo[FinderRegistered]
+          registration <- registerSupervisor.ask(RegisterFinder(rootType, s))( 9501.millis ).mapTo[FinderRegistered]
           agentRef = registration.agentRef
-          agentEnvelope <- agentRef.ask(GetRegister)( 950.millis ).mapTo[RegisterEnvelope]
+          agentEnvelope <- agentRef.ask(GetRegister)( 9502.millis ).mapTo[RegisterEnvelope]
           ar <- specAgentRegistry alter { m => m + (s -> agentEnvelope)}
         } yield ar
       }

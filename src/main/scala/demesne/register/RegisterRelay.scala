@@ -1,9 +1,10 @@
 package demesne.register
 
+import akka.actor.FSM.{CurrentState, Transition}
 import akka.actor._
 import akka.contrib.pattern.ReliableProxy
+import akka.contrib.pattern.ReliableProxy.Connecting
 import akka.event.LoggingReceive
-import demesne.register.RegisterRelay.Tick
 import peds.akka.envelope.Envelope
 import peds.commons.log.Trace
 import peds.commons.util._
@@ -15,8 +16,6 @@ object RegisterRelay extends com.typesafe.scalalogging.LazyLogging {
   def props[K, I]( registerAggregatePath: ActorPath, extractor: KeyIdExtractor[K, I] ): Props = {
     Props( new RegisterRelay( registerAggregatePath, extractor) )
   }
-
-  private case object Tick
 }
 
 /**
@@ -36,27 +35,33 @@ with ActorLogging {
   val proxy: ActorRef = context.actorOf(
     ReliableProxy.props( targetPath = registerAggregatePath, retryAfter = 100.millis )
   )
-
-  proxy ! WaitingForStart
+  proxy ! FSM.SubscribeTransitionCallBack( self )
 
   //todo: move into configuration
-  import context.dispatcher
-  val tickTask = context.system.scheduler.schedule(
-    initialDelay = 500.millis,
-    interval = 200.millis,
-    receiver = self,
-    message = Tick
-  )
+  override val receive: Receive = connecting( List() )
 
-  override def postStop(): Unit = {
-    tickTask.cancel()
-    super.postStop()
+  def connecting( waiting: List[ActorRef] ): Receive = LoggingReceive {
+    case CurrentState( _, state ) if state != Connecting => {
+      //      log info s"proxy.transition( $p, $from -> $to )"
+      log info s"Relay connected to register aggregate at ${registerAggregatePath}"
+      proxy ! WaitingForStart
+      context become starting( waiting )
+    }
+
+    case Transition( _, Connecting, _) => {
+      //      log info s"proxy.transition( $p, $from -> $to )"
+      log info s"Relay connected to register aggregate at ${registerAggregatePath}"
+      proxy ! WaitingForStart
+      context become starting( waiting )
+    }
+
+    case WaitingForStart => {
+      log info s"adding to relay's wait queue: ${sender()}"
+      context become connecting( List( sender() ) )
+    }
   }
 
-  //todo: move into configuration
-  override val receive: Receive = starting( List(), 10 )
-
-  def starting( waiting: List[ActorRef], retries: Int ): Receive = LoggingReceive {
+  def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case Started if sender().path == registerAggregatePath => {
       log info "relay recd start confirmation from aggregate => activating"
       waiting foreach { _ ! Started }
@@ -65,13 +70,7 @@ with ActorLogging {
 
     case WaitingForStart => {
       log info s"adding to relay's wait queue: ${sender()}"
-      context become starting( List( sender() ), retries )
-    }
-
-    case Tick => {
-      val retriesLeft = retries - 1
-      log info s"waiting on register aggregate; retries left:${retriesLeft}"
-      context become starting( waiting, retriesLeft )
+      context become starting( List( sender() ) )
     }
   }
 

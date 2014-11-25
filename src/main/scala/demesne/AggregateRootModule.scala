@@ -62,7 +62,7 @@ trait AggregateRootModuleCompanion extends LazyLogging {
     val rootType = aggregateRootType
     module.initialize( rootType )
     val reg = m.registerAggregateType( rootType, f )
-    Await.result( reg, 5.seconds ) // todo push into configuration
+    Await.result( reg, 10.seconds ) // todo push into configuration
   }
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
