@@ -110,13 +110,19 @@ object DomainModel {
 
 
     override def registerFor( rootName: String, registerName: Symbol ): RegisterEnvelope = trace.block( s"registerFor($rootName, $registerName)" ) {
-      trace( s"""rootName=$rootName; registerName=$registerName => specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""" )
+      trace( s"""aggregateRegistry = ${aggregateRegistry().mkString("[",",","]")}""")
+      trace( s"""specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""" )
 
       val result = for {
         (_, rootType) <- aggregateRegistry() get rootName
         spec <- rootType.finders find { _.name == registerName }
         agent <- specAgentRegistry() get spec
-      } yield agent
+      } yield {
+        trace( s"""rootName=$rootName; rootType=$rootType""" )
+        trace( s"spec = ${spec}" )
+        trace( s"agent = ${agent}" )
+        agent
+      }
 
       result getOrElse {
         throw new IllegalStateException(s"""DomainModel does not have register for root type:${rootName}:: specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""")
