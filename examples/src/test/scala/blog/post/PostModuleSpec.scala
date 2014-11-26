@@ -3,12 +3,14 @@ package sample.blog.post
 import akka.testkit._
 import demesne._
 import demesne.testkit.AggregateRootSpec
+import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import peds.akka.envelope._
 import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.log.Trace
 
 import scala.concurrent.duration._
+
 
 /**
  * Created by damonrolfs on 9/18/14.
@@ -40,7 +42,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
   object GOOD extends Tag( "good" )
 
   "Post Module should" should {
-    "add content" taggedAs(WIP) in { fixture: Fixture =>
+    "add content" in { fixture: Fixture =>
       import fixture._
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
@@ -68,7 +70,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
       bus.expectNoMsg( 200.millis.dilated )
     }
 
-    "not respond to incomplete content" taggedAs(WIP) in { fixture: Fixture =>
+    "not respond to incomplete content" in { fixture: Fixture =>
       import fixture._
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
@@ -212,6 +214,27 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] {
           title mustBe "Test Add"
         }
       }
+    }
+
+    "recorded in author register after post added" taggedAs(WIP) in { fixture: Fixture =>
+      import fixture._
+
+      val register = model.registerFor( PostModule.aggregateRootType, 'author ).mapTo[String, PostModule.TID]
+
+      val id = PostModule.nextId
+      val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+
+      val post = PostModule.aggregateOf( id )
+      post !! AddPost( id, content )
+      bus.expectMsgPF( hint = "post-added" ) {
+        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+      }
+
+      val countDown = new CountDownFunction[String]
+      countDown await 75.millis.dilated
+
+      register.get( "Damon" ) mustBe Some(id)
     }
   }
 }
