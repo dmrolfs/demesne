@@ -7,6 +7,7 @@ import akka.util.Timeout
 import com.typesafe.scalalogging.StrictLogging
 import demesne.{register, AggregateRootType}
 import demesne.register.RegisterSupervisor.ConstituencyProvider
+import peds.akka.envelope.Envelope
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
@@ -82,8 +83,17 @@ object RegisterSupervisor extends StrictLogging {
 
     override def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = {
       subscription.fold(
-        classifier => { classifier._1.system.eventStream.subscribe( constituent, classifier._2 ) },
-        classifier => { classifier._1.subscribe( constituent, classifier._2 ) }
+        classifier => {
+          val (ctx, clazz) = classifier
+          trace( s"Relay[$constituent] register with Akka EventStream for class=$clazz")
+          ctx.system.eventStream.subscribe( constituent, clazz )
+          ctx.system.eventStream.subscribe( constituent, classOf[Envelope] )
+        },
+        classifier => {
+          val (bus, name) = classifier
+          trace( s"Relay[$constituent] register with bus[$bus] for name=$name")
+          bus.subscribe( constituent, name )
+        }
       )
     }
   }

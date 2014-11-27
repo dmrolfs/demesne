@@ -9,7 +9,7 @@ import demesne.register._
 import peds.commons.log.Trace
 import peds.commons.util._
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContext, Future, ExecutionContextExecutor}
 import scala.reflect.ClassTag
 import scala.util.Try
 
@@ -30,16 +30,38 @@ object RegisterLocalAgent {
   def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterLocalAgent[K, I]( topic ) )
 
   import scala.language.existentials
-  type RegisterAgent[K, I] = Agent[RegisterAggregate.Register[K, I]]
 
+  type AkkaAgent[K, I] = Agent[Map[K, I]]
 
     /** Implements the Register trait through a locally cached Akka agent that is kept current with changes in the
       * register.
       */
-  class AgentRegister[K, I]( agent: RegisterAgent[K, I] ) extends Register[K, I] {
+  class AgentRegister[K, I](
+      agent: AkkaAgent[K, I]
+  )(
+    implicit override val ec: ExecutionContext
+  ) extends Register[K, I] {
     override def get( key: K ): Option[I] = agent.get get key
     override def toString: String = getClass.safeSimpleName + s"( ${agent.get.mkString( "," )} )"
-  }
+    override def futureGet( key: K ): Future[Option[I]] = agent.future(). map { _ get key }
+
+//      override def map[BK, BI]( f: (Entry) => (BK, BI) ): Register[BK, BI] = {
+//        new AgentRegister[BK, BI]( Agent( agent().map(f) )( ec ) )
+//      }
+//
+//      override def flatMap[BK, BI]( f: (Entry) => Register[BK, BI] ): Register[BK, BI] = {
+//        val u: Map[K, I] = agent()
+//        val z = f( u.head )
+//        val t1 = for { ue <- u } yield {
+//          val z: Int = f( ue )
+//        }
+////        val b:
+//        val f: Register[BK, BI] = agent().flatMap(f)
+//        f
+//      }
+//
+//      override def foreach[U](f: ((K, I)) => U): Unit = ???
+    }
 }
 
 /**
@@ -62,10 +84,8 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
     result.get
   }
 
-  type Register = RegisterAggregate.Register[K, I]
-  type RegisterAgent = RegisterLocalAgent.RegisterAgent[K, I]
-
-  val register: RegisterAgent = trace.block( "register" ) { Agent( Map[K, I]() )( dispatcher ) }
+  type RAgent = Agent[Map[K, I]]
+  val register: RAgent = trace.block( "register" ) { Agent( Map[K, I]() )( dispatcher ) }
 
   override def receive: Receive = starting( List() )
 
@@ -88,7 +108,7 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
       register send { r => r + ( key -> id ) }
     }
 
-    case GetRegister => trace.block( "receive:GetRegister" ) { sender() ! RegisterEnvelope( new AgentRegister(register) ) }
+    case GetRegister => sender() ! RegisterEnvelope( new AgentRegister( register )( dispatcher ) )
 
     case WaitingForStart => {
       log info s"recd WaitingForStart: sending Started to ${sender()}"

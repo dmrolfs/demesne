@@ -1,5 +1,7 @@
 package demesne.register
 
+import scala.concurrent.{ExecutionContext, Future}
+
 /**
  * Created by damonrolfs on 11/5/14.
  */
@@ -9,11 +11,17 @@ trait Register[K, I] {
   type OptionalResult = Option[Result]
   type PredicateResult
 
+  type Entry = (K, I)
+
+  implicit def ec: ExecutionContext
+
   /** Optionally returns the aggregate id associated with a key.
    * @param key the key aggregate id
    * @return an option value containing the aggregate id associated with key in this map, or None if none exists.
    */
   def get( key: K ): Option[I]
+
+  def futureGet( key: K ): Future[Option[I]]
 
   /** Retrieves the value which is associated with the given key. This
     *  method invokes the `default` method of the register if there is no mapping
@@ -25,6 +33,8 @@ trait Register[K, I] {
     *              map's `default` method, if none exists.
     */
   def apply( key: K ): I = get( key ) getOrElse default( key )
+
+  def future( key: K ): Future[I] = futureGet( key ) map { _ getOrElse default( key ) }
 
   /**  Returns the aggregate id associated with a key, or a default value if the key is not contained in the register.
     *   @param   key      the key.
@@ -53,6 +63,11 @@ trait Register[K, I] {
     */
   def isDefinedAt( key: K ): Boolean = contains( key )
 
+//  def map[BK, BI]( f: Entry => (BK, BI) ): Register[BK, BI]
+//
+//  def flatMap[BK, BI]( f: Entry => Register[BK, BI]): Register[BK, BI]
+//
+//  def foreach[U]( f: Entry => U ): Unit
 
 
   /** Defines the default value computation for the map, returned when a key is not found
