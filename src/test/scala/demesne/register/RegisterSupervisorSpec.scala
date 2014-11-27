@@ -166,7 +166,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       real.receive( RegisterSupervisor.RegisterFinder( f.busRoot, f.busSpec ), f.registrant.ref )
 
       f.registrant.expectMsgPF(
-        400.millis.dilated,
+        800.millis.dilated,
         s"registered[type=${f.busRoot}, spec=${f.busSpec}]"
       ) {
         case FinderRegistered( _, f.busRoot, f.busSpec ) => true
@@ -184,7 +184,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       real.receive( RegisterSupervisor.RegisterFinder( f.contextRoot, f.contextSpec ), f.registrant.ref )
 
       f.registrant.expectMsgPF(
-        400.millis.dilated,
+        800.millis.dilated,
         s"registered[${f.contextRoot}, ${f.contextSpec}]"
       ) {
         case FinderRegistered( _, f.contextRoot, f.contextSpec ) => true
@@ -221,7 +221,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       val monitor = TestProbe()
       monitor watch agent
       agent ! "stop"
-      monitor.expectNoMsg( 200.millis.dilated )
+      monitor.expectNoMsg( 500.millis.dilated )
     }
 
 
