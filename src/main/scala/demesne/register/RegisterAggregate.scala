@@ -12,8 +12,6 @@ import scala.reflect.ClassTag
 
 
 object RegisterAggregate {
-  type Register[K, I] = Map[K, I]
-
   def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterAggregate[K, I]( topic )  )
 
   def topic( rootType: String, keyType: String ): String = s"register/${rootType}/${keyType}"
@@ -81,7 +79,7 @@ with ActorLogging {
       .getOrElse( "register-master" )
   }
 
-  type State = RegisterAggregate.Register[K, I]
+  type State = Map[K, I]
   private var state: State = Map()
 
   private def updateState( event: Any ): Unit = trace.block( s"updateState(${event}})" ) {
@@ -97,7 +95,7 @@ with ActorLogging {
   override val receiveRecover: Receive = LoggingReceive {
     case e: Recorded => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
     case SnapshotOffer( _, snapshot ) => trace.block( s"receiveRecover:SnapshotOffer(_, ${snapshot})" ) {
-      state = snapshot.asInstanceOf[RegisterAggregate.Register[K, I]]
+      state = snapshot.asInstanceOf[State]
     }
   }
 
