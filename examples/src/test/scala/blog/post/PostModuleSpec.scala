@@ -232,10 +232,10 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
 
-      whenReady( register.futureGet( "Damon" ) ) { result => result mustBe Some(id) }
-
       val countDown = new CountDownFunction[String]
-      countDown await 75.millis.dilated
+      countDown await 200.millis.dilated
+
+      whenReady( register.futureGet( "Damon" ) ) { result => result mustBe Some(id) }
 
       register.get( "Damon" ) mustBe Some(id)
     }
@@ -264,10 +264,10 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
       val countDown = new CountDownFunction[String]
 
-      countDown await 75.millis.dilated
+      countDown await 200.millis.dilated
       whenReady( register.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
 
-      countDown await 75.millis.dilated
+//      countDown await 75.millis.dilated
       register.get( "Test Add" ) mustBe Some(id)
     }
   }
