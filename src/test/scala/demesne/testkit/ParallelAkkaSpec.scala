@@ -13,14 +13,14 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 
-object ParallelAkkaTest {
+object ParallelAkkaSpec {
   val sysId = new AtomicInteger()
 }
 
 
 // Runs each individual test in parallel. Only possible with Fixture isolation
 trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelTestExecution {
-  import demesne.testkit.ParallelAkkaTest._
+  import demesne.testkit.ParallelAkkaSpec._
   private val trace = Trace[ParallelAkkaSpec]
 
   type Fixture <: AkkaFixture

@@ -5,6 +5,7 @@ import akka.event.LoggingReceive
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.register.RegisterBus
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
 import squants.{Dimensionless, Each}
@@ -16,12 +17,12 @@ import squants.{Dimensionless, Each}
  * Some of the instances of SeatsAvailability are highly contentious, as there could be several users trying to register
  * for the same conference at the same time.
  */
-trait SeatsAvailabilityModule extends AggregateRootModule {
+trait SeatsAvailabilityModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
   import contoso.conference.registration.SeatsAvailabilityModule.trace
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
-    SeatAssignmentsModule.initialize( ctx )
+    SeatAssignmentsModule.initialize( module, ctx )
   }
 }
 
@@ -35,7 +36,7 @@ object SeatsAvailabilityModule extends AggregateRootModuleCompanion { module =>
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {// def actorFactory: ActorFactory
       override def name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatsAvailability.props( this )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatsAvailability.props( model, this )
       override  val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -172,13 +173,18 @@ object SeatsAvailabilityModule extends AggregateRootModuleCompanion { module =>
 
 
   object SeatsAvailability {
-    def props( meta: AggregateRootType ): Props = Props( new SeatsAvailability( meta ) with EventPublisher )
+    def props( model: DomainModel, meta: AggregateRootType ): Props = {
+      Props( new SeatsAvailability( model, meta ) with EventPublisher )
+    }
   }
 
-  class SeatsAvailability( override val meta: AggregateRootType ) extends AggregateRoot[SeatsAvailabilityState] {
-    outer: EventPublisher =>
-
+  class SeatsAvailability(
+    model: DomainModel,
+    override val meta: AggregateRootType
+  ) extends AggregateRoot[SeatsAvailabilityState] { outer: EventPublisher =>
     override val trace = Trace( "SeatsAvailability", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: SeatsAvailabilityState = _
 

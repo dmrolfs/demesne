@@ -3,7 +3,7 @@ package demesne
 import peds.akka.publish.EventPublisher
 
 
-trait SagaModule extends AggregateRootModule
+trait SagaModule extends AggregateRootModule { module: AggregateModuleInitializationExtension => }
 
 trait SagaModuleCompanion extends AggregateRootModuleCompanion
 

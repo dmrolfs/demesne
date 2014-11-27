@@ -37,6 +37,7 @@ object Build extends Build {
       Seq( pedsCommons ) ++
       Seq( pedsAkka ) ++
       // Seq( pedsArchetype ) ++
+      compile( inMemoryJournal ) ++
       test( akkaRemote ) ++
       test( akkaTestKit ) ++
       test( scalatest ) ++

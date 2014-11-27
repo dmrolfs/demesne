@@ -14,6 +14,7 @@ import com.typesafe.config.ConfigFactory
 // use a bloomfilter behand
 // initially use in-memory cache, but later use shard system
 
+//todo replace with aggregate register: slug -> conferenceId
 // Conference/Conference/ConferenceContext.cs
 object ConferenceContext {
   def props: Props = Props( new ConferenceContext )
@@ -66,12 +67,12 @@ class ConferenceContext extends Actor with ActorLogging {
     // DMR: LISTEN TO AKKA EVENT BUS for this
     case ConferenceModule.ConferenceCreated( sourceId, conference ) => {
       val result = addSlug( conference.slug, sourceId )
-      result pipeTo sender
+      result pipeTo sender()
     }
 
     case ReserveSlug( slug, conferenceId ) => {
       val result = addSlug( slug, conferenceId )
-      result pipeTo sender
+      result pipeTo sender()
     }
 
     case GetSlugStatus( slug ) => {
@@ -81,7 +82,7 @@ class ConferenceContext extends Actor with ActorLogging {
         Future successful { SlugAvailable( slug ) }
       }
 
-      result pipeTo sender
+      result pipeTo sender()
     }
 
     // case ConferenceContextTimeout => sendResponseAndShutdown( Future successful { ConferenceContextTimeout } )

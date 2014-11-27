@@ -4,6 +4,8 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
+import demesne.register.local.RegisterLocalAgent
+import demesne.register.{ContextChannelSubscription, FinderSpec, RegisterBus, RegisterBusSubscription}
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier._
@@ -11,12 +13,12 @@ import peds.commons.log.Trace
 import shapeless._
 
 
-trait PostModule extends AggregateRootModule {
+trait PostModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
   import sample.blog.post.PostModule.trace
 
-  abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-    super.start( ctx )
-    PostModule.initialize( ctx )
+  abstract override def start( contex: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+    super.start( contex )
+    PostModule.initialize( module, contex )
   }
 }
 
@@ -24,10 +26,11 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   override val trace = Trace[PostModule.type]
 
   var makeAuthorListing: () => ActorRef = _
-  override def initialize( context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
-    super.initialize( context )
+
+  override def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
     require( context.contains( 'authorListing ), "must start PostModule with author listing factory" )
     makeAuthorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
+    super.initialize( module, context )
   }
 
   override val aggregateIdTag: Symbol = 'post
@@ -36,7 +39,19 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props( this, makeAuthorListing() )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props(model, this, makeAuthorListing)
+
+      override def finders: Seq[FinderSpec[_, _]] = {
+        Seq(
+          RegisterLocalAgent.spec[String, PostModule.TID]( 'author, RegisterBusSubscription /* not reqd - default */ ) {
+            case PostAdded( sourceId, PostContent(author, _, _) ) => (author, sourceId)
+          },
+          RegisterLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[PostAdded] ) ) {
+            case PostAdded( sourceId, PostContent(_, title, _) ) => (title, sourceId)
+          }
+        )
+      }
+
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -63,13 +78,22 @@ object PostModule extends AggregateRootModuleCompanion { module =>
 
 
   object Post {
-    def props( meta: AggregateRootType, authorListing: ActorRef ): Props = {
+    def props( model: DomainModel, meta: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = {
       import peds.akka.publish._
 
       Props(
-        new Post( meta ) with ReliablePublisher with AtLeastOnceDelivery {
+        new Post( model, meta ) with ReliablePublisher with AtLeastOnceDelivery {
+          val authorListing: ActorRef = makeAuthorListing()
+
           import peds.commons.util.Chain._
-          override def publish: Publisher = local +> filter +> reliablePublisher( authorListing.path )
+
+          override def publish: Publisher = trace.block( "publish" ) {
+            val bus = RegisterBus.bus( model.registerBus, meta ) _
+            val buses = meta.finders
+                          .filter( _.relaySubscription == RegisterBusSubscription )
+                          .foldLeft( silent ){ _ +> bus(_) }
+            buses +> stream +> filter +> reliablePublisher( authorListing.path )
+          }
 
           val filter: Publisher = {
             case e @ Envelope( _: PostPublished, _ ) => Left( e )
@@ -81,8 +105,12 @@ object PostModule extends AggregateRootModuleCompanion { module =>
   }
 
 
-  class Post( override val meta: AggregateRootType ) extends AggregateRoot[PostState] { outer: EventPublisher =>
+  class Post( model: DomainModel, override val meta: AggregateRootType ) extends AggregateRoot[PostState] {
+    outer: EventPublisher =>
+
     override val trace = Trace( "Post", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: PostState = PostState()
 
@@ -96,7 +124,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     import peds.akka.envelope._
 
     val quiescent: Receive = LoggingReceive {
-      case GetContent(_)  => sender() send state.content
+      case GetContent(_)  => sender() !! state.content
       case AddPost( id, content ) if !content.isIncomplete  => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
         persist( PostAdded( id, content ) ) { event =>
           trace.block( s"persist(${event})" ) {
@@ -111,7 +139,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     }
 
     val created: Receive = LoggingReceive {
-      case GetContent( id ) => sender() send state.content
+      case GetContent( id ) => sender() !! state.content
 
       case ChangeBody( id, body ) => persist( BodyChanged( id, body ) ) { event =>
         state = accept( event )
@@ -129,7 +157,7 @@ object PostModule extends AggregateRootModuleCompanion { module =>
     }
 
     val published: Receive = LoggingReceive {
-      case GetContent(_) => sender() send state.content
+      case GetContent(_) => sender() !! state.content
     }
   }
 }

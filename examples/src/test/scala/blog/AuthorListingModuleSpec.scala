@@ -38,7 +38,7 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
     def before(): Unit = trace.block( "before" ) { module start context }
     def after(): Unit = trace.block( "after" ) { module stop context }
 
-    def module: AggregateRootModule = new PostModule { }
+    def module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
 
     // def model: DomainModel = trace.block( s"model()" ) { DomainModel() }
 

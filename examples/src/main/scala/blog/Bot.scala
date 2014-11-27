@@ -1,10 +1,10 @@
 package sample.blog
 
-import akka.actor.{Actor, ActorLogging, Props}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
 import akka.contrib.pattern.ClusterSharding
 import akka.event.LoggingReceive
-import demesne.{AggregateRootRef, DomainModel}
+import demesne.DomainModel
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule
@@ -28,7 +28,7 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
 
   // val model =
   // val postRegion = ClusterSharding( context.system ).shardRegion( PostModule.shardName )
-  def postRegion( id: ShortUUID ): AggregateRootRef = trace.block( s"postRegion( $id) " ) {
+  def postRegion( id: ShortUUID ): ActorRef = trace.block( s"postRegion( $id) " ) {
     implicit val system = context.system
     val result = model.aggregateOf( PostModule.aggregateRootType, id )
     // log warning s"post AR = ${result}"

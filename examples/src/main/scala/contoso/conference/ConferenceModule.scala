@@ -4,6 +4,7 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import com.github.nscala_time.time.{Imports => joda}
 import demesne._
+import demesne.register.RegisterBus
 import peds.akka.AskRetry._
 import peds.akka.publish._
 import peds.commons.log.Trace
@@ -14,12 +15,12 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 
-trait ConferenceModule extends AggregateRootModule {
+trait ConferenceModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
   import contoso.conference.ConferenceModule.trace
 
   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( ctx )
-    ConferenceModule.initialize( ctx )
+    ConferenceModule.initialize( module, ctx )
   }
 }
 
@@ -28,8 +29,8 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
   val trace = Trace[ConferenceModule.type]
 
   var conferenceContext: ActorRef = _
-  override def initialize( context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
-    super.initialize( context )
+  override def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
+    super.initialize( module, context )
     require( context.contains( 'ConferenceContext ), "must start ConferenceModule with ConferenceContext" )
     conferenceContext = context( 'ConferenceContext ).asInstanceOf[ActorRef]
   }
@@ -39,7 +40,11 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = Conference.props( this, conferenceContext )
+
+      override def aggregateRootProps( implicit model: DomainModel ): Props = {
+        Conference.props( model, this, conferenceContext )
+      }
+
       override val toString: String = shardName + "AggregateRootType"
     }
   }
@@ -153,19 +158,24 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
 
 
   object Conference {
-    def props( meta: AggregateRootType, conferenceContext: ActorRef ): Props = {
-      Props( new Conference( meta, conferenceContext ) with EventPublisher )
+    def props( model: DomainModel, meta: AggregateRootType, conferenceContext: ActorRef ): Props = {
+      Props( new Conference( model, meta, conferenceContext ) with EventPublisher )
     }
 
     class ConferenceCreateException( cause: Throwable )
     extends RuntimeException( s"failed to create conference due to: ${cause}", cause )
   }
 
-  class Conference( override val meta: AggregateRootType, conferenceContext: ActorRef ) extends AggregateRoot[ConferenceState] {
-    outer: EventPublisher =>
+  class Conference(
+    model: DomainModel,
+    override val meta: AggregateRootType,
+    conferenceContext: ActorRef
+  ) extends AggregateRoot[ConferenceState] { outer: EventPublisher =>
     import contoso.conference.ConferenceModule.Conference._
 
     override val trace = Trace( "Conference", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: ConferenceState = _
 

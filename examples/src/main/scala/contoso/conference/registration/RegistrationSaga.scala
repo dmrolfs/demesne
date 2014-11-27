@@ -10,6 +10,7 @@ import contoso.conference.registration.OrderModule._
 import contoso.conference.registration.SeatsAvailabilityModule.{CancelSeatReservation, CommitSeatReservation, MakeSeatReservation, SeatsReserved}
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
@@ -23,12 +24,12 @@ import scala.concurrent.duration._
 *
 * Created by damonrolfs on 9/11/14.
 */
-trait RegistrationSagaModule extends SagaModule {
+trait RegistrationSagaModule extends SagaModule { module: AggregateModuleInitializationExtension =>
   import contoso.conference.registration.RegistrationSagaModule.trace
 
   abstract override def start( moduleContext: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
     super.start( moduleContext )
-    RegistrationSagaModule.initialize( moduleContext )
+    RegistrationSagaModule.initialize( module, moduleContext )
   }
 }
 
@@ -118,11 +119,11 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
   }
 
   object RegistrationSaga {
-    def props( 
-      meta: AggregateRootType, 
-      model: DomainModel, 
-      orderType: AggregateRootType, 
-      availabilityType: AggregateRootType 
+    def props(
+      meta: AggregateRootType,
+      model: DomainModel,
+      orderType: AggregateRootType,
+      availabilityType: AggregateRootType
     ): Props = {
       Props( new RegistrationSaga( meta, model, orderType, availabilityType ) with EventPublisher )
     }
@@ -140,6 +141,8 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
     outer: EventPublisher =>
 
     override val trace = Trace( "RegistrationSaga", log )
+
+    override val registerBus: RegisterBus = model.registerBus
 
     override var state: RegistrationSagaState = _
 
@@ -160,9 +163,9 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
     }
 
 
-    def order( id: Option[OrderModule.TID] ): AggregateRootRef = OrderModule.aggregateOf( id )( model )
+    def order( id: Option[OrderModule.TID] ): ActorRef = OrderModule.aggregateOf( id )( model )
 
-    def seatsAvailability( id: Option[SeatsAvailabilityModule.TID] ): AggregateRootRef = {
+    def seatsAvailability( id: Option[SeatsAvailabilityModule.TID] ): ActorRef = {
       SeatsAvailabilityModule.aggregateOf( id )( model )
     }
 
@@ -244,7 +247,7 @@ object RegistrationSagaModule extends SagaModuleCompanion { module =>
       expiration foreach { exp =>
         val timeout = FiniteDuration( exp.getMillis - joda.DateTime.now.getMillis, MILLISECONDS )
         expirationMessager = context.system.scheduler.scheduleOnce( timeout ) {
-          self send ExpireRegistrationProcess( state.id )
+          self !! ExpireRegistrationProcess( state.id )
         }
       }
       seatsAvailability( Some(conferenceId) ) ! reservation
