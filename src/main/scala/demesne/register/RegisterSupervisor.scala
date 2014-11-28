@@ -177,7 +177,7 @@ object RegisterSupervisor extends StrictLogging {
 
     val survey: Receive = LoggingReceive {
       case Survey(Nil, toStart) => {
-        log info s"""starting for spec[${spec}]: ${toStart.map(_.name).mkString("[",",","]")}"""
+        log debug s"""starting for spec[${spec}]: ${toStart.map(_.name).mkString("[",",","]")}"""
         self ! Startup(toStart)
         context become startup
       }
@@ -186,12 +186,12 @@ object RegisterSupervisor extends StrictLogging {
         val piece = toFind.head
         context.actorSelection(piece.path) ? Identify(piece.name) map {
           case ActorIdentity(_, None) => {
-            log info s"${piece.name} not found for ${spec}"
+            log debug s"${piece.name} not found for ${spec}"
             Survey( toFind.tail, piece :: toStart )
           }
 
           case ActorIdentity(_, Some(ref) ) => {
-            log info s"${piece.name} found for ${spec}"
+            log debug s"${piece.name} found for ${spec}"
             constituentRefs += (piece.constituent -> ref)
             Survey( toFind.tail, toStart )
           }
@@ -204,7 +204,7 @@ object RegisterSupervisor extends StrictLogging {
 //ref akka concurrency for controlled startup pattern
       case Startup( Nil ) => {
         constituentRefs.values foreach { cref =>
-          log info s"sending WaitingForStart to $cref"
+          log debug s"sending WaitingForStart to $cref"
           cref ! register.WaitingForStart
         }
         context become verify( constituentRefs )
@@ -245,7 +245,7 @@ object RegisterSupervisor extends StrictLogging {
       if ( !next.isEmpty ) context become verify( next )
       else {
         val msg = FinderRegistered( constituentRefs( Agent ), registrantType, spec )
-        log info s"sending: $registrant ! $msg"
+        log debug s"sending: $registrant ! $msg"
         registrant ! msg
         context stop self
       }

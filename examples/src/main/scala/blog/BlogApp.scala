@@ -35,12 +35,12 @@ object BlogApp extends StrictLogging {
       )
 
       val makeAuthorListing: () => ActorRef = () => {
-        logger info s"##### clusterSystem = $clusterSystem"
+        logger debug s"##### clusterSystem = $clusterSystem"
         val cs = ClusterSharding(clusterSystem)
-        logger info s"##### cluster sharding = $cs"
-        logger info s"##### author listing shard name = ${AuthorListingModule.shardName}"
+        logger debug s"##### cluster sharding = $cs"
+        logger debug s"##### author listing shard name = ${AuthorListingModule.shardName}"
         val result = cs.shardRegion(AuthorListingModule.shardName)
-        logger info s"makeAuthorListing() = $result"
+        logger debug s"makeAuthorListing() = $result"
         result
       }
 

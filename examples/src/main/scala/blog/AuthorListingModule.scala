@@ -77,7 +77,7 @@ object AuthorListingModule extends LazyLogging {
   class AuthorListing extends Actor with EnvelopingActor with ReliableReceiver with ActorLogging {
     def trace: Trace[_] = Trace[AuthorListing]
 
-    log.info( s"STARTED AUTHOR_LISTING: ${self.path}" )
+    log debug s"STARTED AUTHOR_LISTING: ${self.path}"
     context setReceiveTimeout 2.minutes
 
     var posts: immutable.IndexedSeq[PostPublished] = Vector.empty
@@ -85,20 +85,20 @@ object AuthorListingModule extends LazyLogging {
     override def receive: Receive = around {
       LoggingReceive {
         case p: PostPublished => {
-          log info s"AUTHOR_LISTING. REGULAR PostPublished recd: ${p}   SENDER=${sender()}"
+          log debug  s"AUTHOR_LISTING. REGULAR PostPublished recd: ${p}   SENDER=${sender()}"
           posts :+= p
-          log.info( s"Post added to ${p.author}'s list: ${p.title}" )
-          log.info( s"""AUTHOR_LISTING: posts updated to: ${posts.mkString( "[", ",", "]" )}""")
+          log info s"Post added to ${p.author}'s list: ${p.title}"
+          log debug s"""AUTHOR_LISTING: posts updated to: ${posts.mkString( "[", ",", "]" )}"""
         }
 
         case GetPosts(_) => {
-          log.info( s"""AUTHOR_LISTING:GetPosts. posts = ${posts.mkString( "[", ",", "]" )}""")
+          log debug s"""AUTHOR_LISTING:GetPosts. posts = ${posts.mkString( "[", ",", "]" )}"""
           sender() ! Posts( posts )
         }
 
         case ReceiveTimeout => context.parent ! ShardRegion.Passivate( stopMessage = PoisonPill )
 
-        case ex => log.info( s"AUTHOR LISTING: UNEXPECTED MESSAGE: $ex" )
+        case ex => log debug s"AUTHOR LISTING: UNEXPECTED MESSAGE: $ex"
       }
     }
   }

@@ -91,13 +91,13 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
 
   def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case SubscribeAck( Subscribe(topic, None, `self`) ) => {
-      log info s"confirmed subscription to distributed PubSub topic=$topic => activating"
+      log debug s"confirmed subscription to distributed PubSub topic=$topic => activating"
       waiting foreach { _ ! Started }
       context become ready
     }
 
     case WaitingForStart => {
-      log info s"adding actor to wait stack: ${sender()}"
+      log debug s"adding actor to wait stack: ${sender()}"
       context become starting( sender() :: waiting )
     }
   }
@@ -111,7 +111,7 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
     case GetRegister => sender() ! RegisterEnvelope( new AgentRegister( register )( dispatcher ) )
 
     case WaitingForStart => {
-      log info s"recd WaitingForStart: sending Started to ${sender()}"
+      log debug s"recd WaitingForStart: sending Started to ${sender()}"
       sender() ! Started
     }
   }

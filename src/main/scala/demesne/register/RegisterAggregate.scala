@@ -87,7 +87,7 @@ with ActorLogging {
       case e @ Recorded( key: K, _, _, _ ) => {
         val id = e.mapIdTo[I]
         state += ( key -> id )
-        log info s"aggregate recorded in register: ${key} -> ${id}"
+        log debug s"aggregate recorded in register: ${key} -> ${id}"
       }
     }
   }
@@ -108,7 +108,7 @@ with ActorLogging {
     }
 
     case WaitingForStart => {
-      log info s"recd WaitingForStart: sending Started to ${sender()}"
+      log debug s"recd WaitingForStart: sending Started to ${sender()}"
       sender() ! Started
     }
 

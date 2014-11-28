@@ -42,34 +42,34 @@ with ActorLogging {
 
   def connecting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case CurrentState( _, state ) if state != Connecting => {
-      //      log info s"proxy.transition( $p, $from -> $to )"
-      log info s"Relay connected to register aggregate at ${registerAggregatePath}"
+      //      log debug s"proxy.transition( $p, $from -> $to )"
+      log debug s"Relay connected to register aggregate at ${registerAggregatePath}"
       proxy ! WaitingForStart
       context become starting( waiting )
     }
 
     case Transition( _, Connecting, _) => {
-      //      log info s"proxy.transition( $p, $from -> $to )"
-      log info s"Relay connected to register aggregate at ${registerAggregatePath}"
+      //      log debug s"proxy.transition( $p, $from -> $to )"
+      log debug s"Relay connected to register aggregate at ${registerAggregatePath}"
       proxy ! WaitingForStart
       context become starting( waiting )
     }
 
     case WaitingForStart => {
-      log info s"adding to relay's wait queue: ${sender()}"
+      log debug s"adding to relay's wait queue: ${sender()}"
       context become connecting( List( sender() ) )
     }
   }
 
   def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case Started if sender().path == registerAggregatePath => {
-      log info "relay recd start confirmation from aggregate => activating"
+      log debug "relay recd start confirmation from aggregate => activating"
       waiting foreach { _ ! Started }
       context become active
     }
 
     case WaitingForStart => {
-      log info s"adding to relay's wait queue: ${sender()}"
+      log debug s"adding to relay's wait queue: ${sender()}"
       context become starting( List( sender() ) )
     }
   }
@@ -79,11 +79,11 @@ with ActorLogging {
       val (key, id) = fullExtractor( event )
       val recordAggregate = RegisterAggregate.Record( key = key, id = id )
       proxy ! recordAggregate
-      log info s"relayed to aggregate register: ${recordAggregate}"
+      log debug s"relayed to aggregate register: ${recordAggregate}"
     }
 
     case WaitingForStart => {
-      log info s"recd WaitingForStart: sending Started to ${sender()}"
+      log debug s"recd WaitingForStart: sending Started to ${sender()}"
       sender() ! Started
     }
   }

@@ -40,7 +40,7 @@ with ActorLogging {
 
   override def around( r: Receive ): Receive = LoggingReceive {
     case SaveSnapshot => {
-      log info "received SaveSnapshot command"
+      log debug "received SaveSnapshot command"
       saveSnapshot( state )
       super.around( r )( SaveSnapshot )
     }
@@ -102,7 +102,7 @@ with ActorLogging {
     message match {
       case m: ReceiveTimeout => context.parent ! meta.passivation.passivationMessage( m )
       case m => {
-        log info s"aggregate root unhandled $m"
+        log debug s"aggregate root unhandled $m"
         super.unhandled( m )
       }
     }

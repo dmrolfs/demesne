@@ -151,7 +151,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       case WaitingForStart => sender() ! Started
 
       case "stop" => LoggingReceive {
-        log info s"KILLING TestConstituent: ${self.path}"
+        log debug s"KILLING TestConstituent: ${self.path}"
         throw new Exception( s"KILLING constituent: ${self.path}" )
       }
     }
