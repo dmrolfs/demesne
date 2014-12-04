@@ -24,5 +24,3 @@ results of processing
 == Message Envelopes ==
 Messages (Commands and Events) are wrapped with an envelope containing meta data that describes the unit of work,
 actors involved and ordering.
-
-Aggregates are returned from the DomainModel wrapped in an [[demesne.AggregateRootRef]] to ensure

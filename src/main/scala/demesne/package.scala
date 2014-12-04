@@ -18,9 +18,9 @@
   Messages (Commands and Events) are wrapped with an envelope containing meta data that describes the unit of work,
   actors involved and ordering.
 
-  Aggregates are returned from the DomainModel wrapped in an [[demesne.AggregateRootRef]] to ensure messages are sent
-  into the domain with an initial envelope. Developers need to ensure they continue using the envelope capability at
-  each point otherwise the meta envelope will not follow the unit of work.
+  Aggregates are returned from the DomainModel as an ActorRef. In order to ensure messages are sent into the domain with 
+  an initial envelope use the enveloping send or !! operations. Developers need to ensure they continue using the
+  envelope capability at each point otherwise the meta envelope will not follow the unit of work.
  */
 package object demesne {
   val FactoryKey: Symbol = 'factory
