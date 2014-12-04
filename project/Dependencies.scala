@@ -20,7 +20,7 @@ object Dependencies {
   val sprayVersion = "1.3.1"
   def sprayModule(id: String) = "io.spray" %% id % sprayVersion
 
-  val akkaVersion = "2.3.5"
+  val akkaVersion = "2.3.7"
   def akkaModule( id: String ) = "com.typesafe.akka" %% id % akkaVersion
 
   val akkaActor = akkaModule( "akka-actor" )

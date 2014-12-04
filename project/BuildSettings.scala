@@ -19,7 +19,7 @@ object BuildSettings {
     description := "",
     startYear := Some(2013),
     licenses := Seq("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt")),
-    scalaVersion := "2.11.2",
+    scalaVersion := "2.11.4",
     resolvers ++= Dependencies.resolutionRepos,
     coverallsTokenFile := "~/.sbt/demesne-coveralls-token.txt",
     scalacOptions := Seq(
@@ -29,7 +29,7 @@ object BuildSettings {
       "-feature",
       "-unchecked",
       "-deprecation",
-      "-target:jvm-1.6",
+      "-target:jvm-1.7",
       "-language:postfixOps",
       "-language:implicitConversions",
       "-Xlog-reflective-calls",
