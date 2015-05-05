@@ -43,6 +43,12 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
   object GOOD extends Tag( "good" )
 
   "Post Module should" should {
+    // "config is okay" taggedAs(WIP) in { f: Fixture =>
+    //   val config = f.system.settings.config
+    //   config.getString( "akka.persistence.journal.plugin" ) mustBe "inmemory-journal"
+    //   config.getString( "akka.persistence.snapshot-store.plugin" ) mustBe "inmemory-snapshot-store"
+    // }
+
     "add content" in { fixture: Fixture =>
       import fixture._
 
@@ -240,7 +246,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       register.get( "Damon" ) mustBe Some(id)
     }
 
-    "recorded in title register after post added via event stream" taggedAs(WIP) in { fixture: Fixture =>
+    "recorded in title register after post added via event stream" in { fixture: Fixture =>
       import fixture._
 
       val register = model.registerFor( PostModule.aggregateRootType, 'title ).mapTo[String, PostModule.TID]

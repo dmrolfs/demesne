@@ -36,6 +36,7 @@ object BuildSettings {
       // resolvers += "AllenAI Releases" at "http://utility.allenai.org:8081/nexus/content/repositories/public-releases",
       resolvers += "dmrolfs" at "http://dmrolfs.github.com/snapshots",
       resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven",
+      resolvers += "dnvriend at bintray" at "http://dl.bintray.com/dnvriend/maven",
       // Factorie Resolver
       resolvers += "IESL Releases" at "http://dev-iesl.cs.umass.edu/nexus/content/groups/public",
       resolvers += "spray repo" at "http://repo.spray.io",

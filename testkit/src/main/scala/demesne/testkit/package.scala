@@ -12,7 +12,7 @@ package object testkit {
     """
       |#akka.loggers = ["akka.testkit.TestEventListener"]
       |
-      |akka.persistence.journal.plugin = "in-memory-journal"
+      |#akka.persistence.journal.plugin = "in-memory-journal"
       |#akka.persistence {
       |#  journal.plugin = "akka.persistence.journal.leveldb-shared"
       |#  journal.leveldb-shared.store {
@@ -22,6 +22,13 @@ package object testkit {
       |#  }
       |#  snapshot-store.local.dir = "target/snapshots"
       |#}
+      |
+      |akka {
+      |  persistence {
+      |    journal.plugin = "inmemory-journal"
+      |    snapshot-store.plugin = "inmemory-snapshot-store"
+      |  }
+      |}
       |
       |akka {
       |  loggers = ["akka.event.slf4j.Slf4jLogger"]

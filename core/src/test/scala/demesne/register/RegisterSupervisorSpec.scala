@@ -160,7 +160,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
   "RegisterSupervisor should" should {
 
-    "register finder for spec with bus subscription" in { implicit f: Fixture =>
+    "register finder for spec with bus subscription" taggedAs(WIP) in { implicit f: Fixture =>
       implicit val system = f.system
       val real = TestActorRef[RegisterSupervisor]( RegisterSupervisor.props( f.bus ) )
       real.receive( RegisterSupervisor.RegisterFinder( f.busRoot, f.busSpec ), f.registrant.ref )
