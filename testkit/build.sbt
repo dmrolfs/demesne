@@ -1,0 +1,19 @@
+import Dependencies._
+import sbtrelease.ReleasePlugin._
+
+releaseSettings
+
+name := "bellwether-testkit"
+
+description := "lorem ipsum."
+
+libraryDependencies ++= commonDependencies ++ Seq(
+    akkaModule( "remote" ),
+    akkaModule( "testkit" ),
+    "org.scalatest" %% "scalatest" % "2.2.1",
+    "com.github.michaelpisula" %% "akka-persistence-inmemory" % "0.2.1",
+    "com.github.krasserm" %% "akka-persistence-testkit" % "0.3.4",
+    "org.mockito" % "mockito-core" % "1.10.19",
+    akkaModule( "contrib" ),
+    "org.atteo" % "evo-inflector" % "1.2"
+  )

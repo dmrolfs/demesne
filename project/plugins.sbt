@@ -2,12 +2,24 @@ resolvers += Resolver.sonatypeRepo("snapshots")
 
 resolvers += Classpaths.sbtPluginReleases
 
-addSbtPlugin("org.scoverage" % "sbt-scoverage" % "0.99.7.1")
+addSbtPlugin( "com.typesafe.sbt" % "sbt-pgp" % "0.8.3" )
 
-addSbtPlugin("org.scoverage" %% "sbt-coveralls" % "0.99.0")
+addSbtPlugin( "org.allenai.plugins" % "allenai-sbt-release" % "2014.11.06-0" )
 
-addSbtPlugin("com.github.mpeltonen" % "sbt-idea" % "1.5.2")
+addSbtPlugin( "com.typesafe.sbt" % "sbt-scalariform" % "1.3.0" )
 
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.11.2")
+addSbtPlugin( "io.spray" % "sbt-revolver" % "0.7.2" )
 
-addSbtPlugin( "com.typesafe.sbt" % "sbt-multi-jvm" % "0.3.8" )
+// Native packager, for deploys.
+addSbtPlugin( "com.typesafe.sbt" % "sbt-native-packager" % "1.0.0-M1" )
+
+// Check for updates.
+addSbtPlugin( "com.timushev.sbt" % "sbt-updates" % "0.1.7" )
+
+addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.1.0")
+
+addSbtPlugin("org.scoverage" % "sbt-coveralls" % "1.0.0.BETA1")
+
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.13.0")
+
+addSbtPlugin("com.typesafe.sbt" % "sbt-multi-jvm" % "0.3.11")
