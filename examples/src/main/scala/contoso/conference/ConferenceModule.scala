@@ -1,5 +1,7 @@
 package contoso.conference
 
+import scala.concurrent.Future
+import scalaz._, Scalaz._
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import com.github.nscala_time.time.{Imports => joda}
@@ -15,25 +17,49 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 
-trait ConferenceModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
-  import contoso.conference.ConferenceModule.trace
+// trait ConferenceModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
+//   import contoso.conference.ConferenceModule.trace
 
-  abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-    super.start( ctx )
-    ConferenceModule.initialize( module, ctx )
-  }
-}
+//   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+//     super.start( ctx )
+//     ConferenceModule.initialize( module, ctx )
+//   }
+// }
 
-object ConferenceModule extends AggregateRootModuleCompanion { module =>
+object ConferenceModule extends AggregateRootModule { module =>
   //DMR move these into common AggregateModuleCompanion trait
   val trace = Trace[ConferenceModule.type]
 
   var conferenceContext: ActorRef = _
-  override def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
-    super.initialize( module, context )
-    require( context.contains( 'ConferenceContext ), "must start ConferenceModule with ConferenceContext" )
-    conferenceContext = context( 'ConferenceContext ).asInstanceOf[ActorRef]
+  // override def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
+  //   super.initialize( module, context )
+  //   require( context.contains( 'ConferenceContext ), "must start ConferenceModule with ConferenceContext" )
+  //   conferenceContext = context( 'ConferenceContext ).asInstanceOf[ActorRef]
+  // }
+
+  override def initializer( 
+    rootType: AggregateRootType, 
+    model: DomainModel, 
+    props: Map[Symbol, Any] 
+  )( 
+    implicit ec: ExecutionContext
+  ) : V[Future[Unit]] = {
+    checkConferenceContext( props ) map { cc => 
+      Future successful {
+        conferenceContext = cc
+      }
+    }
   }
+
+  private def checkConferenceContext( props: Map[Symbol, Any] ): V[ActorRef] = {
+    val result = for {
+      cc <- props get 'ConferenceContext
+      r <- scala.util.Try[ActorRef]{ cc.asInstanceOf[ActorRef] }.toOption
+    } yield r.successNel
+
+    result getOrElse UnspecifiedConferenceContextError( 'ConferenceContext ).failureNel 
+  }
+
 
   override val aggregateIdTag: Symbol = 'conference
 
@@ -238,4 +264,8 @@ object ConferenceModule extends AggregateRootModuleCompanion { module =>
     //   case x => log info s">>>>> POST UNEXPECTED MESSAGE $x"
     // }
   }
+
+
+  final case class UnspecifiedConferenceContextError private[conference]( expectedKey: Symbol )
+  extends IllegalArgumentException( s"ConferenceContext actor ref required at initialization property [$expectedKey]" ) with ContosoError
 }

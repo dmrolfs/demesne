@@ -1,5 +1,6 @@
 package sample.blog.post
 
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
@@ -10,27 +11,52 @@ import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier._
 import peds.commons.log.Trace
+import scalaz._, Scalaz._
 import shapeless._
+import shapeless.syntax.typeable._
 
 
-trait PostModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
-  import sample.blog.post.PostModule.trace
+// trait PostModule extends AggregateRootModule {
+//   import sample.blog.post.PostModule.trace
 
-  abstract override def start( contex: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-    super.start( contex )
-    PostModule.initialize( module, contex )
-  }
-}
+//   abstract override def start( contex: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+//     super.start( contex )
+//     PostModule.initialize( module, contex )
+//   }
+// }
 
-object PostModule extends AggregateRootModuleCompanion { module =>
+object PostModule extends AggregateRootModule { module =>
   override val trace = Trace[PostModule.type]
 
   var makeAuthorListing: () => ActorRef = _
 
-  override def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
-    require( context.contains( 'authorListing ), "must start PostModule with author listing factory" )
-    makeAuthorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
-    super.initialize( module, context )
+  // override def initialize( context: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V = trace.block( "initialize" ) {
+  //   require( context.contains( 'authorListing ), "must start PostModule with author listing factory" )
+  //   makeAuthorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
+  //   super.initialize( module, context )
+  // }
+
+  override def initializer( 
+    rootType: AggregateRootType, 
+    model: DomainModel, 
+    props: Map[Symbol, Any] 
+  )( 
+    implicit ec: ExecutionContext
+  ) : V[Future[Unit]] = {
+    checkAuthorList( props ) map { al => 
+      Future successful {
+        makeAuthorListing = al 
+      }
+    }
+  }
+
+  private def checkAuthorList( props: Map[Symbol, Any] ): V[() => ActorRef] = {
+    val result = for {
+      al <- props get 'authorListing
+      r <- scala.util.Try[() => ActorRef]{ al.asInstanceOf[() => ActorRef] }.toOption
+    } yield r.successNel
+
+    result getOrElse UnspecifiedMakeAuthorListError( 'authorListing ).failureNel 
   }
 
   override val aggregateIdTag: Symbol = 'post
@@ -160,4 +186,8 @@ object PostModule extends AggregateRootModuleCompanion { module =>
       case GetContent(_) => sender() !! state.content
     }
   }
+
+
+  final case class UnspecifiedMakeAuthorListError private[post]( expectedKey: Symbol )
+  extends IllegalArgumentException( s"AuthorList factory function required at initialization property [$expectedKey]" )
 }

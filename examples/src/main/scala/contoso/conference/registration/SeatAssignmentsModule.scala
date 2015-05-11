@@ -12,16 +12,16 @@ import peds.commons.log.Trace
 import scala.annotation.tailrec
 
 
-trait SeatAssignmentsModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
-   import contoso.conference.registration.SeatAssignmentsModule.trace
+// trait SeatAssignmentsModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
+//    import contoso.conference.registration.SeatAssignmentsModule.trace
 
-   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-     super.start( ctx )
-     SeatAssignmentsModule.initialize( module, ctx )
-   }
-}
+//    abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+//      super.start( ctx )
+//      SeatAssignmentsModule.initialize( module, ctx )
+//    }
+// }
 
-object SeatAssignmentsModule extends AggregateRootModuleCompanion { module =>
+object SeatAssignmentsModule extends AggregateRootModule { module =>
   import com.wix.accord._
 
   val trace = Trace[SeatAssignmentsModule.type]

@@ -1,39 +1,57 @@
 package sample.blog.author
 
+import scala.concurrent.{ ExecutionContext, Future }
+import scalaz._, Scalaz._
+import demesne.V
 import akka.actor.{Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout}
 import akka.contrib.pattern.{ClusterSharding, ShardRegion}
 import akka.event.LoggingReceive
+import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
 import peds.akka.envelope.EnvelopingActor
 import peds.akka.publish.ReliableReceiver
 import peds.commons.log.Trace
 import peds.commons.module._
 import sample.blog.post.PostPublished
-
+import demesne.InitializeAggregateActorType
 import scala.collection.immutable
 import scala.concurrent.duration._
 
 
-trait AuthorListingModule extends ModuleLifecycle {
-  import sample.blog.author.AuthorListingModule._
+// trait AuthorListingModule extends ModuleLifecycle {
+//   import sample.blog.author.AuthorListingModule._
 
-  abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-    super.start( ctx )
+//   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+//     super.start( ctx )
 
-    implicit lazy val system: ActorSystem = ctx get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
+//     implicit lazy val system: ActorSystem = ctx get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
 
-    trace( "starting shard for: AuthorListingModule" )
-    ClusterSharding( system ).start(
-      typeName = AuthorListingModule.shardName,
-      entryProps = Some( AuthorListing.props ),
-      idExtractor = AuthorListing.idExtractor,
-      shardResolver = AuthorListing.shardResolver
-    )
-  }
-}
+//     trace( "starting shard for: AuthorListingModule" )
+//     ClusterSharding( system ).start(
+//       typeName = AuthorListingModule.shardName,
+//       entryProps = Some( AuthorListing.props ),
+//       idExtractor = AuthorListing.idExtractor,
+//       shardResolver = AuthorListing.shardResolver
+//     )
+//   }
+// }
 
-object AuthorListingModule extends LazyLogging {
+object AuthorListingModule extends InitializeAggregateActorType with LazyLogging {
   val trace = Trace[AuthorListingModule.type]
+
+  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V[Future[Unit]] = {
+    Future.successful[Unit] { 
+      implicit lazy val system: ActorSystem = props get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
+      trace( "starting shard for: AuthorListingModule" )
+      ClusterSharding( system ).start(
+        typeName = AuthorListingModule.shardName,
+        entryProps = Some( AuthorListing.props ),
+        idExtractor = AuthorListing.idExtractor,
+        shardResolver = AuthorListing.shardResolver
+      )
+    }.successNel
+  }
+
 
   val shardName: String = "AuthorListings"
 

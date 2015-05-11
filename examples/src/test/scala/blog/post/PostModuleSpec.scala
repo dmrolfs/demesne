@@ -28,7 +28,8 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     val bus: TestProbe = TestProbe()
     val author: TestProbe = TestProbe()
 
-    override val module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
+    // override val module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
+    def moduleCompanions: List[AggregateRootModule] = List( PostModule )
 
     override def context: Map[Symbol, Any] = trace.block( "context" ) {
       val result = super.context
@@ -49,7 +50,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     //   config.getString( "akka.persistence.snapshot-store.plugin" ) mustBe "inmemory-snapshot-store"
     // }
 
-    "add content" in { fixture: Fixture =>
+    "add content" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )

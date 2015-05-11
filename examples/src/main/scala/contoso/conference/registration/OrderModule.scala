@@ -17,16 +17,16 @@ import squants._
 import scala.util.Random
 
 
-trait OrderModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
-  import contoso.conference.registration.OrderModule.trace
+// trait OrderModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
+//   import contoso.conference.registration.OrderModule.trace
 
-  abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-    super.start( ctx )
-    OrderModule.initialize( module, ctx )
-  }
-}
+//   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+//     super.start( ctx )
+//     OrderModule.initialize( module, ctx )
+//   }
+// }
 
-object OrderModule extends AggregateRootModuleCompanion { module =>
+object OrderModule extends AggregateRootModule { module =>
   import com.wix.accord._
   import com.wix.accord.dsl._
   import peds.commons.log.Trace

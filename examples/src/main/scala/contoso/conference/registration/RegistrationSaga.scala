@@ -24,16 +24,16 @@ import scala.concurrent.duration._
 *
 * Created by damonrolfs on 9/11/14.
 */
-trait RegistrationSagaModule extends SagaModule { module: AggregateModuleInitializationExtension =>
-  import contoso.conference.registration.RegistrationSagaModule.trace
+// trait RegistrationSagaModule extends SagaModule { module: AggregateModuleInitializationExtension =>
+//   import contoso.conference.registration.RegistrationSagaModule.trace
 
-  abstract override def start( moduleContext: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-    super.start( moduleContext )
-    RegistrationSagaModule.initialize( module, moduleContext )
-  }
-}
+//   abstract override def start( moduleContext: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+//     super.start( moduleContext )
+//     RegistrationSagaModule.initialize( module, moduleContext )
+//   }
+// }
 
-object RegistrationSagaModule extends SagaModuleCompanion { module =>
+object RegistrationSagaModule extends SagaModule { module =>
   val trace = Trace[RegistrationSagaModule.type]
   override val aggregateIdTag: Symbol = 'registration
 

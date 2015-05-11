@@ -2,6 +2,9 @@ package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import scalaz._, Scalaz._
+import scala.concurrent.{ Await, Future }
+import scala.concurrent.ExecutionContext.Implicits.global
 import demesne.AggregateRootModule
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
@@ -19,19 +22,29 @@ object AggregateRootSpec {
  */
 abstract class AggregateRootSpec[A: ClassTag]
   extends SequentialAkkaSpecWithIsolatedFixture
-//with WordSpecLike
-with MockitoSugar
-//with Matchers
-with BeforeAndAfterAll {
+  with MockitoSugar
+  with BeforeAndAfterAll {
+  
   private val trace = Trace[AggregateRootSpec[A]]
 
   abstract class AggregateFixture( id: Int = AggregateRootSpec.sysId.incrementAndGet() ) extends AkkaFixture {
     private val trace = Trace[AggregateFixture]
 
-    def before(): Unit = trace.block( "before" ) { module start context }
-    def after(): Unit = trace.block( "after" ) { module stop context }
+    import scala.concurrent.duration._
+    import akka.util.Timeout
+    implicit val timeout = Timeout( 5.seconds )
 
-    def module: AggregateRootModule
+    def before(): Unit = trace.block( "before" ) { 
+      for { 
+        init <- moduleCompanions.map{ _ initialize context }.sequence
+      } {
+        Await.ready( Future sequence { init }, 2.seconds )
+      }
+    }
+
+    def after(): Unit = trace.block( "after" ) { }
+
+    def moduleCompanions: List[AggregateRootModule]
 
     def context: Map[Symbol, Any] = trace.block( "context()" ) {
       Map(
@@ -47,7 +60,6 @@ with BeforeAndAfterAll {
   override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
     val sys = createAkkaFixture()
 
-    trace( s"sys.module = ${sys.module}" )
     trace( s"sys.model = ${sys.model}" )
     trace( s"sys.context = ${sys.context}" )
 

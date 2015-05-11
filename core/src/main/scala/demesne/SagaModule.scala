@@ -3,9 +3,9 @@ package demesne
 import peds.akka.publish.EventPublisher
 
 
-trait SagaModule extends AggregateRootModule { module: AggregateModuleInitializationExtension => }
+// // trait SagaModule extends AggregateRootModule { module => }
 
-trait SagaModuleCompanion extends AggregateRootModuleCompanion
+trait SagaModule extends AggregateRootModule
 
 
 abstract class Saga[S: AggregateStateSpecification] extends AggregateRoot[S] { outer: EventPublisher => }

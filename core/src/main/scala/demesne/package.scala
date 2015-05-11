@@ -1,3 +1,6 @@
+import scalaz._, Scalaz._
+
+
 /**
   == Overview ==
   Demesne extends Akka's Persistence frameworks to provide structure to consistently build and use CQRS+ES based
@@ -23,9 +26,15 @@
   envelope capability at each point otherwise the meta envelope will not follow the unit of work.
  */
 package object demesne {
+  type V[A] = ValidationNel[Throwable, A]
+
+
   val FactoryKey: Symbol = 'factory
   val ModelKey: Symbol = 'model
   val SystemKey: Symbol = 'system
 
   case object SaveSnapshot
+
+
+  trait DemesneError
 }

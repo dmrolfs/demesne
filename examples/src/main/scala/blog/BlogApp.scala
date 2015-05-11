@@ -21,7 +21,7 @@ object BlogApp extends StrictLogging {
     else startup( args map { _.toInt } )
   }
 
-  object registry extends AuthorListingModule with PostModule with ClusteredAggregateModuleExtension
+  // object registry extends AuthorListingModule with PostModule with ClusteredAggregateModuleExtension
 
   def startup( ports: Seq[Int] ): Unit = {
     ports foreach { port =>
@@ -52,7 +52,12 @@ object BlogApp extends StrictLogging {
         'authorListing -> makeAuthorListing
       )
 
-      registry.start( context )
+      import scala.concurrent.ExecutionContext.Implicits.global
+      implicit val timeout = Timeout( 5.seconds )
+      // AuthorListingModule.initialize( context )
+      PostModule.initialize( context )
+      // registry.start( context )
+
 
       // if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
       if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )

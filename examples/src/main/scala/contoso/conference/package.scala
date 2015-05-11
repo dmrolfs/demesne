@@ -83,4 +83,7 @@ package object conference {
 
   // Conference/Registration/ReadModel/ConferenceAlias.cs
   case class ConferenceAlias( id: ConferenceModule.ID, code: String, name: String, tagline: String )
+
+
+  trait ContosoError
 }

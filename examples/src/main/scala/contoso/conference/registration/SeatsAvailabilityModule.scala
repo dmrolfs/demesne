@@ -17,16 +17,16 @@ import squants.{Dimensionless, Each}
  * Some of the instances of SeatsAvailability are highly contentious, as there could be several users trying to register
  * for the same conference at the same time.
  */
-trait SeatsAvailabilityModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
-  import contoso.conference.registration.SeatsAvailabilityModule.trace
+// trait SeatsAvailabilityModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
+//   import contoso.conference.registration.SeatsAvailabilityModule.trace
 
-  abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-    super.start( ctx )
-    SeatAssignmentsModule.initialize( module, ctx )
-  }
-}
+//   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
+//     super.start( ctx )
+//     SeatAssignmentsModule.initialize( module, ctx )
+//   }
+// }
 
-object SeatsAvailabilityModule extends AggregateRootModuleCompanion { module =>
+object SeatsAvailabilityModule extends AggregateRootModule{ module =>
   val trace = Trace[SeatsAvailabilityModule.type]
 
   override type ID = ConferenceModule.ID // SeatsAvailability supports corresponding Conference

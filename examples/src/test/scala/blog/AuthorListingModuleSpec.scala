@@ -35,10 +35,15 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
   class AuthorListingFixture extends AkkaFixture {
     private val trace = Trace[AuthorListingFixture]
 
-    def before(): Unit = trace.block( "before" ) { module start context }
-    def after(): Unit = trace.block( "after" ) { module stop context }
+    def before(): Unit = trace.block( "before" ) { 
+      import scala.concurrent.ExecutionContext.Implicits.global
+      implicit val to = Timeout( 5.seconds )
+      AuthorListingModule initialize context 
+    }
 
-    def module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
+    def after(): Unit = trace.block( "after" ) { }
+
+    // def module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
 
     // def model: DomainModel = trace.block( s"model()" ) { DomainModel() }
 
@@ -58,7 +63,7 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
 
   override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
     val sys = createAkkaFixture()
-    trace( s"sys.module = ${sys.module}" )
+    // trace( s"sys.module = ${sys.module}" )
     trace( s"sys.model = ${sys.model}" )
     trace( s"sys.context = ${sys.context}" )
 
