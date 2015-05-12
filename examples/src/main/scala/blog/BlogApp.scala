@@ -44,23 +44,25 @@ object BlogApp extends StrictLogging {
         result
       }
 
-      val model = Await.result( DomainModel.register( "blog" )( clusterSystem ), 1.second )
-      val context: Map[Symbol, Any] = Map(
-        demesne.SystemKey -> clusterSystem,
-        demesne.ModelKey -> model,
-        demesne.FactoryKey -> demesne.factory.clusteredFactory,
-        'authorListing -> makeAuthorListing
-      )
+      DomainModel.register( "blog" )( clusterSystem ) map { dm =>
+        val model = Await.result( dm, 1.second )
+        val context: Map[Symbol, Any] = Map(
+          demesne.SystemKey -> clusterSystem,
+          demesne.ModelKey -> model,
+          demesne.FactoryKey -> demesne.factory.clusteredFactory,
+          'authorListing -> makeAuthorListing
+        )
 
-      import scala.concurrent.ExecutionContext.Implicits.global
-      implicit val timeout = Timeout( 5.seconds )
-      // AuthorListingModule.initialize( context )
-      PostModule.initialize( context )
-      // registry.start( context )
+        import scala.concurrent.ExecutionContext.Implicits.global
+        implicit val timeout = Timeout( 5.seconds )
+        // AuthorListingModule.initialize( context )
+        PostModule.initialize( context )
+        // registry.start( context )
 
 
-      // if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
-      if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
+        // if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
+        if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
+      }
     }
 
     def startSharedJournal( system: ActorSystem, startStore: Boolean, path: ActorPath ): Unit = {

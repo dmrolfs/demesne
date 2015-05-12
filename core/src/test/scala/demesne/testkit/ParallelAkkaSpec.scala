@@ -29,7 +29,10 @@ trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelT
   class AkkaFixture( id: Int = sysId.incrementAndGet(), config: Config = demesne.testkit.config )
   extends TestKit( ActorSystem( s"Parallel-${id}", config ) )
   with ImplicitSender {
-    implicit val model: DomainModel = Await.result( DomainModel.register( s"DomainModel-Parallel-${id}" )( system ), 1.second )
+    implicit val model: DomainModel = {
+      val result = DomainModel.register( s"DomainModel-Parallel-${id}" )( system ) map { Await.result( _, 1.second ) }
+      result.toOption.get
+    }
   }
 
   def createAkkaFixture(): Fixture
