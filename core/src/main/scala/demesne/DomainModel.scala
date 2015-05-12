@@ -129,40 +129,47 @@ object DomainModel {
       }
     }
 
-    def timeoutBudgets( to: Timeout ): (Timeout, Timeout, Timeout) = {
+    override def registerAggregateType(
+      rootType: AggregateRootType,
+      factory: ActorFactory
+    )(
+      implicit to: Timeout
+    ): Future[Unit] = trace.block( "registerAggregateType" ) {
+      implicit val ec = system.dispatcher
+
+      val (registerFinderBudget, registerAgentBudget, startChildSupervisionBudget) = timeoutBudgets( to )
+
+      val result = for {
+        reg <- establishRegister( rootType, registerFinderBudget, registerAgentBudget )
+        ag <- registerAggregate( rootType, factory, startChildSupervisionBudget )
+      } yield ()
+
+      result onFailure {
+        case ex => logger error s"failed to establish register for ${rootType}: ${ex}"
+      }
+
+      result
+    }
+
+    /**
+     * Returns the individual timeout budget components for aggregate type registration.
+     * @return (Register Finder, Get Agent Register, Start Supervised Child)
+     */
+    private def timeoutBudgets( to: Timeout ): (Timeout, Timeout, Timeout) = {
       //      implicit val askTimeout: Timeout = 900.millis //todo: move into configuration OR use one-time actor
       val baseline = to.duration - 200.millis
       ( Timeout( baseline / 2 ), Timeout( baseline / 4 ), Timeout( baseline / 4 ) )
     }
 
-    def establishRegister( rootType: AggregateRootType )( implicit ec: ExecutionContext, to: Timeout ): Future[Unit] = trace.block( s"establishRegister($rootType)" ) {
-      import akka.pattern.ask
-      val (registrationBudget, agentBudget, _) = timeoutBudgets( to )
-      trace( s"registration timeout budget = $registrationBudget" )
-      trace( s"agent timeout budget = $agentBudget" )
-
-      val registers = rootType.finders map { s =>
-        for {
-          registration <- registerSupervisor.ask(RegisterFinder(rootType, s))(registrationBudget).mapTo[FinderRegistered]  //todo askretry
-          agentRef = registration.agentRef
-          agentEnvelope <- agentRef.ask(GetRegister)( agentBudget ).mapTo[RegisterEnvelope]  // todo askretry
-          ar <- specAgentRegistry alter { m => m + (s -> agentEnvelope)}
-        } yield ar
-      }
-
-      Future.sequence( registers ) map { r => () }
-    }
-
-    def registerAggregate(
+    private def registerAggregate(
       rootType: AggregateRootType,
-      factory: ActorFactory
+      factory: ActorFactory,
+      budget: Timeout
     )(
-      implicit ex: ExecutionContext,
-      to: Timeout
+      implicit ex: ExecutionContext
     ): Future[Unit] = trace.block( s"registerAggregate($rootType,_)" ) {
       import akka.pattern.ask
-      val (_, _, registerBudget) = timeoutBudgets( to )
-      trace( s"register timeout budget = $registerBudget" )
+      trace( s"register timeout budget = $budget" )
 
       val aggregate = aggregateRegistry alter { r =>
         trace.block(s"[name=${name}, system=${system}] registry send ${rootType}") {
@@ -171,7 +178,7 @@ object DomainModel {
           else {
             val props = EnvelopingAggregateRootRepository.props( this, rootType, factory )
             val entry = for {
-              repoStarted <- ask( repositorySupervisor, StartChild(props, rootType.repositoryName) )( registerBudget ).mapTo[ChildStarted]
+              repoStarted <- ask( repositorySupervisor, StartChild(props, rootType.repositoryName) )( budget ).mapTo[ChildStarted]
               repo = repoStarted.child
             } yield ( rootType.name, (repo, rootType) )
 
@@ -186,24 +193,27 @@ object DomainModel {
       aggregate map { r => () }
     }
 
-    override def registerAggregateType(
-      rootType: AggregateRootType,
-      factory: ActorFactory
-    )(
-      implicit to: Timeout
-    ): Future[Unit] = trace.block( "registerAggregateType" ) {
-      implicit val ec = system.dispatcher
+    private def establishRegister( 
+      rootType: AggregateRootType, 
+      registerFinderBudget: Timeout, 
+      agentBudget: Timeout
+    )( 
+      implicit ec: ExecutionContext 
+    ): Future[Unit] = trace.block( s"establishRegister($rootType)" ) {
+      import akka.pattern.ask
+      trace( s"registration timeout budget = $registerFinderBudget" )
+      trace( s"agent timeout budget = $agentBudget" )
 
-      val result = for {
-        reg <- establishRegister( rootType )
-        ag <- registerAggregate( rootType, factory )
-      } yield ()
-
-      result onFailure {
-        case ex => logger error s"failed to establish register for ${rootType}: ${ex}"
+      val registers = rootType.finders map { s =>
+        for {
+          registration <- registerSupervisor.ask( RegisterFinder(rootType, s) )( registerFinderBudget ).mapTo[FinderRegistered]  //todo askretry
+          agentRef = registration.agentRef
+          agentEnvelope <- agentRef.ask( GetRegister )( agentBudget ).mapTo[RegisterEnvelope]  // todo askretry
+          ar <- specAgentRegistry alter { m => m + (s -> agentEnvelope) }
+        } yield ar
       }
 
-      result
+      Future.sequence( registers ) map { r => () }
     }
 
     override def shutdown(): Unit = system.shutdown()
