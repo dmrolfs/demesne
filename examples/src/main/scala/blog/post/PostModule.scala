@@ -62,7 +62,7 @@ object PostModule extends AggregateRootModule { module =>
   override val aggregateIdTag: Symbol = 'post
 
 
-  override val aggregateRootType: AggregateRootType = {
+  override def aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props(model, this, makeAuthorListing)

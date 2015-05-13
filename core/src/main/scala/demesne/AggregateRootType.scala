@@ -11,6 +11,8 @@ import scala.concurrent.duration._
 
 
 trait AggregateRootType {
+  type TID
+  
   def name: String
   def repositoryName: String = name+"Repository"
 

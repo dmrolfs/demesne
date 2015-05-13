@@ -24,12 +24,17 @@ trait DomainModel {
   def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory )( implicit to: Timeout ): Future[Unit]
   def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = aggregateOf( rootType.name, id )
   def aggregateOf( name: String, id: Any ): ActorRef
-  def registerFor( rootType: AggregateRootType, name: Symbol ): RegisterEnvelope = registerFor( rootType.name, name )
-  def registerFor( rootName: String, registerName: Symbol ): RegisterEnvelope
+  def aggregateRegisterFor( rootType: AggregateRootType, name: Symbol ): DomainModel.AggregateRegisterE[rootType.TID] = {
+    aggregateRegisterFor[rootType.TID]( rootType.name, name )
+  }
+  def aggregateRegisterFor[TID]( rootName: String, registerName: Symbol ): DomainModel.AggregateRegisterE[TID]
   def shutdown(): Unit
 }
 
 object DomainModel {
+  type AggregateRegister[TID] = Register[String, TID]
+  type AggregateRegisterE[TID] = \/[Throwable, AggregateRegister[TID]]
+
   import scala.concurrent.ExecutionContext.global
   val trace = Trace[DomainModel.type]
 
@@ -69,24 +74,22 @@ object DomainModel {
 
   private val modelRegistry: Agent[Map[Key, DomainModel]] = Agent( Map.empty[Key, DomainModel] )( global )
 
-  private[demesne] object DomainModelImpl {
-    type RootTypeRef = (ActorRef, AggregateRootType)
-    type AggregateRegistry = Map[String, RootTypeRef]
-  }
+
+  type RootTypeRef = (ActorRef, AggregateRootType)
+  type AggregateRegistry = Map[String, RootTypeRef]
+  type FinderSpecLike = FinderSpec[_, _]
+  type RegisterAgent = RegisterEnvelope
+  type SpecAgents = Map[FinderSpecLike, RegisterAgent]
+
 
   final case class DomainModelImpl private[demesne](
     override val name: String, 
     override val system: ActorSystem
   ) extends DomainModel with LazyLogging {
-    import DomainModelImpl._
-
     // default dispatcher is okay since mutations are limited to bootstrap.
-    val aggregateRegistry: Agent[AggregateRegistry] = Agent( Map[String, RootTypeRef]() )( system.dispatcher )
+    val aggregateRegistry: Agent[AggregateRegistry] = Agent( Map.empty[String, RootTypeRef] )( system.dispatcher )
 
-    type FinderSpecLike = FinderSpec[_, _]
-    type RegisterAgent = RegisterEnvelope
-    type SpecAgents = Map[FinderSpecLike, RegisterAgent]
-    val specAgentRegistry: Agent[SpecAgents] = Agent( Map[FinderSpecLike, RegisterAgent]() )( system.dispatcher )
+    val specAgentRegistry: Agent[SpecAgents] = Agent( Map.empty[FinderSpecLike, RegisterAgent] )( system.dispatcher )
 
 //use this to make register actors per root type
     val repositorySupervisor: ActorRef = system.actorOf(
@@ -104,23 +107,27 @@ object DomainModel {
     override def aggregateOf( name: String, id: Any ): ActorRef = trace.block( s"aggregateOf($name, $id)" ) {
       trace( s"""name = $name; system = $system; id = $id; aggregateTypeRegistry = ${aggregateRegistry().mkString("[", ",", "]")} """ )
 
-      aggregateRegistry().get( name ) map { rr =>
-        val (aggregateRepository, _) = rr
-        aggregateRepository
-      } getOrElse {
-        throw new IllegalStateException(s"""DomainModel type registry does not have root type:${name}:: registry=${aggregateRegistry().mkString("[",",","]")}""")
+      val registry = aggregateRegistry()
+      registry.get( name ) match { 
+        case Some(rr) => {
+          val (aggregateRepository, _) = rr
+          aggregateRepository
+        }
+
+        case None => throw NoSuchAggregateRootError( name, registry )
       }
     }
 
-
-    override def registerFor( rootName: String, registerName: Symbol ): RegisterEnvelope = trace.block( s"registerFor($rootName, $registerName)" ) {
+    override def aggregateRegisterFor[TID]( rootName: String, registerName: Symbol ): AggregateRegisterE[TID] = trace.block( s"registerFor($rootName, $registerName)" ) {
       trace( s"""aggregateRegistry = ${aggregateRegistry().mkString("[",",","]")}""")
       trace( s"""specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""" )
+
+      val specRegistry = specAgentRegistry()
 
       val result = for {
         (_, rootType) <- aggregateRegistry() get rootName
         spec <- rootType.finders find { _.name == registerName }
-        agent <- specAgentRegistry() get spec
+        agent <- specRegistry get spec
       } yield {
         trace( s"""rootName=$rootName; rootType=$rootType""" )
         trace( s"spec = ${spec}" )
@@ -128,9 +135,7 @@ object DomainModel {
         agent
       }
 
-      result getOrElse {
-        throw new IllegalStateException(s"""DomainModel does not have register for root type:${rootName}:: specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""")
-      }
+      result map { _.mapTo[String, TID].right } getOrElse NoRegisterForAggregateError( rootName, specRegistry ).left[Register[String, TID]]
     }
 
     override def registerAggregateType(
@@ -233,5 +238,17 @@ object DomainModel {
   final case class ActorSystemMismatchError private[demesne]( dm: DomainModel, expected: ActorSystem )
   extends IllegalArgumentException( 
     s"requested DomainModel [${dm.name}] exists under another system [${dm.system}] not expected [$expected]" 
+  ) with DemesneError
+
+
+  final case class NoSuchAggregateRootError private[demesne]( name: String, registry: Map[String, RootTypeRef] )
+  extends NoSuchElementException( 
+    s"""DomainModel type registry does not have root type [${name}]; registry [${registry.mkString("[",",","]")}]"""
+  ) with DemesneError
+
+
+  final case class NoRegisterForAggregateError private[demesne]( name: String, registry: Map[FinderSpecLike, RegisterAgent] )
+  extends IllegalStateException(
+    s"""DomainModel does not have register for root type [${name}]:: specAgentRegistry [${registry.mkString("[",",","]")}]"""
   ) with DemesneError
 }
