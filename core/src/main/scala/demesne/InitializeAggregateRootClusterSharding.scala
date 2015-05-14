@@ -6,13 +6,15 @@ import scalaz._, Scalaz._
 
 
 trait InitializeAggregateRootClusterSharding extends CommonInitializeAggregateActorType { self: AggregateRootModule =>
-  override def initializer( 
+  abstract override def initializer( 
     rootType: AggregateRootType, 
     model: DomainModel, 
     props: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ): V[Future[Unit]] = {
+  ): V[Future[Unit]] = peds.commons.log.Trace("InitializeAggregateRootClusterSharding").block( "initializer" ) {
+    super.initializer( rootType, model, props )
+
     ClusterSharding( model.system )
       .start(
         typeName = rootType.name,

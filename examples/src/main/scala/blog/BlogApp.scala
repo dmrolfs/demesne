@@ -1,5 +1,6 @@
 package sample.blog
 
+import scalaz._, Scalaz._
 import akka.actor._
 import akka.contrib.pattern.ClusterSharding
 import akka.pattern.ask
@@ -46,6 +47,8 @@ object BlogApp extends StrictLogging {
 
       DomainModel.register( "blog" )( clusterSystem ) map { dm =>
         val model = Await.result( dm, 1.second )
+        logger.info( s"model [blog] registered [$model]" )
+
         val context: Map[Symbol, Any] = Map(
           demesne.SystemKey -> clusterSystem,
           demesne.ModelKey -> model,
@@ -55,13 +58,13 @@ object BlogApp extends StrictLogging {
 
         import scala.concurrent.ExecutionContext.Implicits.global
         implicit val timeout = Timeout( 5.seconds )
-        // AuthorListingModule.initialize( context )
-        PostModule.initialize( context )
-        // registry.start( context )
 
+        InitializeAggregateActorType( context )( AuthorListingModule, PostModule ) foreach { init =>
+          Await.ready( init, 1.second )
+          logger.info( s"aggregate types [AuthorListingModule, PostModule] registered" )
 
-        // if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
-        if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
+          if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
+        }
       }
     }
 
