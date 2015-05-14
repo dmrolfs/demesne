@@ -16,43 +16,36 @@ import shapeless._
 import shapeless.syntax.typeable._
 
 
-// trait PostModule extends AggregateRootModule {
-//   import sample.blog.post.PostModule.trace
-
-//   abstract override def start( contex: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-//     super.start( contex )
-//     PostModule.initialize( module, contex )
-//   }
-// }
-
-object PostModule extends AggregateRootModule { module =>
+object PostModule extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
   override val trace = Trace[PostModule.type]
 
   var makeAuthorListing: () => ActorRef = _
 
-  // override def initialize( context: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V = trace.block( "initialize" ) {
-  //   require( context.contains( 'authorListing ), "must start PostModule with author listing factory" )
-  //   makeAuthorListing = context( 'authorListing ).asInstanceOf[() => ActorRef]
-  //   super.initialize( module, context )
-  // }
-
   override def initializer( 
     rootType: AggregateRootType, 
     model: DomainModel, 
-    props: Map[Symbol, Any] 
+    context: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ) : V[Future[Unit]] = {
-    checkAuthorList( props ) map { al => 
+  ) : V[Future[Unit]] = trace.block( s"initializer($rootType, $model, $context)" ) {
+
+//todo: I need to better determine how to support validation+Future or Task, esp to ensure order of operation and dev model.
+// I'm not confident this impl will always work for more complex scenarios since I haven't combined the local V[Future] with
+// the return of super.initializer
+
+    val result = checkAuthorList( context ) map { al => 
       Future successful {
-        makeAuthorListing = al 
+        makeAuthorListing = al
+        trace( s"makeAuthorListing = $makeAuthorListing .... sample result [${makeAuthorListing()}]" )
       }
     }
+
+    super.initializer( rootType, model, context )
   }
 
-  private def checkAuthorList( props: Map[Symbol, Any] ): V[() => ActorRef] = {
+  private def checkAuthorList( context: Map[Symbol, Any] ): V[() => ActorRef] = {
     val result = for {
-      al <- props get 'authorListing
+      al <- context get 'authorListing
       r <- scala.util.Try[() => ActorRef]{ al.asInstanceOf[() => ActorRef] }.toOption
     } yield r.successNel
 
@@ -62,10 +55,10 @@ object PostModule extends AggregateRootModule { module =>
   override val aggregateIdTag: Symbol = 'post
 
 
-  override val aggregateRootType: AggregateRootType = {
+  override def aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props(model, this, makeAuthorListing)
+      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props( model, this, makeAuthorListing )
 
       override def finders: Seq[FinderSpec[_, _]] = {
         Seq(
@@ -104,11 +97,12 @@ object PostModule extends AggregateRootModule { module =>
 
 
   object Post {
-    def props( model: DomainModel, meta: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = {
+    def props( model: DomainModel, meta: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = trace.block(s"props(_,$meta, $makeAuthorListing)") {
       import peds.akka.publish._
 
       Props(
         new Post( model, meta ) with ReliablePublisher with AtLeastOnceDelivery {
+          trace( s"POST CTOR makeAuthorListing = $makeAuthorListing" )
           val authorListing: ActorRef = makeAuthorListing()
 
           import peds.commons.util.Chain._

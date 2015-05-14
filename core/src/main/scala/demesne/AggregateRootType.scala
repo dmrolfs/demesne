@@ -11,6 +11,8 @@ import scala.concurrent.duration._
 
 
 trait AggregateRootType {
+  type TID
+  
   def name: String
   def repositoryName: String = name+"Repository"
 
@@ -48,24 +50,3 @@ trait AggregateRootType {
 
   override def toString: String = getClass.safeSimpleName
 }
-
-
-// trait ModelProvider {
-//   def model: DomainModel
-// }
-
-
-// class ModeledAggregateRootType(
-//   underlying: AggregateRootType,
-//   override val model: DomainModel
-// ) extends AggregateRootType with ModelProvider {
-//   override def name: String = underlying.name
-//   override def repositoryName: String = underlying.repositoryName
-//   override def aggregateRootProps( implicit model: DomainModel ): Props = underlying.aggregateRootProps( model )
-//   override def aggregateIdOf( aggregateRoot: ActorRef ): String = underlying.aggregateIdOf( aggregateRoot )
-//   override def aggregateIdFor: ShardRegion.IdExtractor = underlying.aggregateIdFor
-//   override def shardIdFor: ShardRegion.ShardResolver = underlying.shardIdFor
-//   override def passivation: PassivationSpecification = underlying.passivation
-//   override def snapshot: SnapshotSpecification = underlying.snapshot
-//   override def toString: String = underlying.toString
-// }

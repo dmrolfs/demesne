@@ -5,6 +5,7 @@ import akka.actor.ActorSystem
 import akka.util.Timeout
 import scalaz._, Scalaz._
 import shapeless.syntax.typeable._
+import peds.commons.log.Trace
 import demesne.factory._
 
 
@@ -17,10 +18,10 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
     props: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ) : V[Future[Unit]] = Future.successful{ }.successNel
+  ) : V[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ }.successNel }
 
 
-  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V[Future[Unit]] = {
+  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V[Future[Unit]] = trace.block( s"initialize" ) {
     import scalaz.Validation.FlatMap._
 
     val rootType = aggregateRootType
@@ -29,23 +30,28 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
       smf <- ( checkSystem(props) |@| checkModel(props) |@| checkFactory(props) ) { (s, m, f) => (s, m, f) }
       (system, model, factory) = smf
       f1 <- initializer( rootType, model, props )
-      f2 = registerWithModel( model, rootType, factory )
-    } yield Future.sequence( Seq(f1, f2) ) flatMap { _ => Future.successful{ } }
+    } yield {
+  //todo: combine this with above for-comp via a monad transformer?
+      for {
+        _ <- f1
+        _ <- registerWithModel( model, rootType, factory )
+      } yield ()
+    }
   }
 
-  private def checkSystem( props: Map[Symbol, Any] ): V[ActorSystem] = {
+  private def checkSystem( props: Map[Symbol, Any] ): V[ActorSystem] = trace.block( "checkSystem" ) {
     props get demesne.SystemKey flatMap { _.cast[ActorSystem] } map { _.successNel } getOrElse { 
       UnspecifiedActorSystemError( demesne.SystemKey ).failureNel 
     }
   }
 
-  private def checkModel( props: Map[Symbol, Any] ): V[DomainModel] = {
+  private def checkModel( props: Map[Symbol, Any] ): V[DomainModel] = trace.block( "checkModel" ) {
     props get demesne.ModelKey flatMap { _.cast[DomainModel] } map { _.successNel } getOrElse {
       UnspecifiedDomainModelError( demesne.ModelKey ).failureNel
     }
   }
 
-  private def checkFactory( props: Map[Symbol, Any] ): V[ActorFactory] = {
+  private def checkFactory( props: Map[Symbol, Any] ): V[ActorFactory] = trace.block( "checkFactory" ) {
     val factory = props get demesne.FactoryKey flatMap { _.cast[ActorFactory] } getOrElse { demesne.factory.systemFactory }
     factory.successNel
   }
@@ -56,6 +62,8 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
 }
 
 object CommonInitializeAggregateActorType { 
+  val trace = Trace[CommonInitializeAggregateActorType.type]
+
   final case class UnspecifiedActorSystemError private[demesne]( expectedKey: Symbol )
   extends IllegalArgumentException( s"ActorSystem required at initialization property [$expectedKey]" ) with DemesneError
   

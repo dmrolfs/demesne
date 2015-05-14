@@ -50,7 +50,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     //   config.getString( "akka.persistence.snapshot-store.plugin" ) mustBe "inmemory-snapshot-store"
     // }
 
-    "add content" taggedAs(WIP) in { fixture: Fixture =>
+    "add content" in { fixture: Fixture =>
       import fixture._
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
@@ -224,58 +224,69 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "recorded in author register after post added via bus" in { fixture: Fixture =>
+    "recorded in author register after post added via bus" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
-      val register = model.registerFor( PostModule.aggregateRootType, 'author ).mapTo[String, PostModule.TID]
+      val rt = PostModule.aggregateRootType
+      val ar = model.aggregateRegisterFor( rt, 'author )
+      ar.isRight mustBe true
+      for {
+        register <- ar 
+      } {
+        val id = PostModule.nextId
+        val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = PostModule.nextId
-      val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+        val post = PostModule.aggregateOf( id )
+        post !! AddPost( id, content )
+        bus.expectMsgPF( hint = "post-added" ) {
+          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        }
 
-      val post = PostModule.aggregateOf( id )
-      post !! AddPost( id, content )
-      bus.expectMsgPF( hint = "post-added" ) {
-        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        val countDown = new CountDownFunction[String]
+        countDown await 200.millis.dilated
+
+        whenReady( register.futureGet( "Damon" ) ) { result => result mustBe Some(id) }
+        trace( s"""register:Damon = ${register.get("Damon")}""" )
+        register.get( "Damon" ) mustBe Some(id)
       }
-
-      val countDown = new CountDownFunction[String]
-      countDown await 200.millis.dilated
-
-      whenReady( register.futureGet( "Damon" ) ) { result => result mustBe Some(id) }
-
-      register.get( "Damon" ) mustBe Some(id)
     }
 
     "recorded in title register after post added via event stream" in { fixture: Fixture =>
       import fixture._
 
-      val register = model.registerFor( PostModule.aggregateRootType, 'title ).mapTo[String, PostModule.TID]
-      val p = TestProbe()
+      val rt = PostModule.aggregateRootType
+      val ar = model.aggregateRegisterFor( rt, 'title )
+      ar.isRight mustBe true
+      for {
+        register <- ar 
+      } {
+        val p = TestProbe()
 
-      val id = PostModule.nextId
-      val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-      system.eventStream.subscribe( p.ref, classOf[Envelope] )
+        val id = PostModule.nextId
+        val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+        system.eventStream.subscribe( p.ref, classOf[Envelope] )
 
-      val post = PostModule.aggregateOf( id )
-      post !! AddPost( id, content )
+        val post = PostModule.aggregateOf( id )
+        post !! AddPost( id, content )
 
-      bus.expectMsgPF( hint = "post-added" ) {
-        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        bus.expectMsgPF( hint = "post-added" ) {
+          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        }
+
+        p.expectMsgPF( hint = "post-added stream" ) {
+          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        }
+
+        val countDown = new CountDownFunction[String]
+
+        countDown await 200.millis.dilated
+        whenReady( register.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
+
+  //      countDown await 75.millis.dilated
+        register.get( "Test Add" ) mustBe Some(id)
       }
-
-      p.expectMsgPF( hint = "post-added stream" ) {
-        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-      }
-
-      val countDown = new CountDownFunction[String]
-
-      countDown await 200.millis.dilated
-      whenReady( register.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
-
-//      countDown await 75.millis.dilated
-      register.get( "Test Add" ) mustBe Some(id)
     }
   }
 }

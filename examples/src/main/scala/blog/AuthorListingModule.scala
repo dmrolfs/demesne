@@ -18,28 +18,10 @@ import scala.collection.immutable
 import scala.concurrent.duration._
 
 
-// trait AuthorListingModule extends ModuleLifecycle {
-//   import sample.blog.author.AuthorListingModule._
-
-//   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-//     super.start( ctx )
-
-//     implicit lazy val system: ActorSystem = ctx get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
-
-//     trace( "starting shard for: AuthorListingModule" )
-//     ClusterSharding( system ).start(
-//       typeName = AuthorListingModule.shardName,
-//       entryProps = Some( AuthorListing.props ),
-//       idExtractor = AuthorListing.idExtractor,
-//       shardResolver = AuthorListing.shardResolver
-//     )
-//   }
-// }
-
 object AuthorListingModule extends InitializeAggregateActorType with LazyLogging {
   val trace = Trace[AuthorListingModule.type]
 
-  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V[Future[Unit]] = {
+  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V[Future[Unit]] = trace.block( "initialize" ) {
     Future.successful[Unit] { 
       implicit lazy val system: ActorSystem = props get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
       trace( "starting shard for: AuthorListingModule" )
@@ -55,7 +37,6 @@ object AuthorListingModule extends InitializeAggregateActorType with LazyLogging
 
   val shardName: String = "AuthorListings"
 
-  // case class PostSummary( author: String, postId: ShortUUID, title: String )
   case class GetPosts( author: String )
   case class Posts( list: immutable.IndexedSeq[PostPublished] )
 

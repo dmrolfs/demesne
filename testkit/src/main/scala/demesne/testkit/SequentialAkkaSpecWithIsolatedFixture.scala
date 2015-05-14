@@ -29,7 +29,10 @@ trait SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMa
   extends TestKit( ActorSystem( name = s"Isolated-${id}", config ) )
   with ImplicitSender {
     //todo need to figure out how to prevent x-test clobbering of DM across suites
-    implicit val model: DomainModel = Await.result( DomainModel.register( s"DomainModel-Isolated-${id}" )( system ), 1.second )
+    implicit val model: DomainModel = {
+      val result = DomainModel.register( s"DomainModel-Isolated-${id}" )( system ) map { Await.result( _, 1.second ) }
+      result.toOption.get
+    }
   }
 
   def createAkkaFixture(): Fixture

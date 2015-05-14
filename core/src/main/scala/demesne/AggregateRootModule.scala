@@ -8,10 +8,6 @@ import peds.commons.log.Trace
 
 // CHANGE MODULE ref to ACTOR or PersistentActor
 
-// trait AggregateRootModule extends ModuleLifecycle { module: AggregateModuleInitializationExtension => }
-// trait AggregateRootModule { module => }
-
-
 trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLogging {
   def trace: Trace[_]
 

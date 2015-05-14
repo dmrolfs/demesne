@@ -1,5 +1,6 @@
 package sample.blog
 
+import scalaz._, Scalaz._
 import akka.actor._
 import akka.contrib.pattern.ClusterSharding
 import akka.pattern.ask
@@ -44,23 +45,27 @@ object BlogApp extends StrictLogging {
         result
       }
 
-      val model = Await.result( DomainModel.register( "blog" )( clusterSystem ), 1.second )
-      val context: Map[Symbol, Any] = Map(
-        demesne.SystemKey -> clusterSystem,
-        demesne.ModelKey -> model,
-        demesne.FactoryKey -> demesne.factory.clusteredFactory,
-        'authorListing -> makeAuthorListing
-      )
+      DomainModel.register( "blog" )( clusterSystem ) map { dm =>
+        val model = Await.result( dm, 1.second )
+        logger.info( s"model [blog] registered [$model]" )
 
-      import scala.concurrent.ExecutionContext.Implicits.global
-      implicit val timeout = Timeout( 5.seconds )
-      // AuthorListingModule.initialize( context )
-      PostModule.initialize( context )
-      // registry.start( context )
+        val context: Map[Symbol, Any] = Map(
+          demesne.SystemKey -> clusterSystem,
+          demesne.ModelKey -> model,
+          demesne.FactoryKey -> demesne.factory.clusteredFactory,
+          'authorListing -> makeAuthorListing
+        )
 
+        import scala.concurrent.ExecutionContext.Implicits.global
+        implicit val timeout = Timeout( 5.seconds )
 
-      // if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
-      if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
+        InitializeAggregateActorType( context )( AuthorListingModule, PostModule ) foreach { init =>
+          Await.ready( init, 1.second )
+          logger.info( s"aggregate types [AuthorListingModule, PostModule] registered" )
+
+          if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
+        }
+      }
     }
 
     def startSharedJournal( system: ActorSystem, startStore: Boolean, path: ActorPath ): Unit = {
