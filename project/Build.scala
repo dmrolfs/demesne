@@ -1,4 +1,4 @@
-import org.allenai.sbt.release.{ AllenaiReleasePlugin => ReleasePlugin }
+// import org.allenai.sbt.release.{ AllenaiReleasePlugin => ReleasePlugin }
 
 import sbt.Keys._
 import sbt._
@@ -15,13 +15,15 @@ object DemesneBuild extends Build {
     publish := { },
     publishTo := Some("bogus" at "http://nowhere.com"),
     publishLocal := { }
-  ).aggregate( core ).enablePlugins( ReleasePlugin )
+  ).aggregate( core )
+  // ).aggregate( core )//.enablePlugins( ReleasePlugin )
 
   lazy val core = Project(
     id = "core",
     base = file( "core" ),
     settings = defaultBuildSettings
-  ).enablePlugins( ReleasePlugin )
+  )
+  // ).enablePlugins( ReleasePlugin ) 
 
   lazy val testkit = Project(
     id = "testkit",

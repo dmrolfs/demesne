@@ -1,7 +1,4 @@
 import Dependencies._
-import sbtrelease.ReleasePlugin._
-
-releaseSettings
 
 name := "bellwether-examples"
 

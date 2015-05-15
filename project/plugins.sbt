@@ -4,7 +4,8 @@ resolvers += Classpaths.sbtPluginReleases
 
 addSbtPlugin( "com.typesafe.sbt" % "sbt-pgp" % "0.8.3" )
 
-addSbtPlugin( "org.allenai.plugins" % "allenai-sbt-release" % "2014.11.06-0" )
+//addSbtPlugin( "org.allenai.plugins" % "allenai-sbt-release" % "2014.11.06-0" )
+//addSbtPlugin( "org.allenai.plugins" % "allenai-sbt-release" % "2015.05.14-1" )
 
 addSbtPlugin( "com.typesafe.sbt" % "sbt-scalariform" % "1.3.0" )
 

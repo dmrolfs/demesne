@@ -1,18 +1,19 @@
 import sbt.Keys._
 import sbt._
-import sbtrelease.ReleasePlugin._
+// import sbtrelease.ReleasePlugin._
 
 import spray.revolver.RevolverPlugin._
 
 object BuildSettings {
-  val defaultBuildSettings = Defaults.defaultSettings ++ releaseSettings ++ Format.settings ++ Revolver.settings ++
+  // val defaultBuildSettings = Defaults.defaultSettings ++ releaseSettings ++ Format.settings ++ Revolver.settings ++
+  val defaultBuildSettings = Defaults.defaultSettings ++ Format.settings ++ Revolver.settings ++
     Seq(
       organization := "com.github.dmrolfs",
       crossScalaVersions := Seq( "2.11.6" ),
       scalaVersion <<= crossScalaVersions { (vs: Seq[String]) => vs.head },
       // updateOptions := updateOptions.value.withCachedResolution(true),
       scalacOptions ++= Seq(
-        // "-encoding",
+        // "-encoding", 
         // "utf8",
         "-target:jvm-1.7",
         "-feature",
@@ -45,6 +46,7 @@ object BuildSettings {
       resolvers += "Sonatype OSS Releases"  at "http://oss.sonatype.org/content/repositories/releases/",
       // resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
       resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases",
+      resolvers += "bintray-allenai-sbt-plugin-releases" at "http://dl.bintray.com/content/allenai/sbt-plugins",
       resolvers += Resolver.sonatypeRepo( "snapshots" ),
       // resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/stew/snapshots",
       resolvers += Classpaths.sbtPluginReleases,

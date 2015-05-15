@@ -1,7 +1,7 @@
 import Dependencies._
-import sbtrelease.ReleasePlugin._
+//import sbtrelease.ReleasePlugin._
 
-releaseSettings
+//releaseSettings
 
 name := "bellwether-core"
 
