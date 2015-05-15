@@ -48,5 +48,5 @@ trait AggregateRootType {
 
   def repositorySupervisionStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 
-  override def toString: String = getClass.safeSimpleName
+  override def toString: String = name + "AggregateRootType"
 }

@@ -12,27 +12,18 @@ import peds.commons.log.Trace
 import scala.annotation.tailrec
 
 
-// trait SeatAssignmentsModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
-//    import contoso.conference.registration.SeatAssignmentsModule.trace
-
-//    abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-//      super.start( ctx )
-//      SeatAssignmentsModule.initialize( module, ctx )
-//    }
-// }
-
 object SeatAssignmentsModule extends AggregateRootModule { module =>
   import com.wix.accord._
 
   val trace = Trace[SeatAssignmentsModule.type]
 
-  override val aggregateIdTag: Symbol = 'seatsAssignment
+  // override val aggregateIdTag: Symbol = 'seatsAssignment
 
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = SeatAssignments.props( model, this )
-      override val toString: String = shardName + "AggregateRootType"
+      // override val toString: String = shardName + "AggregateRootType"
     }
   }
 
@@ -247,8 +238,3 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
     val unhandled: Receive = peds.commons.util.emptyBehavior[Any, Unit]
   }
 }
-
-
-
-//           SeatsAssignmentState( id = id, orderId = orderId, seats = Map( seats zipWithIndex ):_* )
-// quiscient: OrderModule.OrderConfirmed => SeatAssignmentsCreated

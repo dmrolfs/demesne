@@ -17,25 +17,11 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 
-// trait ConferenceModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
-//   import contoso.conference.ConferenceModule.trace
-
-//   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-//     super.start( ctx )
-//     ConferenceModule.initialize( module, ctx )
-//   }
-// }
-
 object ConferenceModule extends AggregateRootModule { module =>
   //DMR move these into common AggregateModuleCompanion trait
   val trace = Trace[ConferenceModule.type]
 
   var conferenceContext: ActorRef = _
-  // override def initialize( module: AggregateModuleInitializationExtension, context: Map[Symbol, Any] ): Unit = trace.block( "initialize" ) {
-  //   super.initialize( module, context )
-  //   require( context.contains( 'ConferenceContext ), "must start ConferenceModule with ConferenceContext" )
-  //   conferenceContext = context( 'ConferenceContext ).asInstanceOf[ActorRef]
-  // }
 
   override def initializer( 
     rootType: AggregateRootType, 
@@ -49,6 +35,8 @@ object ConferenceModule extends AggregateRootModule { module =>
         conferenceContext = cc
       }
     }
+
+    super.initializer( rootType, model, props )
   }
 
   private def checkConferenceContext( props: Map[Symbol, Any] ): V[ActorRef] = {
@@ -71,7 +59,7 @@ object ConferenceModule extends AggregateRootModule { module =>
         Conference.props( model, this, conferenceContext )
       }
 
-      override val toString: String = shardName + "AggregateRootType"
+      // override val toString: String = shardName + "AggregateRootType"
     }
   }
 
@@ -81,9 +69,9 @@ object ConferenceModule extends AggregateRootModule { module =>
   case object GetPublishedSeatTypes extends ConferenceProtocol
   case class SeatTypes( values: Seq[SeatType] ) extends ConferenceProtocol
 
-  private[conference] case class VerifiedCreateConference( conference: ConferenceInfo ) extends ConferenceProtocol
+  final case class VerifiedCreateConference private[conference]( conference: ConferenceInfo ) extends ConferenceProtocol
 
-  private[conference] case class SlugTaken( targetId: ConferenceModule.TID, slug: String ) extends ConferenceProtocol
+  final case class SlugTaken private[conference]( targetId: ConferenceModule.TID, slug: String ) extends ConferenceProtocol
 
   sealed trait Command extends ConferenceProtocol with CommandLike {
     override type ID = module.ID

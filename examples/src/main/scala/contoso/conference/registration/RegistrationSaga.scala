@@ -24,18 +24,9 @@ import scala.concurrent.duration._
 *
 * Created by damonrolfs on 9/11/14.
 */
-// trait RegistrationSagaModule extends SagaModule { module: AggregateModuleInitializationExtension =>
-//   import contoso.conference.registration.RegistrationSagaModule.trace
-
-//   abstract override def start( moduleContext: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-//     super.start( moduleContext )
-//     RegistrationSagaModule.initialize( module, moduleContext )
-//   }
-// }
-
 object RegistrationSagaModule extends SagaModule { module =>
   val trace = Trace[RegistrationSagaModule.type]
-  override val aggregateIdTag: Symbol = 'registration
+  // override val aggregateIdTag: Symbol = 'registration
 
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
@@ -50,7 +41,7 @@ object RegistrationSagaModule extends SagaModule { module =>
         )
       }
 
-      override val toString: String = shardName + "AggregateRootType"
+      // override val toString: String = shardName + "AggregateRootType"
     }
   }
 
@@ -64,7 +55,6 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   sealed trait Event extends EventLike {
     override type ID = module.ID
-    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
   }
 
   case class RegistrationProcessExpired( override val sourceId: RegistrationProcessExpired#TID ) extends Event
@@ -229,8 +219,8 @@ object RegistrationSagaModule extends SagaModule { module =>
     val confirmedUnhandled: Receive = {
       case c: SeatsReserved => {
         log.info(
-          s"""|Seat reservation response for request ${workId} for reservation id ${c.reservationId} was already
-              |handled. Skipping event.""".stripMargin
+          s"Seat reservation response for request [${workId}] for reservation id [${c.reservationId}] was already handled. " + 
+          "Skipping event."
         )
       }
     }

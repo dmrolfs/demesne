@@ -17,15 +17,6 @@ import squants._
 import scala.util.Random
 
 
-// trait OrderModule extends AggregateRootModule { module: AggregateModuleInitializationExtension =>
-//   import contoso.conference.registration.OrderModule.trace
-
-//   abstract override def start( ctx: Map[Symbol, Any] ): Unit = trace.block( "start" ) {
-//     super.start( ctx )
-//     OrderModule.initialize( module, ctx )
-//   }
-// }
-
 object OrderModule extends AggregateRootModule { module =>
   import com.wix.accord._
   import com.wix.accord.dsl._
@@ -41,10 +32,9 @@ object OrderModule extends AggregateRootModule { module =>
     config.getDuration( "reservation-auto-expiration", TU.MILLISECONDS ).toInt
   )
 
-  //DMR move these into common AggregateModuleCompanion trait
-  val trace = Trace[OrderModule.type]
+  override val trace = Trace[OrderModule.type]
 
-  override val aggregateIdTag: Symbol = 'order
+  // override val aggregateIdTag: Symbol = 'order
 
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {
@@ -56,7 +46,8 @@ object OrderModule extends AggregateRootModule { module =>
           ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
         )
       }
-      override val toString: String = shardName + "AggregateRootType"
+
+      // override val toString: String = name + "AggregateRootType"
     }
   }
 

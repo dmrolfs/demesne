@@ -52,7 +52,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     result getOrElse UnspecifiedMakeAuthorListError( 'authorListing ).failureNel 
   }
 
-  override val aggregateIdTag: Symbol = 'post
+  // override val aggregateIdTag: Symbol = 'post
 
 
   override def aggregateRootType: AggregateRootType = {
@@ -70,8 +70,6 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
           }
         )
       }
-
-      override val toString: String = shardName + "AggregateRootType"
     }
   }
 
