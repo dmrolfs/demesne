@@ -1,13 +1,14 @@
 import sbt.Keys._
 import sbt._
-// import sbtrelease.ReleasePlugin._
 
 import spray.revolver.RevolverPlugin._
 
 object BuildSettings {
-  // val defaultBuildSettings = Defaults.defaultSettings ++ releaseSettings ++ Format.settings ++ Revolver.settings ++
+  val VERSION = "0.8.0"
+
   val defaultBuildSettings = Defaults.defaultSettings ++ Format.settings ++ Revolver.settings ++
     Seq(
+      version := VERSION,
       organization := "com.github.dmrolfs",
       crossScalaVersions := Seq( "2.11.6" ),
       scalaVersion <<= crossScalaVersions { (vs: Seq[String]) => vs.head },
@@ -73,10 +74,12 @@ object BuildSettings {
       ),
 
       publishTo <<= version { (v: String) =>
+        val disposition = if ( v.trim.endsWith("SNAPSHOT") ) "snapshots" else "releases"
+        Some( Resolver.file("file", new File( Path.userHome.absolutePath + s"/jd/dev/dmrolfs.github.com/${disposition}" ) ) )
+        // if ( v.trim.endsWith("SNAPSHOT") ) Some( "snapshots" at nexus + "snapshots" )
+        // else Some( "releases" at nexus + "releases" )
         // val nexus = "http://utility.allenai.org:8081/nexus/content/repositories/"
-        val nexus = "http://utility.allenai.org:8081/nexus/content/repositories/"
-        if ( v.trim.endsWith("SNAPSHOT") ) Some( "snapshots" at nexus + "snapshots" )
-        else Some( "releases" at nexus + "releases" )
+        // val nexus = "http://utility.allenai.org:8081/nexus/content/repositories/"
       }
     )
 }
