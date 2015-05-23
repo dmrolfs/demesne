@@ -1,8 +1,10 @@
 package demesne
 
-import scala.concurrent.{ ExecutionContext, Future }
 import scalaz._, Scalaz._
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.util.Timeout
+import peds.commons.V
+
 
 
 trait InitializeAggregateActorType { 

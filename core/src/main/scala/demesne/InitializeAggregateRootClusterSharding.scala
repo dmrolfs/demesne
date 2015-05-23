@@ -1,8 +1,9 @@
 package demesne
 
 import scala.concurrent.{ ExecutionContext, Future }
-import akka.contrib.pattern.ClusterSharding
 import scalaz._, Scalaz._
+import akka.contrib.pattern.ClusterSharding
+import peds.commons.V
 
 
 trait InitializeAggregateRootClusterSharding extends CommonInitializeAggregateActorType { self: AggregateRootModule =>

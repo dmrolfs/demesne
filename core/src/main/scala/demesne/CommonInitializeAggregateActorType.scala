@@ -5,6 +5,7 @@ import akka.actor.ActorSystem
 import akka.util.Timeout
 import scalaz._, Scalaz._
 import shapeless.syntax.typeable._
+import peds.commons.V
 import peds.commons.log.Trace
 import demesne.factory._
 

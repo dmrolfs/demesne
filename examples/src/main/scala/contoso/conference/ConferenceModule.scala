@@ -7,6 +7,7 @@ import akka.event.LoggingReceive
 import com.github.nscala_time.time.{Imports => joda}
 import demesne._
 import demesne.register.RegisterBus
+import peds.commons.V
 import peds.akka.AskRetry._
 import peds.akka.publish._
 import peds.commons.log.Trace
@@ -143,9 +144,10 @@ object ConferenceModule extends AggregateRootModule { module =>
       )
     }
 
-    private val seatsLens = lens[ConferenceState] >> 'seats
 
     implicit val stateSpec = new AggregateStateSpecification[ConferenceState] {
+      private val seatsLens = lens[ConferenceState] >> 'seats
+      
       override def acceptance( state: ConferenceState ): Acceptance = {
         case ConferenceCreated( _, c ) => ConferenceState( c )
         case ConferenceUpdated( _, c ) => ConferenceState( c )

@@ -9,6 +9,7 @@ import demesne.register.local.RegisterLocalAgent
 import demesne.register.{ContextChannelSubscription, FinderSpec, RegisterBus, RegisterBusSubscription}
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
+import peds.commons.V
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import scalaz._, Scalaz._
@@ -58,7 +59,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
   override def aggregateRootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = Post.props( model, this, makeAuthorListing )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = PostActor.props( model, this, makeAuthorListing )
 
       override def finders: Seq[FinderSpec[_, _]] = {
         Seq(
@@ -74,32 +75,12 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
   }
 
 
-  case class PostState(
-    id: TaggedID[ShortUUID] = ShortUUID.nilUUID,
-    content: PostContent = PostContent.empty,
-    published: Boolean = false
-  )
-
-  object PostState {
-    implicit val stateSpec = new AggregateStateSpecification[PostState] {
-      implicit val postContentLabelledGen = LabelledGeneric[PostContent]
-      private val bodyLens = lens[PostState] >> 'content >> 'body
-
-      override def acceptance( state: PostState ): PartialFunction[Any, PostState] = {
-        case PostAdded( id, c ) => PostState( id = id, content = c, published = false )
-        case BodyChanged( _, body: String ) => bodyLens.set( state )( body )
-        case _: PostPublished => state.copy( published = true )
-      }
-    }
-  }
-
-
-  object Post {
+  object PostActor {
     def props( model: DomainModel, meta: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = trace.block(s"props(_,$meta, $makeAuthorListing)") {
       import peds.akka.publish._
 
       Props(
-        new Post( model, meta ) with ReliablePublisher with AtLeastOnceDelivery {
+        new PostActor( model, meta ) with ReliablePublisher with AtLeastOnceDelivery {
           trace( s"POST CTOR makeAuthorListing = $makeAuthorListing" )
           val authorListing: ActorRef = makeAuthorListing()
 
@@ -120,19 +101,37 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
         }
       )
     }
+
+    case class State(
+      id: TaggedID[ShortUUID] = ShortUUID.nilUUID,
+      content: PostContent = PostContent.empty,
+      published: Boolean = false
+    )
+
+    implicit val stateSpecification: AggregateStateSpecification[State] = new AggregateStateSpecification[State] {
+      private val bodyLens = lens[State] >> 'content >> 'body
+
+      override def acceptance( state: State ): PartialFunction[Any, State] = {
+        case PostAdded( id, c ) => State( id = id, content = c, published = false )
+        case BodyChanged( _, body: String ) => bodyLens.set( state )( body )
+        case _: PostPublished => state.copy( published = true )
+      }
+    }
   }
 
 
-  class Post( model: DomainModel, override val meta: AggregateRootType ) extends AggregateRoot[PostState] {
+  class PostActor( model: DomainModel, override val meta: AggregateRootType ) extends AggregateRoot[PostActor.State] {
     outer: EventPublisher =>
+
+    import PostActor._
 
     override val trace = Trace( "Post", log )
 
     override val registerBus: RegisterBus = model.registerBus
 
-    override var state: PostState = PostState()
+    override var state: State = State()
 
-    override def transitionFor( state: PostState ): Transition = {
+    override def transitionFor( state: State ): Transition = {
       case _: PostAdded => context become around( created )
       case _: PostPublished => context become around( published )
     }

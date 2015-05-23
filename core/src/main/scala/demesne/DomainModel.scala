@@ -14,6 +14,7 @@ import demesne.register.RegisterSupervisor.{ FinderRegistered, RegisterFinder }
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ StartChild, ChildStarted }
 import peds.akka.supervision.{ IsolatedDefaultSupervisor, OneForOneStrategyFactory }
 import peds.commons.log.Trace
+import peds.commons.V
 
 
 

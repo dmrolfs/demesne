@@ -69,7 +69,7 @@ object Dependencies {
   def runtime( deps: ModuleID* ): Seq[ModuleID] = deps map ( _ % "runtime" )
   def container( deps: ModuleID* ): Seq[ModuleID] = deps map ( _ % "container" )
 
-  def akkaModule( id: String ) = "com.typesafe.akka" %% s"akka-$id" % "2.3.10"
+  def akkaModule( id: String ) = "com.typesafe.akka" %% s"akka-$id" % "2.3.11"
   def sprayModule( id: String ) = "io.spray" %% s"spray-$id" % "1.3.3"
   def peds( id: String ) = "com.github.dmrolfs" %% s"peds-$id" % "0.1.6" % "compile" changing()
 }

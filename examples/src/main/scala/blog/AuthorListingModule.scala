@@ -2,7 +2,7 @@ package sample.blog.author
 
 import scala.concurrent.{ ExecutionContext, Future }
 import scalaz._, Scalaz._
-import demesne.V
+import peds.commons.V
 import akka.actor.{Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout}
 import akka.contrib.pattern.{ClusterSharding, ShardRegion}
 import akka.event.LoggingReceive
