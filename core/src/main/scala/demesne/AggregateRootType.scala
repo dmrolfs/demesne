@@ -44,7 +44,7 @@ trait AggregateRootType {
     override val snapshotInterval: FiniteDuration = 1.minute
   }
 
-  def finders: Seq[FinderSpec[_,_]] = Seq()
+  def finders: Seq[DomainModel.FinderSpecLike] = Seq.empty[DomainModel.FinderSpecLike]
 
   def repositorySupervisionStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 

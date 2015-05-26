@@ -108,7 +108,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       published: Boolean = false
     )
 
-    implicit val stateSpecification: AggregateStateSpecification[State] = new AggregateStateSpecification[State] {
+    implicit val stateSpecification = new AggregateStateSpecification[State] {
       private val bodyLens = lens[State] >> 'content >> 'body
 
       override def acceptance( state: State ): PartialFunction[Any, State] = {
@@ -141,7 +141,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     import peds.akka.envelope._
 
     val quiescent: Receive = LoggingReceive {
-      case GetContent(_)  => sender() !! state.content
+      case GetContent(_)  => sender() !+ state.content
       case AddPost( id, content ) if !content.isIncomplete  => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
         persist( PostAdded( id, content ) ) { event =>
           trace.block( s"persist(${event})" ) {
@@ -156,7 +156,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     }
 
     val created: Receive = LoggingReceive {
-      case GetContent( id ) => sender() !! state.content
+      case GetContent( id ) => sender() !+ state.content
 
       case ChangeBody( id, body ) => persist( BodyChanged( id, body ) ) { event =>
         state = accept( event )
@@ -174,7 +174,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     }
 
     val published: Receive = LoggingReceive {
-      case GetContent(_) => sender() !! state.content
+      case GetContent(_) => sender() !+ state.content
     }
   }
 

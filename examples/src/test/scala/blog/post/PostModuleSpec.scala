@@ -59,7 +59,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       val id = PostModule.nextId
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
-      post !! AddPost( id, content )
+      post !+ AddPost( id, content )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
@@ -73,8 +73,8 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
-      post !! ChangeBody( id, "dummy content" )
-      post !! Publish( id )
+      post !+ ChangeBody( id, "dummy content" )
+      post !+ Publish( id )
       bus.expectNoMsg( 200.millis.dilated )
     }
 
@@ -86,9 +86,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
       val id = PostModule.nextId
       val post = PostModule aggregateOf id
-      post !! AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
+      post !+ AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
       bus.expectNoMsg( 200.millis.dilated )
-      post !! AddPost( id, PostContent( author = "", title = "Incomplete Content", body = "no author" ) )
+      post !+ AddPost( id, PostContent( author = "", title = "Incomplete Content", body = "no author" ) )
       bus.expectNoMsg( 200.millis.dilated )
     }
 
@@ -116,7 +116,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
 
       val clientProbe = TestProbe()
-      post !! AddPost( id, content )
+      post !+ AddPost( id, content )
       post.send( GetContent( id ))( clientProbe.ref )
       clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "initial contents" ){
         case Envelope( payload: PostContent, h ) if payload == content => true
@@ -135,12 +135,12 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
       val clientProbe = TestProbe()
-      post !! AddPost( id, content )
+      post !+ AddPost( id, content )
       bus.expectMsgPF( hint = "PostAdded" ) {
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
       }
 
-      post !! ChangeBody( id, updated )
+      post !+ ChangeBody( id, updated )
       bus.expectMsgPF( hint = "BodyChanged" ) {
         case Envelope( payload: BodyChanged, _ ) => payload.body mustBe updated
       }
@@ -160,9 +160,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       val updated = "updated contents"
 
       val clientProbe = TestProbe()
-      post !! AddPost( id, content )
-      post !! ChangeBody( id, updated )
-      post !! Publish( id )
+      post !+ AddPost( id, content )
+      post !+ ChangeBody( id, updated )
+      post !+ Publish( id )
       post.send( GetContent( id ) )( clientProbe.ref )
       clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
@@ -178,10 +178,10 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       val updated = "updated contents"
 
       val clientProbe = TestProbe()
-      post !! AddPost( id, content )
-      post !! ChangeBody( id, updated )
-      post !! Publish( id )
-      post !! ChangeBody( id, "BAD CONTENT" )
+      post !+ AddPost( id, content )
+      post !+ ChangeBody( id, updated )
+      post !+ Publish( id )
+      post !+ ChangeBody( id, "BAD CONTENT" )
       post.send( GetContent( id ) )( clientProbe.ref )
       clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
@@ -197,9 +197,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      PostModule.aggregateOf( id ) !! AddPost( id, content )
-      PostModule.aggregateOf( id ) !! ChangeBody( id, "new content" )
-      PostModule.aggregateOf( id ) !! Publish( id )
+      PostModule.aggregateOf( id ) !+ AddPost( id, content )
+      PostModule.aggregateOf( id ) !+ ChangeBody( id, "new content" )
+      PostModule.aggregateOf( id ) !+ Publish( id )
 
       bus.expectMsgPF( hint = "post-added" ) {
         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
@@ -238,7 +238,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
         val post = PostModule.aggregateOf( id )
-        post !! AddPost( id, content )
+        post !+ AddPost( id, content )
         bus.expectMsgPF( hint = "post-added" ) {
           case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
         }
@@ -269,7 +269,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         system.eventStream.subscribe( p.ref, classOf[Envelope] )
 
         val post = PostModule.aggregateOf( id )
-        post !! AddPost( id, content )
+        post !+ AddPost( id, content )
 
         bus.expectMsgPF( hint = "post-added" ) {
           case Envelope( payload: PostAdded, _ ) => payload.content mustBe content

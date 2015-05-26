@@ -237,7 +237,7 @@ object RegistrationSagaModule extends SagaModule { module =>
       expiration foreach { exp =>
         val timeout = FiniteDuration( exp.getMillis - joda.DateTime.now.getMillis, MILLISECONDS )
         expirationMessager = context.system.scheduler.scheduleOnce( timeout ) {
-          self !! ExpireRegistrationProcess( state.id )
+          self !+ ExpireRegistrationProcess( state.id )
         }
       }
       seatsAvailability( Some(conferenceId) ) ! reservation
