@@ -96,9 +96,11 @@ object AuthorListingModule extends InitializeAggregateActorType with LazyLogging
         }
 
         case ReceiveTimeout => context.parent ! ShardRegion.Passivate( stopMessage = PoisonPill )
-
-        case ex => log debug s"AUTHOR LISTING: UNEXPECTED MESSAGE: $ex"
       }
+    }
+
+    override def unhandled( unexpected: Any ): Unit = {
+      log debug s"AUTHOR LISTING: UNEXPECTED MESSAGE: $unexpected"
     }
   }
 }
