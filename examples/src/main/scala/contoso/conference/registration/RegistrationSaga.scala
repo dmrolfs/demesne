@@ -132,7 +132,7 @@ object RegistrationSagaModule extends SagaModule { module =>
 
     override val trace = Trace( "RegistrationSaga", log )
 
-    override val registerBus: RegisterBus = model.registerBus
+    // override val registerBus: RegisterBus = model.registerBus
 
     override var state: RegistrationSagaState = _
 

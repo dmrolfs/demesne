@@ -12,15 +12,31 @@ import scala.reflect.ClassTag
 
 
 object RegisterAggregate {
+  /**
+   * Create an Akka Props for the [[RegisterAggregate]] actor corresponding to a specific key-to-identifier index. 
+   */
   def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterAggregate[K, I]( topic )  )
 
-  def topic( rootType: String, keyType: String ): String = s"register/${rootType}/${keyType}"
+  /**
+   * Create a standard pub/sub topic label for the given aggregate root type name and key type.
+   */
+  // def topic( rootType: String, keyType: String ): String = s"register/${rootType}/${keyType}"
 
   import scala.language.existentials
   sealed trait Command
+
+  /**
+   * Register the mapping of the index key to idenifier.
+   */
   case class Record( key: Any, id: Any ) extends Command
 
+ //Todo: add Delist key
+
   sealed trait Event
+
+  /**
+   * Index key to identfier recorded.
+   */
   case class Recorded( key: Any, keyType: Class[_], id: Any, idType: Class[_] ) extends Event {
     def mapIdTo[T]( implicit tag: ClassTag[T] ): T = {
       val boxedClass = {
@@ -55,6 +71,9 @@ object RegisterAggregate {
 }
 
 /**
+ * [[RegisterAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are [[Record]]ed.
+ * Recorded events are published via a distrubuted pub/sub mechanism to a relay who makes sure the index is recorded in a 
+ * local Register Akka Agent for easier access.
  * Created by damonrolfs on 10/26/14.
  */
 class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String )
@@ -64,6 +83,10 @@ with ActorLogging {
   import demesne.register.RegisterAggregate._
 
   val trace = Trace( getClass.safeSimpleName, log )
+
+  /**
+   * Distributed pub/sub channel used to deliver news of aggregate root indexing.
+   */
   val mediator: ActorRef = DistributedPubSubExtension( context.system ).mediator
   val keyType: Class[_] = implicitly[ClassTag[K]].runtimeClass
   val idType: Class[_] = implicitly[ClassTag[I]].runtimeClass
@@ -82,6 +105,9 @@ with ActorLogging {
   type State = Map[K, I]
   private var state: State = Map()
 
+  /**
+   * Update the state with the new index.
+   */
   private def updateState( event: Any ): Unit = trace.block( s"updateState(${event}})" ) {
     event match {
       case e @ Recorded( key: K, _, _, _ ) => {
@@ -92,6 +118,9 @@ with ActorLogging {
     }
   }
 
+  /**
+   * Akka Persistence handler used to rehydrate aggregate from event journal.
+   */
   override val receiveRecover: Receive = LoggingReceive {
     case e: Recorded => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
     case SnapshotOffer( _, snapshot ) => trace.block( s"receiveRecover:SnapshotOffer(_, ${snapshot})" ) {
@@ -99,7 +128,12 @@ with ActorLogging {
     }
   }
 
+  /**
+   * Akka Persistence handler used to receive command when the aggregate actor is active.
+   * Record commands are processed asynchronously to update the index with a new logical key to identifier mapping.
+   */
   override def receiveCommand: Receive = LoggingReceive {
+    // Record commands are processed asynchronously to update the index with a new logical key to identifier mapping.
     case Record( key: K, id: I ) => trace.block( s"receiveCommand:RecordAggregate($key, $id)" ) {
       persistAsync( Recorded( key = key, keyType = keyType, id = id, idType = idType ) ) { e =>
         updateState( e )
@@ -107,6 +141,7 @@ with ActorLogging {
       }
     }
 
+    // Register actors dependent on the aggregate issue a WaitingForStart message
     case WaitingForStart => {
       log debug s"recd WaitingForStart: sending Started to ${sender()}"
       sender() ! Started

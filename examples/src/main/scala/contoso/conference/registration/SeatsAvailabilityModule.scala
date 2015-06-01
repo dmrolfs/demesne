@@ -175,7 +175,7 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
   ) extends AggregateRoot[SeatsAvailabilityState] { outer: EventPublisher =>
     override val trace = Trace( "SeatsAvailability", log )
 
-    override val registerBus: RegisterBus = model.registerBus
+    // override val registerBus: RegisterBus = model.registerBus
 
     override var state: SeatsAvailabilityState = _
 

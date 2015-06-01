@@ -215,7 +215,7 @@ object OrderModule extends AggregateRootModule { module =>
   ) extends AggregateRoot[OrderState] { outer: EventPublisher =>
     override val trace = Trace( "Order", log )
 
-    override val registerBus: RegisterBus = model.registerBus
+    // override val registerBus: RegisterBus = model.registerBus
 
     override var state: OrderState = _
     var expirationMessager: Cancellable = _

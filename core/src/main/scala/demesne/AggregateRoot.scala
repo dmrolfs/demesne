@@ -3,7 +3,7 @@ package demesne
 import akka.actor.{ActorLogging, ReceiveTimeout}
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
-import demesne.register.{RegisterBusProvider, RegisterBus}
+// import demesne.register.{RegisterBusProvider, RegisterBus}
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
@@ -24,7 +24,7 @@ import peds.commons.util._
 
 abstract class AggregateRoot[S: AggregateStateSpecification]
 extends PersistentActor
-with RegisterBusProvider
+// with RegisterBusProvider
 with EnvelopingActor
 with ActorLogging {
   outer: EventPublisher =>

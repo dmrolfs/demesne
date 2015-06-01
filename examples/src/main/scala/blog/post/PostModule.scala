@@ -127,7 +127,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
     override val trace = Trace( "Post", log )
 
-    override val registerBus: RegisterBus = model.registerBus
+    // override val registerBus: RegisterBus = model.registerBus
 
     override var state: State = State()
 
