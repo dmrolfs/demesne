@@ -16,16 +16,16 @@ import peds.commons.log.Trace
 import scala.concurrent.duration._
 
 
-object FinderRegistrationSpec {
+object AggregateIndexRegistrationSpec {
   val sysId = new AtomicInteger()
 }
 
 /**
  * Created by damonrolfs on 9/18/14.
  */
-class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
+class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
 
-  private val trace = Trace[FinderRegistrationSpec]
+  private val trace = Trace[AggregateIndexRegistrationSpec]
 
 //  override type Fixture = AuthorListingFixture
   case class FooAdded( value: String )
@@ -44,9 +44,9 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
     val constituent = TestProbe()
     val bus = mock[RegisterBus]
 
-    def rootType( specs: FinderSpec[_,_]* ): AggregateRootType = new AggregateRootType {
+    def rootType( specs: AggregateIndexSpec[_,_]* ): AggregateRootType = new AggregateRootType {
       override def name: String = "foo"
-      override def finders: Seq[FinderSpec[_, _]] = specs
+      override def indexes: Seq[AggregateIndexSpec[_, _]] = specs
       override def aggregateRootProps(implicit model: DomainModel): Props = {
         throw new Exception( "rootType.aggregateRootProps should not be invoked" )
       }
@@ -69,14 +69,14 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
 
   object WIP extends Tag( "wip" )
 
-  def childNameFor( prefix: String, rootType: AggregateRootType, spec: FinderSpec[_,_] ): String = {
+  def childNameFor( prefix: String, rootType: AggregateRootType, spec: AggregateIndexSpec[_,_] ): String = {
     s"${prefix}_${rootType.name}-${spec topic rootType}"
   }
 
   def constituencyFor(
     probes: Map[RegisterConstituent, ActorRef],
     registrantType: AggregateRootType,
-    spec: FinderSpec[_, _]
+    spec: AggregateIndexSpec[_, _]
   ): List[RegisterConstituentRef] = {
     val aggregatePath = probes( Aggregate ).path
     List(
@@ -86,14 +86,14 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
     )
   }
 
-  def finderRegistrationFor(
+  def indexRegistrationFor(
     rootType: AggregateRootType,
-    spec: FinderSpec[_,_],
+    spec: AggregateIndexSpec[_,_],
     constituency: List[RegisterConstituentRef]
   )(
     implicit system: ActorSystem, f: Fixture
-  ): TestActorRef[FinderRegistration] = TestActorRef[FinderRegistration](
-    FinderRegistration.props(
+  ): TestActorRef[IndexRegistration] = TestActorRef[IndexRegistration](
+    IndexRegistration.props(
       supervisor = f.supervisor.ref,
       constituency = constituency,
       subscription = Right( (f.bus, spec.relayClassifier(rootType)) ),
@@ -105,7 +105,7 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
 
   def expectStartWorkflow(
     rootType: AggregateRootType,
-    spec: FinderSpec[_,_],
+    spec: AggregateIndexSpec[_,_],
     constituentProbes: Map[RegisterConstituent, TestProbe],
     toCheck: Set[RegisterConstituent]
   )(
@@ -135,11 +135,11 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
       3.seconds.dilated,
       s"registered[${constituentProbes.size}]"
     ) {
-      case FinderRegistered(_, rootType, spec) => true
+      case IndexRegistered(_, rootType, spec) => true
     }
   }
 
-  "FinderRegistration should" should {
+  "IndexRegistration should" should {
 
     "survey upon first create" in { implicit f: Fixture =>
       implicit val system = f.system
@@ -156,7 +156,7 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
       )
       probes.values foreach { _.ref ! PoisonPill }
 
-      val real = finderRegistrationFor( rt, spec, constituency )
+      val real = indexRegistrationFor( rt, spec, constituency )
       expectStartWorkflow( rt, spec, probes, probes.keySet )
     }
 
@@ -173,7 +173,7 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
         spec
       )
 
-      val real = finderRegistrationFor( rt, spec, constituency )
+      val real = indexRegistrationFor( rt, spec, constituency )
       expectStartWorkflow( rt, spec, probes, Set() )
     }
 
@@ -192,7 +192,7 @@ class FinderRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
 
       probes.values.head.ref ! PoisonPill
 
-      val real = finderRegistrationFor( rt, spec, constituency )
+      val real = indexRegistrationFor( rt, spec, constituency )
       expectStartWorkflow( rt, spec, probes, Set( Relay ) )
     }
   }

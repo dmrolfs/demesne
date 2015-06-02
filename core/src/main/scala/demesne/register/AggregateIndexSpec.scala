@@ -13,7 +13,7 @@ case class ContextChannelSubscription( channel: Class[_] ) extends RelaySubscrip
 case object RegisterBusSubscription extends RelaySubscription
 
 
-abstract class FinderSpec[K: ClassTag, I: ClassTag] extends Equals {
+abstract class AggregateIndexSpec[K: ClassTag, I: ClassTag] extends Equals {
   def name: Symbol
   def keyIdExtractor: KeyIdExtractor[K, I]
   def agentProps( rootType: AggregateRootType ): Props
@@ -36,7 +36,7 @@ abstract class FinderSpec[K: ClassTag, I: ClassTag] extends Equals {
   }
 
   override def equals( rhs: Any ): Boolean = rhs match {
-    case that: FinderSpec[K, I] => {
+    case that: AggregateIndexSpec[K, I] => {
       if ( this eq that ) true
       else {
         ( that.## == this.## ) &&
@@ -50,11 +50,11 @@ abstract class FinderSpec[K: ClassTag, I: ClassTag] extends Equals {
     case _ => false
   }
 
-  override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[FinderSpec[K, I]]
+  override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[AggregateIndexSpec[K, I]]
 
   override def toString: String = {
     val kname = implicitly[ClassTag[K]].runtimeClass.safeSimpleName
     val iname = implicitly[ClassTag[I]].runtimeClass.safeSimpleName
-    s"FinderSpec[$kname, $iname](${name.name})"
+    s"AggregateIndexSpec[$kname, $iname](${name.name})"
   }
 }
