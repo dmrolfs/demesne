@@ -87,7 +87,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
           import peds.commons.util.Chain._
 
           override def publish: Publisher = trace.block( "publish" ) {
-            val bus = RegisterBus.bus( model.registerBus, meta ) _
+            val bus = RegisterBus.bus( model.registerBus, meta )( _: FinderSpec[_,_] )
             val buses = meta.finders
                           .filter( _.relaySubscription == RegisterBusSubscription )
                           .foldLeft( silent ){ _ +> bus(_) }
