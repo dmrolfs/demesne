@@ -144,7 +144,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     "survey upon first create" in { implicit f: Fixture =>
       implicit val system = f.system
       val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
-        case FooAdded( name ) => (name, name.hashCode)
+        case FooAdded( name ) => Directive.Record(name, name.hashCode)
       }
       val rt = f.rootType( spec )
       val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
@@ -163,7 +163,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     "no startups after initial create in node" in { implicit f: Fixture =>
       implicit val system = f.system
       val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
-        case FooAdded( name ) => (name, name.hashCode)
+        case FooAdded( name ) => Directive.Record(name, name.hashCode)
       }
       val rt = f.rootType( spec )
       val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
@@ -180,7 +180,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     "relay startup after initial create in node" taggedAs(WIP) in { implicit f: Fixture =>
       implicit val system = f.system
       val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
-        case FooAdded( name ) => (name, name.hashCode)
+        case FooAdded( name ) => Directive.Record(name, name.hashCode)
       }
       val rt = f.rootType( spec )
       val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )

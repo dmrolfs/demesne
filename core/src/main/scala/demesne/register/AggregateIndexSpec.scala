@@ -15,7 +15,7 @@ case object RegisterBusSubscription extends RelaySubscription
 
 abstract class AggregateIndexSpec[K: ClassTag, I: ClassTag] extends Equals {
   def name: Symbol
-  def keyIdExtractor: KeyIdExtractor[K, I]
+  def keyIdExtractor: KeyIdExtractor
   def agentProps( rootType: AggregateRootType ): Props
   def relaySubscription: RelaySubscription = RegisterBusSubscription
 
@@ -24,7 +24,7 @@ abstract class AggregateIndexSpec[K: ClassTag, I: ClassTag] extends Equals {
   def topic( rootType: AggregateRootType ): String = makeTopic( name.name, rootType, key, id )
 
   def aggregateProps( rootType: AggregateRootType ): Props = RegisterAggregate.props[K, I]( topic( rootType ) )
-  def relayProps( aggregatePath: ActorPath ): Props = RegisterRelay.props[K, I]( aggregatePath, keyIdExtractor )
+  def relayProps( aggregatePath: ActorPath ): Props = RegisterRelay.props( aggregatePath, keyIdExtractor )
   def relayClassifier( rootType: AggregateRootType ): String = rootType.name
 
   override def hashCode: Int = {

@@ -23,14 +23,6 @@ object RegisterAggregate {
   // def topic( rootType: String, keyType: String ): String = s"register/${rootType}/${keyType}"
 
   import scala.language.existentials
-  sealed trait Command
-
-  /**
-   * Register the mapping of the index key to idenifier.
-   */
-  case class Record( key: Any, id: Any ) extends Command
-
- //Todo: add Delist key
 
   sealed trait Event
 
@@ -52,6 +44,11 @@ object RegisterAggregate {
       boxedClass.cast( id ).asInstanceOf[T]
     }
   }
+
+  case class Withdrawn( key: Any, keyType: Class[_] ) extends Event
+
+  case class Revised( oldKey: Any, newKey: Any, keyType: Class[_] ) extends Event
+
 
   object AggregateRegistered {
     //todo find a better home; i.e., someplace utility like
@@ -113,7 +110,19 @@ with ActorLogging {
       case e @ Recorded( key: K, _, _, _ ) => {
         val id = e.mapIdTo[I]
         state += ( key -> id )
-        log debug s"aggregate recorded in register: ${key} -> ${id}"
+        log debug s"aggregate RECORDED in register: ${key} -> ${id}"
+      }
+
+      case Withdrawn( key: K, _ ) => {
+        state -= key
+        log debug s"aggregate WITHDRAWN from register: ${key}"
+      }
+
+      case e @ Revised( oldKey: K, newKey: K, _ ) if state.contains(oldKey) => {
+        val id = state( oldKey )
+        state += ( newKey -> id )
+        state -= oldKey
+        log debug s"aggregate REVISED register: ${oldKey} to ${newKey}"
       }
     }
   }
@@ -123,6 +132,8 @@ with ActorLogging {
    */
   override val receiveRecover: Receive = LoggingReceive {
     case e: Recorded => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
+    case e: Withdrawn => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
+    case e: Revised => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
     case SnapshotOffer( _, snapshot ) => trace.block( s"receiveRecover:SnapshotOffer(_, ${snapshot})" ) {
       state = snapshot.asInstanceOf[State]
     }
@@ -134,8 +145,22 @@ with ActorLogging {
    */
   override def receiveCommand: Receive = LoggingReceive {
     // Record commands are processed asynchronously to update the index with a new logical key to identifier mapping.
-    case Record( key: K, id: I ) => trace.block( s"receiveCommand:RecordAggregate($key, $id)" ) {
+    case Directive.Record( key: K, id: I ) => trace.block( s"RecordAggregate.receiveCommand:RECORD($key, $id)" ) {
       persistAsync( Recorded( key = key, keyType = keyType, id = id, idType = idType ) ) { e =>
+        updateState( e )
+        mediator ! Publish( topic = topic, msg = e )
+      }
+    }
+
+    case Directive.Withdraw( key: K ) => trace.block( s"RecordAggregate.receiveCommand:WITHDRAW($key)" ) {
+      persistAsync( Withdrawn( key = key, keyType = keyType ) ) { e => 
+        updateState( e )
+        mediator ! Publish( topic = topic, msg = e )
+      }
+    }
+
+    case Directive.Revise( oldKey: K, newKey: K ) => trace.block( s"RecordAggregate.receiveCommand:REVISE($oldKey, $newKey" ) {
+      persistAsync( Revised( oldKey = oldKey, newKey = newKey, keyType = keyType ) ) { e =>
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }

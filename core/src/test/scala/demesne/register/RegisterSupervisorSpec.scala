@@ -45,8 +45,8 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       override def toString: String = "FooAggregateRootType"
     }
 
-    val fooIdExtractor: KeyIdExtractor[String, Int] = {
-      case FooAdded(value) => (value, value.hashCode)
+    val fooIdExtractor: KeyIdExtractor = {
+      case FooAdded(value) => Directive.Record(value, value.hashCode)
     }
 
     def testSpec(
@@ -55,10 +55,10 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     )(
       specAgentProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterLocalAgent.props( makeTopic( specName.name, rt, classOf[String], classOf[Int]) ),
       specAggregateProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterAggregate.props( makeTopic(specName.name, rt, classOf[String], classOf[Int]) ),
-      specRelayProps: ActorPath => Props = (ap: ActorPath) => RegisterRelay.props[String, Int](ap, fooIdExtractor )
+      specRelayProps: ActorPath => Props = (ap: ActorPath) => RegisterRelay.props(ap, fooIdExtractor )
     ): AggregateIndexSpec[String, Int] = new AggregateIndexSpec[String, Int] {
       override val name: Symbol = specName
-      override val keyIdExtractor: KeyIdExtractor[String, Int] = fooIdExtractor
+      override val keyIdExtractor: KeyIdExtractor = fooIdExtractor
       override val relaySubscription: RelaySubscription = specRelaySubscription
       override def agentProps(rootType: AggregateRootType): Props = specAgentProps(rootType)
       override def aggregateProps(rootType: AggregateRootType): Props = specAggregateProps(rootType)

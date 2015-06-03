@@ -6,7 +6,7 @@ import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
 import demesne.register.local.RegisterLocalAgent
-import demesne.register.{ContextChannelSubscription, AggregateIndexSpec, RegisterBus, RegisterBusSubscription}
+import demesne.register._
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.V
@@ -64,10 +64,10 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       override def indexes: Seq[AggregateIndexSpec[_, _]] = {
         Seq(
           RegisterLocalAgent.spec[String, PostModule.TID]( 'author, RegisterBusSubscription /* not reqd - default */ ) {
-            case PostAdded( sourceId, PostContent(author, _, _) ) => (author, sourceId)
+            case PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId)
           },
           RegisterLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[PostAdded] ) ) {
-            case PostAdded( sourceId, PostContent(_, title, _) ) => (title, sourceId)
+            case PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record(title, sourceId)
           }
         )
       }

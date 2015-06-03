@@ -13,7 +13,7 @@ import scala.concurrent.duration._
 
 
 object RegisterRelay extends com.typesafe.scalalogging.LazyLogging {
-  def props[K, I]( registerAggregatePath: ActorPath, extractor: KeyIdExtractor[K, I] ): Props = {
+  def props( registerAggregatePath: ActorPath, extractor: KeyIdExtractor ): Props = {
     Props( new RegisterRelay( registerAggregatePath, extractor) )
   }
 }
@@ -21,12 +21,12 @@ object RegisterRelay extends com.typesafe.scalalogging.LazyLogging {
 /**
  * Created by damonrolfs on 10/27/14.
  */
-class RegisterRelay[K, I]( registerAggregatePath: ActorPath, extractor: KeyIdExtractor[K, I] )
+class RegisterRelay( registerAggregatePath: ActorPath, extractor: KeyIdExtractor )
 extends Actor
 with ActorLogging {
   val trace = Trace( getClass.safeSimpleName, log )
 
-  val fullExtractor: KeyIdExtractor[K, I] = {
+  val fullExtractor: KeyIdExtractor = {
     case m if extractor.isDefinedAt( m ) => extractor( m )
     case e @ Envelope( payload, _ ) if extractor.isDefinedAt( payload ) => extractor( payload )
   }
@@ -76,10 +76,9 @@ with ActorLogging {
 
   val active: Receive = LoggingReceive {
     case event if fullExtractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
-      val (key, id) = fullExtractor( event )
-      val recordAggregate = RegisterAggregate.Record( key = key, id = id )
-      proxy ! recordAggregate
-      log debug s"relayed to aggregate register: ${recordAggregate}"
+      val directive = fullExtractor( event )
+      proxy ! directive
+      log debug s"relayed to aggregate register: ${directive}"
     }
 
     case WaitingForStart => {
