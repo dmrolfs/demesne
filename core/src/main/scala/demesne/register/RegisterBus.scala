@@ -9,16 +9,18 @@ import peds.akka.publish.Publisher
 import peds.commons.log.Trace
 
 
-trait RegisterBusProvider {
-  def registerBus: RegisterBus
-}
-
-
 object RegisterBus extends LazyLogging {
   val trace = Trace[RegisterBus]
+
+  /**
+   * Message used to relay an event to the [[AggregateRegister]].
+   */
   case class RecordingEvent( topic: String, recording: Any )
 
-  def bus( b: RegisterBus, rootType: AggregateRootType )( spec: FinderSpec[_,_] ): Publisher = {
+  /**
+   * create a publisher corresponding to the system's register bus and a topic based on the root type.
+   */
+  def bus( b: RegisterBus, rootType: AggregateRootType )( spec: AggregateIndexSpec[_,_] ): Publisher = {
     ( event: Envelope ) => trace.block( "bus" ) {
       b.publish( RegisterBus.RecordingEvent( topic = spec.relayClassifier(rootType), recording = event ) )
       Left( event )
@@ -27,6 +29,8 @@ object RegisterBus extends LazyLogging {
 }
 
 /**
+ * RegisterBus connects the register mechanism via Akka's EventBus framework. The rebister bus is used to route aggregate
+ * events to the [[RegisterAggregate]] who maintains the local index for the Aggregate Root.
  * Created by damonrolfs on 11/1/14.
  */
 class RegisterBus extends ActorEventBus with SubchannelClassification {
@@ -47,3 +51,8 @@ class RegisterBus extends ActorEventBus with SubchannelClassification {
 
   override protected def publish( event: Event, subscriber: Subscriber ): Unit = subscriber ! event.recording
 }
+
+
+// trait RegisterBusProvider {
+//   def registerBus: RegisterBus
+// }

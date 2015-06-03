@@ -10,7 +10,7 @@ import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
 import demesne.factory._
 import demesne.register._
-import demesne.register.RegisterSupervisor.{ FinderRegistered, RegisterFinder }
+import demesne.register.RegisterSupervisor.{ IndexRegistered, RegisterIndex }
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ StartChild, ChildStarted }
 import peds.akka.supervision.{ IsolatedDefaultSupervisor, OneForOneStrategyFactory }
 import peds.commons.log.Trace
@@ -78,9 +78,9 @@ object DomainModel {
 
   type RootTypeRef = (ActorRef, AggregateRootType)
   type AggregateRegistry = Map[String, RootTypeRef]
-  type FinderSpecLike = FinderSpec[_, _]
+  type AggregateIndexSpecLike = AggregateIndexSpec[_, _]
   type RegisterAgent = RegisterEnvelope
-  type SpecAgents = Map[FinderSpecLike, RegisterAgent]
+  type SpecAgents = Map[AggregateIndexSpecLike, RegisterAgent]
 
 
   final case class DomainModelImpl private[demesne](
@@ -90,7 +90,7 @@ object DomainModel {
     // default dispatcher is okay since mutations are limited to bootstrap.
     val aggregateRegistry: Agent[AggregateRegistry] = Agent( Map.empty[String, RootTypeRef] )( system.dispatcher )
 
-    val specAgentRegistry: Agent[SpecAgents] = Agent( Map.empty[FinderSpecLike, RegisterAgent] )( system.dispatcher )
+    val specAgentRegistry: Agent[SpecAgents] = Agent( Map.empty[AggregateIndexSpecLike, RegisterAgent] )( system.dispatcher )
 
 //use this to make register actors per root type
     val repositorySupervisor: ActorRef = system.actorOf(
@@ -127,7 +127,7 @@ object DomainModel {
 
       val result = for {
         (_, rootType) <- aggregateRegistry() get rootName
-        spec <- rootType.finders find { _.name == registerName }
+        spec <- rootType.indexes find { _.name == registerName }
         agent <- specRegistry get spec
       } yield {
         trace( s"""rootName=$rootName; rootType=$rootType""" )
@@ -147,10 +147,10 @@ object DomainModel {
     ): Future[Unit] = trace.block( "registerAggregateType" ) {
       implicit val ec = system.dispatcher
 
-      val (registerFinderBudget, registerAgentBudget, startChildSupervisionBudget) = timeoutBudgets( to )
+      val (registerIndexBudget, registerAgentBudget, startChildSupervisionBudget) = timeoutBudgets( to )
 
       val result = for {
-        reg <- establishRegister( rootType, registerFinderBudget, registerAgentBudget )
+        reg <- establishRegister( rootType, registerIndexBudget, registerAgentBudget )
         ag <- registerAggregate( rootType, factory, startChildSupervisionBudget )
       } yield ()
 
@@ -163,7 +163,7 @@ object DomainModel {
 
     /**
      * Returns the individual timeout budget components for aggregate type registration.
-     * @return (Register Finder, Get Agent Register, Start Supervised Child)
+     * @return (Register Index, Get Agent Register, Start Supervised Child)
      */
     private def timeoutBudgets( to: Timeout ): (Timeout, Timeout, Timeout) = {
       //      implicit val askTimeout: Timeout = 900.millis //todo: move into configuration OR use one-time actor
@@ -205,18 +205,18 @@ object DomainModel {
 
     private def establishRegister( 
       rootType: AggregateRootType, 
-      registerFinderBudget: Timeout, 
+      registerIndexBudget: Timeout, 
       agentBudget: Timeout
     )( 
       implicit ec: ExecutionContext 
     ): Future[Unit] = trace.block( s"establishRegister($rootType)" ) {
       import akka.pattern.ask
-      trace( s"registration timeout budget = $registerFinderBudget" )
+      trace( s"registration timeout budget = $registerIndexBudget" )
       trace( s"agent timeout budget = $agentBudget" )
 
-      val registers = rootType.finders map { s =>
+      val registers = rootType.indexes map { s =>
         for {
-          registration <- registerSupervisor.ask( RegisterFinder(rootType, s) )( registerFinderBudget ).mapTo[FinderRegistered]  //todo askretry
+          registration <- registerSupervisor.ask( RegisterIndex(rootType, s) )( registerIndexBudget ).mapTo[IndexRegistered]  //todo askretry
           agentRef = registration.agentRef
           agentEnvelope <- agentRef.ask( GetRegister )( agentBudget ).mapTo[RegisterEnvelope]  // todo askretry
           ar <- specAgentRegistry alter { m => m + (s -> agentEnvelope) }
@@ -248,7 +248,7 @@ object DomainModel {
   ) with DemesneError
 
 
-  final case class NoRegisterForAggregateError private[demesne]( name: String, registry: Map[FinderSpecLike, RegisterAgent] )
+  final case class NoRegisterForAggregateError private[demesne]( name: String, registry: Map[AggregateIndexSpecLike, RegisterAgent] )
   extends IllegalStateException(
     s"""DomainModel does not have register for root type [${name}]:: specAgentRegistry [${registry.mkString("[",",","]")}]"""
   ) with DemesneError

@@ -6,7 +6,7 @@ import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
 import demesne.register.local.RegisterLocalAgent
-import demesne.register.{ContextChannelSubscription, FinderSpec, RegisterBus, RegisterBusSubscription}
+import demesne.register.{ContextChannelSubscription, AggregateIndexSpec, RegisterBus, RegisterBusSubscription}
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
 import peds.commons.V
@@ -61,7 +61,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       override val name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = PostActor.props( model, this, makeAuthorListing )
 
-      override def finders: Seq[FinderSpec[_, _]] = {
+      override def indexes: Seq[AggregateIndexSpec[_, _]] = {
         Seq(
           RegisterLocalAgent.spec[String, PostModule.TID]( 'author, RegisterBusSubscription /* not reqd - default */ ) {
             case PostAdded( sourceId, PostContent(author, _, _) ) => (author, sourceId)
@@ -87,8 +87,8 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
           import peds.commons.util.Chain._
 
           override def publish: Publisher = trace.block( "publish" ) {
-            val bus = RegisterBus.bus( model.registerBus, meta ) _
-            val buses = meta.finders
+            val bus = RegisterBus.bus( model.registerBus, meta )( _: AggregateIndexSpec[_,_] )
+            val buses = meta.indexes
                           .filter( _.relaySubscription == RegisterBusSubscription )
                           .foldLeft( silent ){ _ +> bus(_) }
             buses +> stream +> filter +> reliablePublisher( authorListing.path )
@@ -127,7 +127,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
     override val trace = Trace( "Post", log )
 
-    override val registerBus: RegisterBus = model.registerBus
+    // override val registerBus: RegisterBus = model.registerBus
 
     override var state: State = State()
 

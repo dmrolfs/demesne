@@ -33,14 +33,14 @@ class RegisterSupervisor( bus: RegisterBus )
   override def receive: Receive = super.receive orElse register
 
   val register: Receive = LoggingReceive {
-    case RegisterFinder( rootType, spec ) => trace.block( s"register:RegisterFinder($rootType, $spec)" ) {
+    case RegisterIndex( rootType, spec ) => trace.block( s"register:RegisterIndex($rootType, $spec)" ) {
       val subscription: SubscriptionClassifier = spec.relaySubscription match {
         case ContextChannelSubscription( channel ) => Left( (context, channel) )
         case RegisterBusSubscription => Right( (bus, spec.relayClassifier(rootType) ) )
       }
 
       context.actorOf(
-        FinderRegistration.props(
+        IndexRegistration.props(
           supervisor = self,
           constituency = constituencyFor( rootType, spec ),
           subscription = subscription,
@@ -60,8 +60,8 @@ object RegisterSupervisor extends StrictLogging {
 
   import scala.language.existentials
   sealed trait Message
-  case class RegisterFinder( rootType: AggregateRootType, spec: FinderSpec[_, _] ) extends Message
-  case class FinderRegistered( agentRef: ActorRef, rootType: AggregateRootType, spec: FinderSpec[_, _] ) extends Message
+  case class RegisterIndex( rootType: AggregateRootType, spec: AggregateIndexSpec[_, _] ) extends Message
+  case class IndexRegistered( agentRef: ActorRef, rootType: AggregateRootType, spec: AggregateIndexSpec[_, _] ) extends Message
 
 
   type ContextClassifier = (ActorContext, Class[_])
@@ -112,14 +112,14 @@ object RegisterSupervisor extends StrictLogging {
   trait ConstituencyProvider { outer: Actor =>
     def pathFor(
       registrantType: AggregateRootType,
-      spec: FinderSpec[_,_]
+      spec: AggregateIndexSpec[_,_]
     )(
       constituent: RegisterConstituent
     ): ActorPath = ActorPath.fromString(
       self.path + "/" + constituent.category.name + "-" + spec.topic( registrantType )
     )
 
-    def constituencyFor( registrantType: AggregateRootType, spec: FinderSpec[_, _] ): List[RegisterConstituentRef] = {
+    def constituencyFor( registrantType: AggregateRootType, spec: AggregateIndexSpec[_, _] ): List[RegisterConstituentRef] = {
       val p = pathFor( registrantType, spec ) _
       val aggregatePath = p( Aggregate )
 
@@ -132,22 +132,22 @@ object RegisterSupervisor extends StrictLogging {
   }
 
 
-  object FinderRegistration {
+  object IndexRegistration {
     def props(
       supervisor: ActorRef,
       constituency: List[RegisterConstituentRef],
       subscription: SubscriptionClassifier,
-      spec: FinderSpec[_, _],
+      spec: AggregateIndexSpec[_, _],
       registrant: ActorRef,
       registrantType: AggregateRootType
-    ): Props = Props( new FinderRegistration( supervisor, constituency, subscription, spec, registrant, registrantType ) )
+    ): Props = Props( new IndexRegistration( supervisor, constituency, subscription, spec, registrant, registrantType ) )
   }
 
-  class FinderRegistration(
+  class IndexRegistration(
     supervisor: ActorRef,
     constituency: List[RegisterConstituentRef],
     subscription: SubscriptionClassifier,
-    spec: FinderSpec[_, _],
+    spec: AggregateIndexSpec[_, _],
     registrant: ActorRef,
     registrantType: AggregateRootType
   ) extends Actor with ActorLogging {
@@ -244,7 +244,7 @@ object RegisterSupervisor extends StrictLogging {
     def handleNext( next: Map[RegisterConstituent, ActorRef] ): Unit = {
       if ( !next.isEmpty ) context become verify( next )
       else {
-        val msg = FinderRegistered( constituentRefs( Agent ), registrantType, spec )
+        val msg = IndexRegistered( constituentRefs( Agent ), registrantType, spec )
         log debug s"sending: $registrant ! $msg"
         registrant ! msg
         context stop self

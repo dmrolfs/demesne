@@ -20,7 +20,7 @@ object RegisterLocalAgent {
     specRelaySubscription: RelaySubscription = RegisterBusSubscription
   )(
     extractor: KeyIdExtractor[K, I]
-  ): FinderSpec[K, I] = new FinderSpec[K, I] {
+  ): AggregateIndexSpec[K, I] = new AggregateIndexSpec[K, I] {
     override val name: Symbol = specName
     override def keyIdExtractor: KeyIdExtractor[K, I] = extractor
     override def agentProps( rootType: AggregateRootType ): Props = props[K, I]( topic(rootType) )
@@ -36,7 +36,7 @@ object RegisterLocalAgent {
     /** Implements the Register trait through a locally cached Akka agent that is kept current with changes in the
       * register.
       */
-  class AgentRegister[K, I](
+  final class AgentRegister[K, I] private[local](
       agent: AkkaAgent[K, I]
   )(
     implicit override val ec: ExecutionContext
@@ -61,7 +61,7 @@ object RegisterLocalAgent {
 //      }
 //
 //      override def foreach[U](f: ((K, I)) => U): Unit = ???
-    }
+  }
 }
 
 /**

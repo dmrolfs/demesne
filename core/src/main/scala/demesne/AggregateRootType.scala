@@ -2,7 +2,7 @@ package demesne
 
 import akka.actor.{ActorRef, Props, SupervisorStrategy}
 import akka.contrib.pattern.ShardRegion
-import demesne.register.FinderSpec
+import demesne.register.AggregateIndexSpec
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.util._
@@ -44,7 +44,7 @@ trait AggregateRootType {
     override val snapshotInterval: FiniteDuration = 1.minute
   }
 
-  def finders: Seq[DomainModel.FinderSpecLike] = Seq.empty[DomainModel.FinderSpecLike]
+  def indexes: Seq[DomainModel.AggregateIndexSpecLike] = Seq.empty[DomainModel.AggregateIndexSpecLike]
 
   def repositorySupervisionStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 

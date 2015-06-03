@@ -191,7 +191,7 @@ object ConferenceModule extends AggregateRootModule { module =>
 
     override val trace = Trace( "Conference", log )
 
-    override val registerBus: RegisterBus = model.registerBus
+    // override val registerBus: RegisterBus = model.registerBus
 
     override var state: ConferenceState = _
 
