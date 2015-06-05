@@ -43,7 +43,7 @@ object RegisterLocalAgent {
   ) extends Register[K, I] {
     override def get( key: K ): Option[I] = agent.get get key
     override def toString: String = getClass.safeSimpleName + s"( ${agent.get.mkString( "," )} )"
-    override def futureGet( key: K ): Future[Option[I]] = agent.future(). map { _ get key }
+    override def futureGet( key: K ): Future[Option[I]] = agent.future() map { _ get key }
 
 //      override def map[BK, BI]( f: (Entry) => (BK, BI) ): Register[BK, BI] = {
 //        new AgentRegister[BK, BI]( Agent( agent().map(f) )( ec ) )
