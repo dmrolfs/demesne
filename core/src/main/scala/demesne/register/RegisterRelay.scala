@@ -78,7 +78,7 @@ with ActorLogging {
     case event if fullExtractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
       val directive = fullExtractor( event )
       proxy ! directive
-      log debug s"relayed to aggregate register: ${directive}"
+      log info s"relayed to aggregate register: ${directive}"
     }
 
     case WaitingForStart => {
@@ -88,6 +88,12 @@ with ActorLogging {
   }
 
   override def unhandled( message: Any ): Unit = {
-    log warning  s"RELAY_UNHANDLED ${message}; extractor-defined-at=${fullExtractor.isDefinedAt(message)}"
+    message match {
+      case _: akka.actor.FSM.CurrentState[_] => ()
+      case _: akka.actor.FSM.Transition[_] => ()
+      case _: akka.contrib.pattern.ReliableProxy.TargetChanged => ()
+      case m => log warning  s"RELAY_UNHANDLED ${message}; extractor-defined-at=${fullExtractor.isDefinedAt(message)}"
+    }
+    
   }
 }

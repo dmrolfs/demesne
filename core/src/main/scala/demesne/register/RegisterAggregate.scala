@@ -45,7 +45,7 @@ object RegisterAggregate {
     }
   }
 
-  case class Withdrawn( key: Any, keyType: Class[_] ) extends Event
+  case class Withdrawn( identifier: Any, idType: Class[_] ) extends Event
 
   case class Revised( oldKey: Any, newKey: Any, keyType: Class[_] ) extends Event
 
@@ -110,19 +110,27 @@ with ActorLogging {
       case e @ Recorded( key: K, _, _, _ ) => {
         val id = e.mapIdTo[I]
         state += ( key -> id )
-        log debug s"aggregate RECORDED in register: ${key} -> ${id}"
+        log debug s"RegisterAggregate RECORDED: ${key} -> ${id}"
       }
 
-      case Withdrawn( key: K, _ ) => {
-        state -= key
-        log debug s"aggregate WITHDRAWN from register: ${key}"
+      case Withdrawn( identifier: I, _ ) => {
+        val key = state collectFirst { case kv if kv._2 == identifier => kv._1 }
+
+        key match {
+          case Some(k) => {
+            state -= k
+            log info s"RegisterAggregate WITHDRAWN: ${k}"
+          }
+
+          case None => log info s"RegisterAggregate could find identifier [$identifier] to withdraw"
+        }
       }
 
       case e @ Revised( oldKey: K, newKey: K, _ ) if state.contains(oldKey) => {
         val id = state( oldKey )
         state += ( newKey -> id )
         state -= oldKey
-        log debug s"aggregate REVISED register: ${oldKey} to ${newKey}"
+        log debug s"RegisterAggregate REVISED: ${oldKey} to ${newKey}"
       }
     }
   }
@@ -152,8 +160,8 @@ with ActorLogging {
       }
     }
 
-    case Directive.Withdraw( key: K ) => trace.block( s"RecordAggregate.receiveCommand:WITHDRAW($key)" ) {
-      persistAsync( Withdrawn( key = key, keyType = keyType ) ) { e => 
+    case w: Directive.Withdraw[I] => trace.block( s"RecordAggregate.receiveCommand:WITHDRAW(${w.identifier})" ) {
+      persistAsync( Withdrawn( identifier = w.identifier, idType = idType ) ) { e => 
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }
@@ -175,5 +183,10 @@ with ActorLogging {
     case "print" => println( s"register state = ${state}" )
   }
 
-  override def unhandled( message: Any ): Unit = log warning s"REGISTER UNHANDLED ${message}"
+  override def unhandled( message: Any ): Unit = {
+    message match {
+      case _: akka.persistence.RecoveryCompleted => ()
+      case m => log warning s"REGISTER UNHANDLED ${message}"
+    }
+  }
 }

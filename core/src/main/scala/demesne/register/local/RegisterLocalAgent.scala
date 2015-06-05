@@ -108,7 +108,12 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
       register send { r => r + ( key -> id ) }
     }
 
-    case RegisterAggregate.Withdrawn( key: K, _ ) => trace.briefBlock( s"receive:WITHDRAWN($key)") { register send { r => r - key } }
+    case RegisterAggregate.Withdrawn( identifier: I, _ ) => trace.briefBlock( s"receive:WITHDRAWN($identifier)") { 
+      register send { r => 
+        val result = r collectFirst { case kv if kv._2 == identifier => r - kv._1 }
+        result getOrElse r
+      } 
+    }
 
     case RegisterAggregate.Revised( oldKey: K, newKey: K, _ ) => trace.briefBlock( s"receive:REVISED($oldKey, $newKey)" ) {
       register send { r => 
