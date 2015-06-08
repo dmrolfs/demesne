@@ -220,7 +220,7 @@ object OrderModule extends AggregateRootModule { module =>
     override var state: OrderState = _
     var expirationMessager: Cancellable = _
 
-    override def transitionFor( state: OrderState ): Transition = {
+    override def transitionFor( oldState: OrderState, newState: OrderState ): Transition = {
       case _: OrderPlaced => context.become( around( reserved orElse common ) )
       case _: OrderConfirmed => context.become( around( confirmed orElse common ) )
       case _: OrderExpired => context.become( around( expired ) )
@@ -233,7 +233,7 @@ object OrderModule extends AggregateRootModule { module =>
       case c @ RegisterToConference( orderId, conferenceId, seats ) if validate( c ) == Success => {
         val expiration = reservationAutoExpiration.later
         persist( OrderPlaced( orderId, conferenceId, seats, Some(expiration), generateHandle ) ) { event =>
-          state = accept( event )
+          accept( event )
           pricingRetriever ! PricingRetriever.CalculateTotal( conferenceId, seats )
           publish( event )
         }
@@ -246,7 +246,7 @@ object OrderModule extends AggregateRootModule { module =>
       // no need to convertItems
       case c @ RegisterToConference( orderId, conferenceId, seats ) if validate( c ) == Success => {
         persist( OrderUpdated( orderId, seats ) ) { event =>
-          state = accept( event )
+          accept( event )
           pricingRetriever ! PricingRetriever.CalculateTotal( conferenceId, seats )
           publish( event )
         }
@@ -260,7 +260,7 @@ object OrderModule extends AggregateRootModule { module =>
           reservationExpiration = expiration,
           seats = reserved
         )
-        persist( completed ) { event => state = acceptAndPublish( event ) }
+        persist( completed ) { event => acceptAndPublish( event ) }
       }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[39]
@@ -273,7 +273,7 @@ object OrderModule extends AggregateRootModule { module =>
         )
 
         persist( partiallyReserved ) { event =>
-          state = accept( event )
+          accept( event )
           pricingRetriever ! PricingRetriever.CalculateTotal( state.conferenceId, reserved )
           publish( event )
         }
@@ -281,17 +281,17 @@ object OrderModule extends AggregateRootModule { module =>
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[62]
       // Conference/Registration/Order.cs[145]
-      case RejectOrder( orderId ) => persist( OrderExpired( orderId ) ) { e => state = acceptAndPublish( e ) }
+      case RejectOrder( orderId ) => persist( OrderExpired( orderId ) ) { e => acceptAndPublish( e ) }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[73]
       // Conference/Registration/Order.cs[145]
       case AssignRegistrantDetails( orderId, firstName, lastName, email ) => {
-        persist( OrderRegistrantAssigned( orderId, firstName, lastName, email ) ) { e => state = acceptAndPublish( e ) }
+        persist( OrderRegistrantAssigned( orderId, firstName, lastName, email ) ) { e => acceptAndPublish( e ) }
       }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[80]
       // Conference/Registration/Order.cs[153]
-      case ConfirmOrder( orderId ) => persist( OrderConfirmed( orderId ) ) { e => state = acceptAndPublish( e ) }
+      case ConfirmOrder( orderId ) => persist( OrderConfirmed( orderId ) ) { e => acceptAndPublish( e ) }
     }
 
     def confirmed: Receive = Actor.emptyBehavior
@@ -308,7 +308,7 @@ object OrderModule extends AggregateRootModule { module =>
           isFreeOfCharge = ( total == 0D )
         )
 
-        persist( totalCalculated ) { e => state = acceptAndPublish( e ) }
+        persist( totalCalculated ) { e => acceptAndPublish( e ) }
       }
     }
 

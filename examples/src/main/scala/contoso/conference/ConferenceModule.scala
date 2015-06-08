@@ -195,7 +195,7 @@ object ConferenceModule extends AggregateRootModule { module =>
 
     override var state: ConferenceState = _
 
-    override def transitionFor( state: ConferenceState ): Transition = {
+    override def transitionFor( oldState: ConferenceState, newState: ConferenceState ): Transition = {
       case _: ConferenceCreated => context.become( around( draft ) )
       case _: ConferencePublished => context.become( around( published ) )
       case _: ConferenceUnpublished => context.become( around( draft ) )
@@ -215,7 +215,7 @@ object ConferenceModule extends AggregateRootModule { module =>
         ).mapTo[ConferenceContext.SlugStatus]
 
         askForSlugStatus onComplete {
-          case Success( status ) => persist( ConferenceCreated( id, conference ) ) { event => state = acceptAndPublish( event ) }
+          case Success( status ) => persist( ConferenceCreated( id, conference ) ) { event => acceptAndPublish( event ) }
           case Failure( ex ) => throw new ConferenceCreateException( ex )
         }
       }
@@ -224,28 +224,28 @@ object ConferenceModule extends AggregateRootModule { module =>
 
     def draft: Receive = LoggingReceive {
       case UpdateConference( _, conference ) => {
-        persist( ConferenceCreated( state.id, conference ) ) { event => state = acceptAndPublish( event ) }
+        persist( ConferenceCreated( state.id, conference ) ) { event => acceptAndPublish( event ) }
       }
 
       case CreateSeat( _, seat ) => {
-        persist( SeatCreated( state.id, seat ) ) { event => state = acceptAndPublish( event ) }
+        persist( SeatCreated( state.id, seat ) ) { event => acceptAndPublish( event ) }
       }
 
       case UpdateSeat( _, seat ) => {
-        persist( SeatUpdated( state.id, seat ) ) { event => state = acceptAndPublish( event ) }
+        persist( SeatUpdated( state.id, seat ) ) { event => acceptAndPublish( event ) }
       }
 
       case DeleteSeat( _, seatId ) => {
-        persist( SeatDeleted( state.id, seatId ) ) { event => state = acceptAndPublish( event ) }
+        persist( SeatDeleted( state.id, seatId ) ) { event => acceptAndPublish( event ) }
       }
 
       case Publish => {
-        persist( ConferencePublished( state.id ) ) { event => state = acceptAndPublish( event ) }
+        persist( ConferencePublished( state.id ) ) { event => acceptAndPublish( event ) }
       }
     }
 
     def published: Receive = LoggingReceive {
-      case Unpublish => { persist( ConferenceUnpublished( state.id ) ) { event => state = acceptAndPublish( event ) } }
+      case Unpublish => { persist( ConferenceUnpublished( state.id ) ) { event => acceptAndPublish( event ) } }
     }
 
     def common: Receive = peds.commons.util.emptyBehavior[Any, Unit]

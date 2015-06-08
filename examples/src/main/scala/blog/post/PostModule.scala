@@ -137,7 +137,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
     override var state: State = State()
 
-    override def transitionFor( state: State ): Transition = {
+    override def transitionFor( oldState: State, newState: State ): Transition = {
       case _: PostAdded => context become around( created )
       case _: PostPublished => context become around( published )
       case _: Deleted => context become around( quiescent )
@@ -153,7 +153,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
         persist( PostAdded( id, content ) ) { event =>
           trace.block( s"persist(${event})" ) {
             trace( s"before accept state = ${state}" )
-            state = accept( event )
+            accept( event )
             trace( s"after accept state = ${state}" )
             log info s"New post saved: ${state.content.title}"
             trace.block( s"publish($event)" ) { publish( event ) }
@@ -166,24 +166,24 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       case GetContent( id ) => sender() !+ state.content
 
       case ChangeBody( id, body ) => persist( BodyChanged( id, body ) ) { event =>
-        state = accept( event )
+        accept( event )
         log info s"Post changed: ${state.content.title}"
         publish( event )
       }
 
       case ChangeTitle( id, newTitle ) => persist( TitleChanged(id, state.content.title, newTitle) ) { event => 
-        state = acceptAndPublish( event ) 
+        acceptAndPublish( event ) 
       }
 
       case Publish( postId ) => {
         persist( PostPublished( postId, state.content.author, state.content.title ) ) { event =>
-          state = accept( event )
+          accept( event )
           log info s"Post published: ${state.content.title}"
           publish( event )
         }
       }
 
-      case Delete( id ) => persist( Deleted(id) ) { event => state = acceptAndPublish( event ) }
+      case Delete( id ) => persist( Deleted(id) ) { event => acceptAndPublish( event ) }
     }
 
     val published: Receive = LoggingReceive {

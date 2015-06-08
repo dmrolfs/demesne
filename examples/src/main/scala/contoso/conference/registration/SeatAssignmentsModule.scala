@@ -150,7 +150,7 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
 
     override var state: SeatAssignmentsState = _
 
-    override def transitionFor( state: SeatAssignmentsState ): Transition = {
+    override def transitionFor( oldState: SeatAssignmentsState, newState: SeatAssignmentsState ): Transition = {
       case _: SeatAssignmentsCreated => context.become( around( active orElse unhandled ) )
       // case _: SeatAssigned => context.become( active orElse unhandled )
       // case _: SeatAssignmentsUpdated => context.become( active orElse unhandled )
@@ -189,7 +189,7 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
         }
 
         val assignments = makeAssignments( seats )
-        persist( SeatAssignmentsCreated( id, orderId, assignments) ) { event => state = acceptAndPublish( event ) }
+        persist( SeatAssignmentsCreated( id, orderId, assignments) ) { event => acceptAndPublish( event ) }
       }
     }
 
@@ -198,12 +198,12 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
       if ( state.seats.isDefinedAt( position ) && (validate(attendee) == Success) ) => {
         val current = state.seats( position )
         val events = makeAssignmentEvents( current, attendee, position )
-        events foreach { e => persist( e ) { event => state = acceptAndPublish( event ) } }
+        events foreach { e => persist( e ) { event => acceptAndPublish( event ) } }
       }
 
       case UnassignSeat( id, seatTypeId, position )
       if ( state.seats.isDefinedAt( position ) && state.seats(position).attendee.isDefined ) => {
-        persist( SeatUnassigned( id, position ) ) { event => state = acceptAndPublish( event ) }
+        persist( SeatUnassigned( id, position ) ) { event => acceptAndPublish( event ) }
       }
     }
 

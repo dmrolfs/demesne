@@ -68,9 +68,9 @@ object RegisterAggregate {
 }
 
 /**
- * [[RegisterAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are [[Record]]ed.
- * Recorded events are published via a distrubuted pub/sub mechanism to a relay who makes sure the index is recorded in a 
- * local Register Akka Agent for easier access.
+ * [[RegisterAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are
+ * [[demesne.register.Directive.Record]]ed. Recorded events are published via a distrubuted pub/sub mechanism to a relay who
+ * makes sure the index is recorded in a local Register Akka Agent for easier access.
  * Created by damonrolfs on 10/26/14.
  */
 class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String )

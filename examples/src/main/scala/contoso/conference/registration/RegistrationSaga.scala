@@ -139,7 +139,7 @@ object RegistrationSagaModule extends SagaModule { module =>
     import context.dispatcher
     var expirationMessager: Cancellable = _
 
-    override def transitionFor( state: RegistrationSagaState ): Transition = {
+    override def transitionFor( oldState: RegistrationSagaState, newState: RegistrationSagaState ): Transition = {
       case _: OrderPlaced => context.become( around( awaitingReservationConfirmation orElse common ) )
       case _: OrderUpdated => context.become( around( awaitingReservationConfirmation orElse common ) )
       case _: SeatsReserved => {

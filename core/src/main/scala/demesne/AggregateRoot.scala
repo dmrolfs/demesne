@@ -33,7 +33,9 @@ with ActorLogging {
 
   val meta: AggregateRootType
 
-  var state: S
+  // var state: S
+  def state: S
+  def state_=( newState: S ): Unit
 
 
   override def around( r: Receive ): Receive = LoggingReceive {
@@ -48,9 +50,10 @@ with ActorLogging {
 
 
   def accept( event: Any ): S = {
-    val result = implicitly[AggregateStateSpecification[S]].accept( state, event )
-    transition( event )
-    result
+    val newState = implicitly[AggregateStateSpecification[S]].accept( state, event )
+    transition( event, state, newState )
+    state = newState
+    newState
   }
 
   def acceptAndPublish( event: Any ): S = {
@@ -64,10 +67,10 @@ with ActorLogging {
 
   type Transition = PartialFunction[Any, Unit]
   //todo: considering removing - does this add value or make code harder to figure out?
-  def transitionFor( state: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]()
+  def transitionFor( oldState: S, newState: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]()
 
-  def transition( event: Any ): Unit = {
-    val core = transitionFor( state )
+  def transition( event: Any, oldState: S, newState: S ): Unit = {
+    val core = transitionFor( oldState, newState )
     val t: Transition = ( core andThen infoTransitioning ) orElse infoNotTransitioning
 
     event match {
