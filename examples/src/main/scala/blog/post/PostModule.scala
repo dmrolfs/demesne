@@ -115,7 +115,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       private val bodyLens = lens[State] >> 'content >> 'body
       private val titleLens = lens[State] >> 'content >> 'title
 
-      override def acceptance( state: State ): PartialFunction[Any, State] = {
+      override def acceptance( state: State ): Acceptance = {
         case PostAdded( id, c ) => State( id = id, content = c, published = false )
         case BodyChanged( _, body: String ) => bodyLens.set( state )( body )
         case TitleChanged( _, _, newTitle ) => titleLens.set( state )( newTitle )
