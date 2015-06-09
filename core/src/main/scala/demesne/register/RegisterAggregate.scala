@@ -23,14 +23,6 @@ object RegisterAggregate {
   // def topic( rootType: String, keyType: String ): String = s"register/${rootType}/${keyType}"
 
   import scala.language.existentials
-  sealed trait Command
-
-  /**
-   * Register the mapping of the index key to idenifier.
-   */
-  case class Record( key: Any, id: Any ) extends Command
-
- //Todo: add Delist key
 
   sealed trait Event
 
@@ -53,6 +45,11 @@ object RegisterAggregate {
     }
   }
 
+  case class Withdrawn( identifier: Any, idType: Class[_] ) extends Event
+
+  case class Revised( oldKey: Any, newKey: Any, keyType: Class[_] ) extends Event
+
+
   object AggregateRegistered {
     //todo find a better home; i.e., someplace utility like
     val toBoxed: Map[Class[_], Class[_]] = Map(
@@ -71,9 +68,9 @@ object RegisterAggregate {
 }
 
 /**
- * [[RegisterAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are [[Record]]ed.
- * Recorded events are published via a distrubuted pub/sub mechanism to a relay who makes sure the index is recorded in a 
- * local Register Akka Agent for easier access.
+ * [[RegisterAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are
+ * [[demesne.register.Directive.Record]]ed. Recorded events are published via a distrubuted pub/sub mechanism to a relay who
+ * makes sure the index is recorded in a local Register Akka Agent for easier access.
  * Created by damonrolfs on 10/26/14.
  */
 class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String )
@@ -113,7 +110,27 @@ with ActorLogging {
       case e @ Recorded( key: K, _, _, _ ) => {
         val id = e.mapIdTo[I]
         state += ( key -> id )
-        log debug s"aggregate recorded in register: ${key} -> ${id}"
+        log debug s"RegisterAggregate RECORDED: ${key} -> ${id}"
+      }
+
+      case Withdrawn( identifier: I, _ ) => {
+        val key = state collectFirst { case kv if kv._2 == identifier => kv._1 }
+
+        key match {
+          case Some(k) => {
+            state -= k
+            log info s"RegisterAggregate WITHDRAWN: ${k}"
+          }
+
+          case None => log info s"RegisterAggregate could find identifier [$identifier] to withdraw"
+        }
+      }
+
+      case e @ Revised( oldKey: K, newKey: K, _ ) if state.contains(oldKey) => {
+        val id = state( oldKey )
+        state += ( newKey -> id )
+        state -= oldKey
+        log debug s"RegisterAggregate REVISED: ${oldKey} to ${newKey}"
       }
     }
   }
@@ -123,6 +140,8 @@ with ActorLogging {
    */
   override val receiveRecover: Receive = LoggingReceive {
     case e: Recorded => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
+    case e: Withdrawn => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
+    case e: Revised => trace.block( s"receiveRecover:$e" ) { updateState( e ) }
     case SnapshotOffer( _, snapshot ) => trace.block( s"receiveRecover:SnapshotOffer(_, ${snapshot})" ) {
       state = snapshot.asInstanceOf[State]
     }
@@ -134,8 +153,22 @@ with ActorLogging {
    */
   override def receiveCommand: Receive = LoggingReceive {
     // Record commands are processed asynchronously to update the index with a new logical key to identifier mapping.
-    case Record( key: K, id: I ) => trace.block( s"receiveCommand:RecordAggregate($key, $id)" ) {
+    case Directive.Record( key: K, id: I ) => trace.block( s"RecordAggregate.receiveCommand:RECORD($key, $id)" ) {
       persistAsync( Recorded( key = key, keyType = keyType, id = id, idType = idType ) ) { e =>
+        updateState( e )
+        mediator ! Publish( topic = topic, msg = e )
+      }
+    }
+
+    case w: Directive.Withdraw[I] => trace.block( s"RecordAggregate.receiveCommand:WITHDRAW(${w.identifier})" ) {
+      persistAsync( Withdrawn( identifier = w.identifier, idType = idType ) ) { e => 
+        updateState( e )
+        mediator ! Publish( topic = topic, msg = e )
+      }
+    }
+
+    case Directive.Revise( oldKey: K, newKey: K ) => trace.block( s"RecordAggregate.receiveCommand:REVISE($oldKey, $newKey" ) {
+      persistAsync( Revised( oldKey = oldKey, newKey = newKey, keyType = keyType ) ) { e =>
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }
@@ -150,5 +183,18 @@ with ActorLogging {
     case "print" => println( s"register state = ${state}" )
   }
 
-  override def unhandled( message: Any ): Unit = log warning s"REGISTER UNHANDLED ${message}"
+  override def unhandled( message: Any ): Unit = {
+    message match {
+      case _: akka.persistence.RecoveryCompleted => ()
+
+      case Directive.Record(k, i) => {
+        log.warning( 
+          s"REGISTER UNHANDLED ${message} - verify ${topic} AggregateRootType indexes() type parameterization " +
+          s"matches [${k.getClass.safeSimpleName}, ${i.getClass.safeSimpleName}]"
+        )
+      }
+
+      case m => log warning s"REGISTER UNHANDLED ${message}"
+    }
+  }
 }

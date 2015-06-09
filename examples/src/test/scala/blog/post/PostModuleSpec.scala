@@ -11,12 +11,13 @@ import peds.commons.log.Trace
 
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
+import com.typesafe.scalalogging.LazyLogging
 
 
 /**
  * Created by damonrolfs on 9/18/14.
  */
-class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures {
+class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures with LazyLogging {
 
   private val trace = Trace[PostModuleSpec]
 
@@ -224,11 +225,11 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "recorded in author register after post added via bus" taggedAs(WIP) in { fixture: Fixture =>
+    "recorded in author register after post added via bus" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.aggregateRootType
-      val ar = model.aggregateRegisterFor( rt, 'author )
+      val ar = model.aggregateRegisterFor[String]( rt, 'author )
       ar.isRight mustBe true
       for {
         register <- ar 
@@ -256,7 +257,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       import fixture._
 
       val rt = PostModule.aggregateRootType
-      val ar = model.aggregateRegisterFor( rt, 'title )
+      val ar = model.aggregateRegisterFor[String]( rt, 'title )
       ar.isRight mustBe true
       for {
         register <- ar 
@@ -286,6 +287,145 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
   //      countDown await 75.millis.dilated
         register.get( "Test Add" ) mustBe Some(id)
+      }
+    }
+
+    "withdrawn title in register after post delete via event stream" taggedAs(WIP) in { fixture: Fixture =>
+      import fixture._
+
+      val rt = PostModule.aggregateRootType
+      val ar = model.aggregateRegisterFor[String]( rt, 'author )
+      ar.isRight mustBe true
+      val tr = model.aggregateRegisterFor[String]( rt, 'title )
+      tr.isRight mustBe true
+      for {
+        authorRegister <- ar
+        titleregister <- tr 
+      } {
+        val p = TestProbe()
+
+        val id = PostModule.nextId
+        val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
+        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+        system.eventStream.subscribe( p.ref, classOf[Envelope] )
+
+        val post = PostModule.aggregateOf( id )
+        post !+ AddPost( id, content )
+
+        bus.expectMsgPF( hint = "post-added" ) {
+          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        }
+
+        p.expectMsgPF( hint = "post-added stream" ) {
+          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        }
+
+        val countDownAdd = new CountDownFunction[String]
+        countDownAdd await 200.millis.dilated
+
+        whenReady( titleregister.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
+
+  //      countDown await 75.millis.dilated
+        titleregister.get( "Test Add" ) mustBe Some(id)
+
+        post !+ Delete( id )
+
+        bus.expectMsgPF( hint = "post-deleted" ) {
+          case Envelope( payload: Deleted, _ ) => payload.sourceId mustBe id
+        }
+
+        p.expectMsgPF( hint = "post-deleted stream" ) {
+          case Envelope( payload: Deleted, _ ) => payload.sourceId mustBe id
+        }
+
+        val countDownChange = new CountDownFunction[String]
+        countDownChange await 200.millis.dilated
+
+        whenReady( titleregister.futureGet( "Test Add" ) ) { result => 
+          logger error s"HERE ****: result(Test Add) = $result"
+          result mustBe None
+        }
+
+        whenReady( authorRegister.futureGet( "Damon" ) ) { result => 
+          logger error s"HERE ****: result(Damon) = $result"
+          result mustBe None
+        }
+      }
+    }
+
+    "revised title in register after post title change via event stream" in { fixture: Fixture =>
+      import fixture._
+
+      val rt = PostModule.aggregateRootType
+      val ar = model.aggregateRegisterFor[String]( rt, 'author )
+      ar.isRight mustBe true
+      val tr = model.aggregateRegisterFor[String]( rt, 'title )
+      tr.isRight mustBe true
+      for {
+        authorRegister <- ar
+        titleRegister <- tr 
+      } {
+        val p = TestProbe()
+
+        val id = PostModule.nextId
+        val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
+        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+        system.eventStream.subscribe( p.ref, classOf[Envelope] )
+
+        val post = PostModule.aggregateOf( id )
+        post !+ AddPost( id, content )
+
+        bus.expectMsgPF( hint = "post-added" ) {
+          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        }
+
+        p.expectMsgPF( hint = "post-added stream" ) {
+          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        }
+
+        val countDownAdd = new CountDownFunction[String]
+        countDownAdd await 200.millis.dilated
+
+        whenReady( authorRegister.futureGet( "Damon" ) ) { result => result mustBe Some(id) }
+        whenReady( titleRegister.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
+
+  //      countDown await 75.millis.dilated
+        authorRegister.get( "Damon" ) mustBe Some(id)
+        titleRegister.get( "Test Add" ) mustBe Some(id)
+
+        post !+ ChangeTitle( id, "New Title" )
+
+        bus.expectMsgPF( hint = "title-change" ) {
+          case Envelope( payload: TitleChanged, _ ) => {
+            payload.oldTitle mustBe "Test Add"
+            payload.newTitle mustBe "New Title"
+          }
+        }
+
+        p.expectMsgPF( hint = "post-title change stream" ) {
+          case Envelope( payload: TitleChanged, _ ) => {
+            payload.oldTitle mustBe "Test Add"
+            payload.newTitle mustBe "New Title"
+          }
+        }
+
+        val countDownChange = new CountDownFunction[String]
+        countDownChange await 200.millis.dilated
+
+        whenReady( titleRegister.futureGet( "New Title" ) ) { result => 
+          logger error s"HERE ****: result(New Title) = $result"
+          result mustBe Some(id) 
+        }
+
+        whenReady( titleRegister.futureGet( "Test Add" ) ) { result => 
+          logger error s"HERE ****: result(Test Add) = $result"
+          result mustBe None 
+        }
+
+        whenReady( authorRegister.futureGet( "Damon" ) ) { result => 
+          logger error s"HERE ****: result(Damon) = $result"
+          result mustBe Some(id)
+        }
       }
     }
   }

@@ -19,10 +19,10 @@ object RegisterLocalAgent {
     specName: Symbol,
     specRelaySubscription: RelaySubscription = RegisterBusSubscription
   )(
-    extractor: KeyIdExtractor[K, I]
+    extractor: KeyIdExtractor
   ): AggregateIndexSpec[K, I] = new AggregateIndexSpec[K, I] {
     override val name: Symbol = specName
-    override def keyIdExtractor: KeyIdExtractor[K, I] = extractor
+    override def keyIdExtractor: KeyIdExtractor = extractor
     override def agentProps( rootType: AggregateRootType ): Props = props[K, I]( topic(rootType) )
     override def relaySubscription: RelaySubscription = specRelaySubscription
   }
@@ -43,7 +43,7 @@ object RegisterLocalAgent {
   ) extends Register[K, I] {
     override def get( key: K ): Option[I] = agent.get get key
     override def toString: String = getClass.safeSimpleName + s"( ${agent.get.mkString( "," )} )"
-    override def futureGet( key: K ): Future[Option[I]] = agent.future(). map { _ get key }
+    override def futureGet( key: K ): Future[Option[I]] = agent.future() map { _ get key }
 
 //      override def map[BK, BI]( f: (Entry) => (BK, BI) ): Register[BK, BI] = {
 //        new AgentRegister[BK, BI]( Agent( agent().map(f) )( ec ) )
@@ -103,9 +103,27 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
   }
 
   val ready: Receive = LoggingReceive {
-    case e @ RegisterAggregate.Recorded( key: K, _, _, _ ) => trace.block( s"receive:${e}" ) {
+    case e @ RegisterAggregate.Recorded( key: K, _, _, _ ) => trace.briefBlock( s"receive:RECORDED($key)" ) {
       val id = e.mapIdTo[I] // cast here to handled boxed primitive cases
       register send { r => r + ( key -> id ) }
+    }
+
+    case RegisterAggregate.Withdrawn( identifier: I, _ ) => trace.briefBlock( s"receive:WITHDRAWN($identifier)") { 
+      register send { r => 
+        val result = r collectFirst { case kv if kv._2 == identifier => r - kv._1 }
+        result getOrElse r
+      } 
+    }
+
+    case RegisterAggregate.Revised( oldKey: K, newKey: K, _ ) => trace.briefBlock( s"receive:REVISED($oldKey, $newKey)" ) {
+      register send { r => 
+        val result = r get oldKey map { id =>
+          val rAdded = r + ( newKey -> id )
+          rAdded - oldKey
+        }
+
+        result getOrElse r
+      }
     }
 
     case GetRegister => sender() ! RegisterEnvelope( new AgentRegister( register )( dispatcher ) )

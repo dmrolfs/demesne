@@ -25,16 +25,16 @@ trait DomainModel {
   def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory )( implicit to: Timeout ): Future[Unit]
   def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = aggregateOf( rootType.name, id )
   def aggregateOf( name: String, id: Any ): ActorRef
-  def aggregateRegisterFor( rootType: AggregateRootType, name: Symbol ): DomainModel.AggregateRegisterE[rootType.TID] = {
-    aggregateRegisterFor[rootType.TID]( rootType.name, name )
+  def aggregateRegisterFor[K]( rootType: AggregateRootType, name: Symbol ): DomainModel.AggregateRegisterE[K, rootType.TID] = {
+    aggregateRegisterFor[K, rootType.TID]( rootType.name, name )
   }
-  def aggregateRegisterFor[TID]( rootName: String, registerName: Symbol ): DomainModel.AggregateRegisterE[TID]
+  def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): DomainModel.AggregateRegisterE[K, TID]
   def shutdown(): Unit
 }
 
 object DomainModel {
-  type AggregateRegister[TID] = Register[String, TID]
-  type AggregateRegisterE[TID] = \/[Throwable, AggregateRegister[TID]]
+  type AggregateRegister[K, TID] = Register[K, TID]
+  type AggregateRegisterE[K, TID] = \/[Throwable, AggregateRegister[K, TID]]
 
   import scala.concurrent.ExecutionContext.global
   val trace = Trace[DomainModel.type]
@@ -119,7 +119,7 @@ object DomainModel {
       }
     }
 
-    override def aggregateRegisterFor[TID]( rootName: String, registerName: Symbol ): AggregateRegisterE[TID] = trace.block( s"registerFor($rootName, $registerName)" ) {
+    override def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): AggregateRegisterE[K, TID] = trace.block( s"registerFor($rootName, $registerName)" ) {
       trace( s"""aggregateRegistry = ${aggregateRegistry().mkString("[",",","]")}""")
       trace( s"""specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""" )
 
@@ -136,7 +136,7 @@ object DomainModel {
         agent
       }
 
-      result map { _.mapTo[String, TID].right } getOrElse NoRegisterForAggregateError( rootName, specRegistry ).left[Register[String, TID]]
+      result map { _.mapTo[K, TID].right } getOrElse NoRegisterForAggregateError( rootName, specRegistry ).left[Register[K, TID]]
     }
 
     override def registerAggregateType(

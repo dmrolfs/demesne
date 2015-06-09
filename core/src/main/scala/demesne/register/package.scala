@@ -32,8 +32,8 @@ import scala.reflect.ClassTag
  */
 package object register {
 
-  type KeyIdExtractor[K, I] = PartialFunction[Any, (K, I)]
-
+  type KeyIdExtractor = PartialFunction[Any, Directive]
+  
 
   import scala.language.existentials
   /**
