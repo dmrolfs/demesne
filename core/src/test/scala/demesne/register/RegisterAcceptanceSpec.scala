@@ -47,9 +47,9 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
           case Added( sid, foo, _ ) => Directive.Record( foo, sid )
           case Deleted( sid ) => Directive.Withdraw( sid )
         },
-        RegisterLocalAgent.spec[String, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
-          case Added( sid, _, bar ) => Directive.Record( bar.toString, sid )
-          case BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar.toString, newBar.toString )
+        RegisterLocalAgent.spec[Int, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
+          case Added( sid, _, bar ) => Directive.Record( bar, sid )
+          case BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar, newBar )
           case Deleted( sid ) => Directive.Withdraw( sid )
         }
       )
@@ -280,13 +280,13 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     // }
 
 
-    "recorded in registers after added" in { fixture: Fixture =>
+    "recorded in registers after added" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
       val rt = TestModule.aggregateRootType
-      val br = model.aggregateRegisterFor( rt, 'bus )
+      val br = model.aggregateRegisterFor[String]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor( rt, 'stream )
+      val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br 
@@ -314,19 +314,19 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         trace( s"""bus-register:Test Foo = ${busRegister.get("Test Foo")}""" )
         busRegister.get( "Test Foo" ) mustBe Some(id)
 
-        whenReady( streamRegister.futureGet( 17.toString ) ) { result => result mustBe Some(id) }
-        trace( s"stream-register:17 = ${streamRegister.get(17.toString)}" )
-        streamRegister.get( 17.toString ) mustBe Some(id)
+        whenReady( streamRegister.futureGet( 17 ) ) { result => result mustBe Some(id) }
+        trace( s"stream-register:17 = ${streamRegister.get(17)}" )
+        streamRegister.get( 17 ) mustBe Some(id)
       }
     }
 
-    "withdrawn from register after delete" taggedAs(WIP) in { fixture: Fixture =>
+    "withdrawn from register after delete" in { fixture: Fixture =>
       import fixture._
 
       val rt = TestModule.aggregateRootType
-      val br = model.aggregateRegisterFor( rt, 'bus )
+      val br = model.aggregateRegisterFor[String]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor( rt, 'stream )
+      val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br
@@ -385,7 +385,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
           result mustBe None
         }
 
-        whenReady( streamRegister.futureGet( 13.toString ) ) { result => 
+        whenReady( streamRegister.futureGet( 13 ) ) { result => 
           logger error s"HERE ****: result(Damon) = $result"
           result mustBe None
         }
@@ -396,9 +396,9 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       import fixture._
 
       val rt = TestModule.aggregateRootType
-      val br = model.aggregateRegisterFor( rt, 'bus )
+      val br = model.aggregateRegisterFor[String]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor( rt, 'stream )
+      val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br
@@ -435,11 +435,11 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         countDownAdd await 200.millis.dilated
 
         whenReady( busRegister.futureGet( "Test Foo" ) ) { result => result mustBe Some(id) }
-        whenReady( streamRegister.futureGet( 7.toString ) ) { result => result mustBe Some(id) }
+        whenReady( streamRegister.futureGet( 7 ) ) { result => result mustBe Some(id) }
 
   //      countDown await 75.millis.dilated
         busRegister.get( "Test Foo" ) mustBe Some(id)
-        streamRegister.get( 7.toString ) mustBe Some(id)
+        streamRegister.get( 7 ) mustBe Some(id)
 
         aggregate !+ TestModule.ChangeBar( id, 13 )
 
@@ -465,12 +465,12 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
           result mustBe Some(id) 
         }
 
-        whenReady( streamRegister.futureGet( 7.toString ) ) { result => 
+        whenReady( streamRegister.futureGet( 7 ) ) { result => 
           logger error s"HERE ****: result(7) = $result"
           result mustBe None 
         }
 
-        whenReady( streamRegister.futureGet( 13.toString ) ) { result => 
+        whenReady( streamRegister.futureGet( 13 ) ) { result => 
           logger error s"HERE ****: result(13) = $result"
           result mustBe Some(id)
         }

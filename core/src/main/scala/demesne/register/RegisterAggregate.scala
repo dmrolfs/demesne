@@ -186,6 +186,14 @@ with ActorLogging {
   override def unhandled( message: Any ): Unit = {
     message match {
       case _: akka.persistence.RecoveryCompleted => ()
+
+      case Directive.Record(k, i) => {
+        log.warning( 
+          s"REGISTER UNHANDLED ${message} - verify ${topic} AggregateRootType indexes() type parameterization " +
+          s"matches [${k.getClass.safeSimpleName}, ${i.getClass.safeSimpleName}]"
+        )
+      }
+
       case m => log warning s"REGISTER UNHANDLED ${message}"
     }
   }
