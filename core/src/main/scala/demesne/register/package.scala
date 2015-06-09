@@ -18,14 +18,14 @@ import scala.reflect.ClassTag
  * Events flow from an [[AggregateRoot]] event publishing to a RegisterRelay subscriber, who filters for events specified by the 
  * AggregateIndexSpec defined in the [[AggregateRootType]].indexes() sequence, and directs the event to the corresponding
  * [[RegisterAggregate]]. The RegisterAggregate records the logical key to identifier mapping and published a Recorded event, which
- * is picked up by local [[Register]]s, such as an in-memory [[RegisterLocalAgent]] or in the future a register backed by some 
- * other form of cache (perhaps Redis). 
+ * is picked up by local [[Register]]s, such as an in-memory [[demesne.register.local.RegisterLocalAgent]] or in the future a 
+ * register backed by some other form of cache (perhaps Redis). 
  *
  * [[AggregateRoot]]s override the publish() operation to publish events to the Register Index. [[RegisterRelay]] actors listen
  * for events published either via the RegisterBus (default) or the ContextChannel subscription for a specific class. Aggregates
  * can publish to additional channels by adding to the publish chain.
  *
- * [[LogicalIndex]] subscriptions are registered by overriding the [[AggregateRootType]].logicalIndexes() operation. Each 
+ * [[Register]] subscriptions are registered by overriding the [[AggregateRootType]].indexes() operation. Each 
  * subscription is provided a partial function that is used to extract logical key to aggregate indentfier mapping from the
  * published event. Events that don't match both the publish subscription of key-id extractor are ignored by the index register 
  * mechanism.

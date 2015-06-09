@@ -13,7 +13,7 @@ object RegisterBus extends LazyLogging {
   val trace = Trace[RegisterBus]
 
   /**
-   * Message used to relay an event to the [[AggregateRegister]].
+   * Message used to relay an event to the [[demesne.register.RegisterAggregate]].
    */
   case class RecordingEvent( topic: String, recording: Any )
 
