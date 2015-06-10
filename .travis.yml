@@ -7,7 +7,7 @@ jdk:
 script: 
   - "sbt -Dlog4j.configuration=file://$TRAVIS_BUILD_DIR/project/travis-log4j.properties ++$TRAVIS_SCALA_VERSION test"
   - "sbt -Dlog4j.configuration=file://$TRAVIS_BUILD_DIR/project/travis-log4j.properties ++$TRAVIS_SCALA_VERSION publish-local"
-  - "sbt 'project core' coveralls"
+  - "sbt 'project core' coverage test coveralls"
 notifications:
   email:
     - github.10.dmrolfs@xoxy.net
