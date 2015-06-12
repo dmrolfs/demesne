@@ -19,6 +19,10 @@ object Directive {
   /** Revise directive tells the register change the index key.
    */
   case class Revise[K]( oldKey: K, newKey: K ) extends Directive
+
+  /** Tells the relay to take no action for this case. 
+   */
+  case object Ignore extends Directive
 }
 
 
