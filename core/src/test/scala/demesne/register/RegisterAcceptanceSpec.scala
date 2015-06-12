@@ -19,16 +19,10 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
 
   object TestModule extends SimpleTestModule { module =>
 
-    sealed trait Command extends CommandLike {
-      override type ID = module.ID
-    }
     case class Add( override val targetId: Add#TID, foo: String, bar: Int ) extends Command
     case class ChangeBar( override val targetId: ChangeBar#TID, bar: Int ) extends Command
     case class Delete( override val targetId: Delete#TID ) extends Command
 
-    sealed trait Event extends EventLike {
-      override type ID = module.ID
-    }
     case class Added( override val sourceId: Added#TID, foo: String, bar: Int ) extends Event
     case class BarChanged( override val sourceId: BarChanged#TID, oldBar: Int, newBar: Int ) extends Event
     case class Deleted( override val sourceId: Deleted#TID ) extends Event

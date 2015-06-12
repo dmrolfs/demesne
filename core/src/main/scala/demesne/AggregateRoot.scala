@@ -24,6 +24,8 @@ import peds.commons.util._
 abstract class AggregateRoot[S: AggregateStateSpecification]
 extends PersistentActor
 with EnvelopingActor
+with DomainModel.Provider
+with AggregateRootType.Provider
 with ActorLogging {
   outer: EventPublisher =>
 
@@ -31,7 +33,7 @@ with ActorLogging {
 
   override def persistenceId: String = self.path.toStringWithoutAddress
 
-  val meta: AggregateRootType
+  // def meta: AggregateRootType
 
   // var state: S
   def state: S

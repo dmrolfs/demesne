@@ -74,9 +74,6 @@ object ConferenceModule extends AggregateRootModule { module =>
 
   final case class SlugTaken private[conference]( targetId: ConferenceModule.TID, slug: String ) extends ConferenceProtocol
 
-  sealed trait Command extends ConferenceProtocol with CommandLike {
-    override type ID = module.ID
-  }
 
   case class CreateConference( override val targetId: CreateConference#TID, conference: ConferenceInfo ) extends Command
   case class UpdateConference( override val targetId: UpdateConference#TID, conference: ConferenceInfo ) extends Command
@@ -89,11 +86,6 @@ object ConferenceModule extends AggregateRootModule { module =>
   case class Publish( override val targetId: Publish#TID ) extends Command
   case class Unpublish( override val targetId: Unpublish#TID ) extends Command
 
-
-  sealed trait Event extends ConferenceProtocol with EventLike {
-    override type ID = module.ID
-    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
-  }
 
   //Conference/Conference.Contracts/ConferenceCreated.cs
   case class ConferenceCreated( override val sourceId: ConferenceCreated#TID, conference: ConferenceInfo ) extends Event
@@ -183,7 +175,7 @@ object ConferenceModule extends AggregateRootModule { module =>
   }
 
   class Conference(
-    model: DomainModel,
+    override val model: DomainModel,
     override val meta: AggregateRootType,
     conferenceContext: ActorRef
   ) extends AggregateRoot[ConferenceState] { outer: EventPublisher =>

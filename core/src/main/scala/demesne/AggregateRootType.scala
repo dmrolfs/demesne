@@ -10,6 +10,12 @@ import peds.commons.util._
 import scala.concurrent.duration._
 
 
+object AggregateRootType {
+  trait Provider {
+    def meta: AggregateRootType
+  }
+}
+
 trait AggregateRootType {
   type TID
   

@@ -46,16 +46,7 @@ object RegistrationSagaModule extends SagaModule { module =>
   }
 
 
-  sealed trait Command extends CommandLike {
-    override type ID = module.ID
-  }
-
   case class ExpireRegistrationProcess( override val targetId: ExpireRegistrationProcess#TID ) extends Command
-
-
-  sealed trait Event extends EventLike {
-    override type ID = module.ID
-  }
 
   case class RegistrationProcessExpired( override val sourceId: RegistrationProcessExpired#TID ) extends Event
 
@@ -124,7 +115,7 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   class RegistrationSaga(
     override val meta: AggregateRootType,
-    model: DomainModel,
+    override val model: DomainModel,
     orderType: AggregateRootType,
     seatsAvailabilityType: AggregateRootType
   ) extends Saga[RegistrationSagaState] {

@@ -8,7 +8,7 @@ import demesne._
 import demesne.register.local.RegisterLocalAgent
 import demesne.register._
 import peds.akka.envelope.Envelope
-import peds.akka.publish.EventPublisher
+import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
 import peds.commons.V
 import peds.commons.identifier._
 import peds.commons.log.Trace
@@ -83,18 +83,18 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       import peds.akka.publish._
 
       Props(
-        new PostActor( model, meta ) with ReliablePublisher with AtLeastOnceDelivery {
+        new PostActor( model, meta ) 
+        with ReliablePublisher  
+        with StackableRegisterBusPublisher 
+        with StackableStreamPublisher 
+        with AtLeastOnceDelivery {
           trace( s"POST CTOR makeAuthorListing = $makeAuthorListing" )
           val authorListing: ActorRef = makeAuthorListing()
 
           import peds.commons.util.Chain._
 
           override def publish: Publisher = trace.block( "publish" ) {
-            val bus = RegisterBus.bus( model.registerBus, meta )( _: AggregateIndexSpec[_,_] )
-            val buses = meta.indexes
-                          .filter( _.relaySubscription == RegisterBusSubscription )
-                          .foldLeft( silent ){ _ +> bus(_) }
-            buses +> stream +> filter +> reliablePublisher( authorListing.path )
+            super.publish +> filter +> reliablePublisher( authorListing.path )
           }
 
           val filter: Publisher = {
@@ -126,7 +126,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
   }
 
 
-  class PostActor( model: DomainModel, override val meta: AggregateRootType ) extends AggregateRoot[PostActor.State] {
+  class PostActor( override val model: DomainModel, override val meta: AggregateRootType ) extends AggregateRoot[PostActor.State] {
     outer: EventPublisher =>
 
     import PostActor._

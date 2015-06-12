@@ -124,7 +124,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "have changed contents after change" in { fixture: Fixture =>
+    "have changed contents after change" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId
@@ -290,7 +290,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "withdrawn title in register after post delete via event stream" taggedAs(WIP) in { fixture: Fixture =>
+    "withdrawn title in register after post delete via event stream" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.aggregateRootType

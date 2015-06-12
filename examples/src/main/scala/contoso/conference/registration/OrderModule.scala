@@ -52,10 +52,6 @@ object OrderModule extends AggregateRootModule { module =>
   }
 
 
-  sealed trait Command extends CommandLike {
-    override type ID = module.ID
-  }
-
   // Conference/Registration/Commands/RegsiterToConference.cs
   case class RegisterToConference(
     override val targetId: RegisterToConference#TID,
@@ -109,11 +105,6 @@ object OrderModule extends AggregateRootModule { module =>
   // Conference/Registration/Commands/ConfirmOrder.cs
   case class ConfirmOrder( override val targetId: ConfirmOrder#TID ) extends Command
 
-
-  sealed trait Event extends EventLike {
-    override type ID = module.ID
-    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
-  }
 
   // Registration.Contracts/Events/OrderPlaced.cs
   case class OrderPlaced(
@@ -209,7 +200,7 @@ object OrderModule extends AggregateRootModule { module =>
   }
 
   class Order(
-    model: DomainModel,
+    override val model: DomainModel,
     override val meta: AggregateRootType,
     pricingRetriever: ActorRef
   ) extends AggregateRoot[OrderState] { outer: EventPublisher =>

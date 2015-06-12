@@ -34,10 +34,6 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
 
 
   // targetId is conference ID
-  sealed trait Command extends CommandLike {
-    override type ID = module.ID
-    def conferenceId: ConferenceModule.TID = targetId
-  }
 
   // Conference/Registration/Commands/MakeSeatReservation.cs
   case class MakeSeatReservation(
@@ -72,11 +68,6 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
     quantity: Dimensionless
   ) extends Command
 
-
-  sealed trait Event extends EventLike {
-    override type ID = module.ID
-    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
-  }
 
   // Conference/Registration/Events/AvailableSeatsChanged.cs
   case class AvailableSeatsChanged(
@@ -170,7 +161,7 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
   }
 
   class SeatsAvailability(
-    model: DomainModel,
+    override val model: DomainModel,
     override val meta: AggregateRootType
   ) extends AggregateRoot[SeatsAvailabilityState] { outer: EventPublisher =>
     override val trace = Trace( "SeatsAvailability", log )

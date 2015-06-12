@@ -7,7 +7,7 @@ import peds.commons.log.Trace
 import peds.commons.util._
 
 
-trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLogging {
+trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLogging { module =>
   def trace: Trace[_]
 
   type ID = ShortUUID
@@ -25,6 +25,17 @@ trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLo
   }
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
+
+
+  trait Command extends CommandLike {
+    override type ID = module.ID
+  }
+
+
+  trait Event extends EventLike {
+    override type ID = module.ID
+  }
+
 
   private[this] lazy val _shardName: String = org.atteo.evo.inflector.English.plural( aggregateIdTag.name ).capitalize
   private[this] lazy val _aggregateIdTag: Symbol = AggregateRootModule tagify getClass()

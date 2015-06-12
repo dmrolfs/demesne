@@ -36,6 +36,11 @@ object DomainModel {
   type AggregateRegister[K, TID] = Register[K, TID]
   type AggregateRegisterE[K, TID] = \/[Throwable, AggregateRegister[K, TID]]
 
+  trait Provider {
+    def model: DomainModel
+  }
+
+
   import scala.concurrent.ExecutionContext.global
   val trace = Trace[DomainModel.type]
 

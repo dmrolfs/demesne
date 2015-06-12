@@ -36,10 +36,6 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
   )
 
 
-  sealed trait Command extends CommandLike {
-    override type ID = module.ID
-  }
-
   case class CreateSeatsAssignment(
     override val targetId: CreateSeatsAssignment#TID,
     orderId: OrderModule.TID,
@@ -61,11 +57,6 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
     position: Int
   ) extends Command
 
-
-  sealed trait Event extends EventLike {
-    override type ID = module.ID
-    // override val sourceTypeName: Option[String] = Option( module.aggregateRootType.name )
-  }
 
   // Registration.Contracts/Events/SeatAssigned.cs
   case class SeatAssigned(
@@ -141,7 +132,7 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
   }
 
   class SeatAssignments(
-    model: DomainModel,
+    override val model: DomainModel,
     override val meta: AggregateRootType
   ) extends AggregateRoot[SeatAssignmentsState] {  outer: EventPublisher =>
     override val trace = Trace( "SeatsAssignment", log )
