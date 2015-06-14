@@ -59,8 +59,6 @@ object ConferenceModule extends AggregateRootModule { module =>
       override def aggregateRootProps( implicit model: DomainModel ): Props = {
         Conference.props( model, this, conferenceContext )
       }
-
-      // override val toString: String = shardName + "AggregateRootType"
     }
   }
 
@@ -90,16 +88,16 @@ object ConferenceModule extends AggregateRootModule { module =>
   //Conference/Conference.Contracts/ConferenceCreated.cs
   case class ConferenceCreated( override val sourceId: ConferenceCreated#TID, conference: ConferenceInfo ) extends Event
   //Conference/Conference.Contracts/ConferenceUpdated.cs
-  case class ConferenceUpdated( override val sourceId: ConferenceCreated#TID, conference: ConferenceInfo ) extends Event
+  case class ConferenceUpdated( override val sourceId: ConferenceUpdated#TID, conference: ConferenceInfo ) extends Event
   //Conference/Conference.Contracts/ConferencePublished.cs
-  case class ConferencePublished( override val sourceId: ConferenceCreated#TID ) extends Event
+  case class ConferencePublished( override val sourceId: ConferencePublished#TID ) extends Event
   //Conference/Conference.Contracts/ConferenceUnpublished.cs
-  case class ConferenceUnpublished( override val sourceId: ConferenceCreated#TID ) extends Event
+  case class ConferenceUnpublished( override val sourceId: ConferenceUnpublished#TID ) extends Event
   //Conference/Conference.Contracts/SeatCreated.cs
-  case class SeatCreated( override val sourceId: ConferenceCreated#TID, seatType: SeatType ) extends Event
+  case class SeatCreated( override val sourceId: SeatCreated#TID, seatType: SeatType ) extends Event
   //Conference/Conference.Contracts/SeatUpdated.cs
-  case class SeatUpdated( override val sourceId: ConferenceCreated#TID, seatType: SeatType ) extends Event
-  case class SeatDeleted( override val sourceId: ConferenceCreated#TID, seatTypeId: SeatType.TID ) extends Event
+  case class SeatUpdated( override val sourceId: SeatUpdated#TID, seatType: SeatType ) extends Event
+  case class SeatDeleted( override val sourceId: SeatDeleted#TID, seatTypeId: SeatType.TID ) extends Event
 
 
   case class ConferenceState(
@@ -183,17 +181,8 @@ object ConferenceModule extends AggregateRootModule { module =>
 
     override val trace = Trace( "Conference", log )
 
-    // override val registerBus: RegisterBus = model.registerBus
-
     override var state: ConferenceState = _
 
-    override def transitionFor( oldState: ConferenceState, newState: ConferenceState ): Transition = {
-      case _: ConferenceCreated => context.become( around( draft ) )
-      case _: ConferencePublished => context.become( around( published ) )
-      case _: ConferenceUnpublished => context.become( around( draft ) )
-    }
-
-    // override def pathname: String = self.path.name
     override def receiveCommand: Receive = around( quiescent )
 
     val quiescent: Receive = LoggingReceive {
@@ -207,7 +196,11 @@ object ConferenceModule extends AggregateRootModule { module =>
         ).mapTo[ConferenceContext.SlugStatus]
 
         askForSlugStatus onComplete {
-          case Success( status ) => persist( ConferenceCreated( id, conference ) ) { event => acceptAndPublish( event ) }
+          case Success( status ) => persist( ConferenceCreated( id, conference ) ) { event => 
+            acceptAndPublish( event ) 
+            context.become( around( draft ) )
+          }
+
           case Failure( ex ) => throw new ConferenceCreateException( ex )
         }
       }
@@ -232,12 +225,18 @@ object ConferenceModule extends AggregateRootModule { module =>
       }
 
       case Publish => {
-        persist( ConferencePublished( state.id ) ) { event => acceptAndPublish( event ) }
+        persist( ConferencePublished( state.id ) ) { event => 
+          acceptAndPublish( event ) 
+          context.become( around( published ) )
+        }
       }
     }
 
     def published: Receive = LoggingReceive {
-      case Unpublish => { persist( ConferenceUnpublished( state.id ) ) { event => acceptAndPublish( event ) } }
+      case Unpublish => persist( ConferenceUnpublished( state.id ) ) { event => 
+        acceptAndPublish( event ) 
+        context.become( around( draft ) )
+      } 
     }
 
     def common: Receive = peds.commons.util.emptyBehavior[Any, Unit]

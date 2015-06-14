@@ -206,16 +206,8 @@ object OrderModule extends AggregateRootModule { module =>
   ) extends AggregateRoot[OrderState] { outer: EventPublisher =>
     override val trace = Trace( "Order", log )
 
-    // override val registerBus: RegisterBus = model.registerBus
-
     override var state: OrderState = _
     var expirationMessager: Cancellable = _
-
-    override def transitionFor( oldState: OrderState, newState: OrderState ): Transition = {
-      case _: OrderPlaced => context.become( around( reserved orElse common ) )
-      case _: OrderConfirmed => context.become( around( confirmed orElse common ) )
-      case _: OrderExpired => context.become( around( expired ) )
-    }
 
     override def receiveCommand: Receive = around( quiescent )
 
@@ -227,6 +219,7 @@ object OrderModule extends AggregateRootModule { module =>
           accept( event )
           pricingRetriever ! PricingRetriever.CalculateTotal( conferenceId, seats )
           publish( event )
+          context.become( around( reserved orElse common ) )
         }
       }
     }
@@ -272,7 +265,10 @@ object OrderModule extends AggregateRootModule { module =>
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[62]
       // Conference/Registration/Order.cs[145]
-      case RejectOrder( orderId ) => persist( OrderExpired( orderId ) ) { e => acceptAndPublish( e ) }
+      case RejectOrder( orderId ) => persist( OrderExpired( orderId ) ) { e => 
+        acceptAndPublish( e ) 
+        context.become( around( expired ) )
+      }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[73]
       // Conference/Registration/Order.cs[145]
@@ -282,7 +278,10 @@ object OrderModule extends AggregateRootModule { module =>
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[80]
       // Conference/Registration/Order.cs[153]
-      case ConfirmOrder( orderId ) => persist( OrderConfirmed( orderId ) ) { e => acceptAndPublish( e ) }
+      case ConfirmOrder( orderId ) => persist( OrderConfirmed( orderId ) ) { e => 
+        acceptAndPublish( e ) 
+        context.become( around( confirmed orElse common ) )
+      }
     }
 
     def confirmed: Receive = Actor.emptyBehavior

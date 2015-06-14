@@ -137,18 +137,7 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
   ) extends AggregateRoot[SeatAssignmentsState] {  outer: EventPublisher =>
     override val trace = Trace( "SeatsAssignment", log )
 
-    // override val registerBus: RegisterBus = model.registerBus
-
     override var state: SeatAssignmentsState = _
-
-    override def transitionFor( oldState: SeatAssignmentsState, newState: SeatAssignmentsState ): Transition = {
-      case _: SeatAssignmentsCreated => context.become( around( active orElse unhandled ) )
-      // case _: SeatAssigned => context.become( active orElse unhandled )
-      // case _: SeatAssignmentsUpdated => context.become( active orElse unhandled )
-      // case _: SeatUnassigned => context.become( active orElse unhandled )
-    }
-
-    //   override def pathname: String = self.path.name
 
     case class SeatAssignmentsCreated(
       override val sourceId: SeatAssigned#TID,
@@ -180,7 +169,10 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
         }
 
         val assignments = makeAssignments( seats )
-        persist( SeatAssignmentsCreated( id, orderId, assignments) ) { event => acceptAndPublish( event ) }
+        persist( SeatAssignmentsCreated( id, orderId, assignments) ) { event => 
+          acceptAndPublish( event ) 
+          context.become( around( active orElse unhandled ) )
+        }
       }
     }
 

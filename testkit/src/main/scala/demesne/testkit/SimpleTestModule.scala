@@ -12,12 +12,6 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
   def indexes: Seq[AggregateIndexSpec[_, _]]
   def acceptance( state: SimpleTestActor.State ): stateSpecification.Acceptance
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
-  def transitionFor( 
-    oldState: SimpleTestActor.State, 
-    newState: SimpleTestActor.State 
-  ): AggregateRoot[SimpleTestActor.State]#Transition = {
-    peds.commons.util.emptyBehavior[Any, Unit]
-  }
 
   override val trace = Trace[SimpleTestModule]
 
@@ -54,8 +48,6 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
     override val trace = Trace( "SimpleTestActor", log )
 
     override var state: State = Map.empty[Symbol, Any]
-
-    override def transitionFor( oldState: State, newState: State ): Transition = module.transitionFor( oldState, newState )
 
     override def receiveCommand: Receive = around {
       case command if module.eventFor(state).isDefinedAt( command ) => {

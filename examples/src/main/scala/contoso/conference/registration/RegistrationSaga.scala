@@ -123,26 +123,10 @@ object RegistrationSagaModule extends SagaModule { module =>
 
     override val trace = Trace( "RegistrationSaga", log )
 
-    // override val registerBus: RegisterBus = model.registerBus
-
     override var state: RegistrationSagaState = _
 
     import context.dispatcher
     var expirationMessager: Cancellable = _
-
-    override def transitionFor( oldState: RegistrationSagaState, newState: RegistrationSagaState ): Transition = {
-      case _: OrderPlaced => context.become( around( awaitingReservationConfirmation orElse common ) )
-      case _: OrderUpdated => context.become( around( awaitingReservationConfirmation orElse common ) )
-      case _: SeatsReserved => {
-        context.become( around( reservationConfirmationReceived orElse common orElse confirmedUnhandled ) )
-      }
-      case _: PaymentCompleted => {
-        context.become( around( paymentConfirmationReceived orElse common orElse confirmedUnhandled ) )
-      }
-      case _: OrderConfirmed => context.become( around( confirmed orElse confirmedUnhandled ))
-      case _: RegistrationProcessExpired => context.become( around( expired ) )
-    }
-
 
     def order( id: Option[OrderModule.TID] ): ActorRef = OrderModule.aggregateOf( id )( model )
 
@@ -157,11 +141,13 @@ object RegistrationSagaModule extends SagaModule { module =>
       case e @ OrderPlaced(oid, cid, seats, Some(expiration), accessCode) if expiration > joda.DateTime.now => {
         reserveSeats( conferenceId = cid, orderId = oid, seats = seats, expiration = Some(expiration) )
         accept( e )
+        context.become( around( awaitingReservationConfirmation orElse common ) )
       }
 
       case e @ OrderPlaced(oid, cid, seats, None, accessCode) => {
         reserveSeats( conferenceId = cid, orderId = oid, seats = seats, expiration = None )
         accept( e )
+        context.become( around( awaitingReservationConfirmation orElse common ) )
       }
 
       case OrderPlaced( orderId, _, _, _, _ ) => order( Some(orderId) ) ! RejectOrder( targetId = orderId )
@@ -177,6 +163,7 @@ object RegistrationSagaModule extends SagaModule { module =>
           expiration = state.reservationAutoExpiration
         )
         order( Some(state.orderId) ) ! markAsReserved
+        context.become( around( reservationConfirmationReceived orElse common orElse confirmedUnhandled ) )
       }
     }
 
@@ -185,6 +172,7 @@ object RegistrationSagaModule extends SagaModule { module =>
       case c: OrderConfirmed => orderConfirmed( c )
       case c @ PaymentCompleted( sourceId: PaymentCompleted#TID, paymentSourceId: PaymentSourceModule.TID ) => {
         order( Some(state.orderId) ) ! ConfirmOrder( state.orderId )
+        context.become( around( paymentConfirmationReceived orElse common orElse confirmedUnhandled ) )
       }
     }
 
@@ -243,11 +231,13 @@ object RegistrationSagaModule extends SagaModule { module =>
 //      state = state.copy( seatReservationWorkId = workId ) //DMR: isn't this cheating accept; how best to provide workId without closing on this in AR usage?
       seatsAvailability( Some(state.conferenceId) ) ! reservation
       accept( (e, workId) )
+      context.become( around( awaitingReservationConfirmation orElse common ) )
     }
 
     def orderConfirmed( e: OrderConfirmed ): Unit = {
       val commit = CommitSeatReservation( targetId = state.conferenceId, reservationId = state.reservationId )
       seatsAvailability( Some(state.conferenceId) ) ! commit
+      context.become( around( confirmed orElse confirmedUnhandled ))
     }
 
     override def unhandled( msg: Any ): Unit = ???

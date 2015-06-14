@@ -52,10 +52,8 @@ with ActorLogging {
 
 
   def accept( event: Any ): S = {
-    val newState = implicitly[AggregateStateSpecification[S]].accept( state, event )
-    transition( event, state, newState )
-    state = newState
-    newState
+    state = implicitly[AggregateStateSpecification[S]].accept( state, event )
+    state
   }
 
   def acceptAndPublish( event: Any ): S = {
@@ -65,29 +63,6 @@ with ActorLogging {
   }
 
   def acceptSnapshot( snapshotOffer: SnapshotOffer ): S = accept( snapshotOffer.snapshot )
-
-
-  type Transition = PartialFunction[Any, Unit]
-  //todo: considering removing - does this add value or make code harder to figure out?
-  def transitionFor( oldState: S, newState: S ): Transition = peds.commons.util.emptyBehavior[Any, Unit]()
-
-  def transition( event: Any, oldState: S, newState: S ): Unit = {
-    val core = transitionFor( oldState, newState )
-    val t: Transition = ( core andThen infoTransitioning ) orElse infoNotTransitioning
-
-    event match {
-      case (e, ctx) if core isDefinedAt e => t( e )
-      case e => t( e )
-    }
-  }
-
-  val infoTransitioning: Transition = {
-    case u => log info s"${self.path.name} transitioning for ${u.getClass.safeSimpleName}"
-  }
-
-  val infoNotTransitioning: Transition = {
-    case ex => log info s"${self.path.name} will not transition state for ${ex.getClass.safeSimpleName}"
-  }
 
 
   override def receiveRecover: Receive = {

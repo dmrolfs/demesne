@@ -133,15 +133,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
     override val trace = Trace( "Post", log )
 
-    // override val registerBus: RegisterBus = model.registerBus
-
     override var state: State = State()
-
-    override def transitionFor( oldState: State, newState: State ): Transition = {
-      case _: PostAdded => context become around( created )
-      case _: PostPublished => context become around( published )
-      case _: Deleted => context become around( quiescent )
-    }
 
     override def receiveCommand: Receive = around( quiescent )
 
@@ -158,6 +150,8 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
             log info s"New post saved: ${state.content.title}"
             trace.block( s"publish($event)" ) { publish( event ) }
           }
+
+          context become around( created )
         }
       }
     }
@@ -180,10 +174,14 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
           accept( event )
           log info s"Post published: ${state.content.title}"
           publish( event )
+          context become around( published )
         }
       }
 
-      case Delete( id ) => persist( Deleted(id) ) { event => acceptAndPublish( event ) }
+      case Delete( id ) => persist( Deleted(id) ) { event => 
+        acceptAndPublish( event ) 
+        context become around( quiescent )
+      }
     }
 
     val published: Receive = LoggingReceive {
