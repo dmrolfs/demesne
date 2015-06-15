@@ -54,6 +54,6 @@ object AggregateRootModule {
       case n => n
     }
 
-    Symbol( name )
+    Symbol( name(0).toLower + name.drop(1) )
   } 
 }
