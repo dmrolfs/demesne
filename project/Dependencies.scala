@@ -11,7 +11,7 @@ object Dependencies {
     akkaModule( "agent" ),
     akkaModule( "slf4j" ),
     "com.chuusai" %% "shapeless" % "2.1.0",
-    "org.scalaz" %% "scalaz-core" % "7.1.1",
+    "org.scalaz" %% "scalaz-core" % "7.1.3",
     "org.typelevel" %% "scalaz-contrib-210"        % "0.2",
     "org.typelevel" %% "scalaz-contrib-validation" % "0.2",
     "org.typelevel" %% "scalaz-contrib-undo"       % "0.2",

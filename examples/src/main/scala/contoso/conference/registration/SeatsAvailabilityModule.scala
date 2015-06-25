@@ -110,27 +110,27 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
     type PendingReservations = Map[OrderModule.TID, Seq[SeatQuantity]]
 
     implicit val stateSpec = new AggregateStateSpecification[SeatsAvailabilityState] {
-      override def acceptance( state: SeatsAvailabilityState ): Acceptance = {
+      override def acceptance: AggregateStateSpecification.Acceptance[SeatsAvailabilityState] = {
         // Conference/Registration/SeatsAvailability.cs[185-198]
-        case AvailableSeatsChanged( _, seats ) => {
+        case ( AvailableSeatsChanged(_, seats), state ) => {
           val updated = addToRemainingSeats( state.remainingSeats, seats )
           state.copy( remainingSeats = updated )
         }
 
         // Conference/Registration/SeatsAvailability.cs[223-231]
-        case SeatsReservationCancelled( _, reservationId, availableSeatsChanged ) => {
+        case ( SeatsReservationCancelled(_, reservationId, availableSeatsChanged), state ) => {
           val updatedPending = state.pendingReservations - reservationId
           val updatedRemaining = addToRemainingSeats( state.remainingSeats, availableSeatsChanged )
           state.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
         }
 
         // Conference/Registration/SeatsAvailability.cs[218 - 221]
-        case SeatsReservationCommitted( _, reservationId ) => {
+        case ( SeatsReservationCommitted(_, reservationId), state ) => {
           state.copy( pendingReservations = (state.pendingReservations - reservationId) )
         }
 
         // Conference/Registration/SeatsAvailability.cs[200-216]
-        case SeatsReserved( _, reservationId, reservationDetails, availableSeatsChanged ) => {
+        case ( SeatsReserved(_, reservationId, reservationDetails, availableSeatsChanged), state ) => {
           val updatedPending = (
             if ( reservationDetails.size > 0 ) state.pendingReservations + (reservationId -> reservationDetails.toSeq)
             else state.pendingReservations - reservationId

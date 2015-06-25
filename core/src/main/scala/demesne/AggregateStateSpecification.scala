@@ -1,21 +1,23 @@
 package demesne
 
+import scala.reflect.ClassTag
 import akka.persistence.SnapshotOffer
 import com.typesafe.scalalogging.LazyLogging
 import peds.commons.util._
 
-import scala.reflect.ClassTag
 
+object AggregateStateSpecification {
+  type Acceptance[S] = PartialFunction[(Any, S), S]
+}
 
 trait AggregateStateSpecification[S] extends LazyLogging { outer =>
-  type Acceptance = PartialFunction[Any, S]
-
-  def acceptance( state: S ): Acceptance
+  import AggregateStateSpecification._
+  
+  def acceptance: Acceptance[S]
 
   def accept( state: S, event: Any ): S = {
-    val a = acceptance( state )
-
-    if ( a.isDefinedAt( event ) ) a( event )
+    val eventState = (event, state)
+    if ( acceptance.isDefinedAt( eventState ) ) acceptance( eventState )
     else {
       logger debug s"""${Option(state).map{_.getClass.safeSimpleName}} does not accept event ${event.getClass.safeSimpleName}"""
       state

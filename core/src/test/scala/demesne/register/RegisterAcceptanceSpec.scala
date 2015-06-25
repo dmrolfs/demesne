@@ -49,10 +49,10 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       )
     }
 
-    override def acceptance( state: SimpleTestActor.State ): stateSpecification.Acceptance = {
-      case Added( id, foo, bar ) => state + ( 'id -> id ) + ( 'foo -> foo ) + ( 'bar -> bar )
-      case BarChanged( id, _, newBar ) => state + ( 'bar -> newBar )
-      case _: Deleted => Map.empty[Symbol, Any]
+    override def acceptance: AggregateStateSpecification.Acceptance[SimpleTestActor.State] = {
+      case ( Added(id, foo, bar), state ) => state + ( 'id -> id ) + ( 'foo -> foo ) + ( 'bar -> bar )
+      case ( BarChanged(id, _, newBar), state ) => state + ( 'bar -> newBar )
+      case (_: Deleted, _) => Map.empty[Symbol, Any]
     }
   }
 

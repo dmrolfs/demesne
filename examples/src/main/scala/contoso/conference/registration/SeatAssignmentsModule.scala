@@ -88,16 +88,16 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
 
   object SeatAssignmentsState {
     implicit val stateSpec = new AggregateStateSpecification[SeatAssignmentsState] {
-      override def acceptance( state: SeatAssignmentsState ): Acceptance = {
-        case SeatAssignmentsCreated( id, orderId, seats ) => SeatAssignmentsState( id = id, orderId = orderId, seats = seats )
+      override def acceptance: AggregateStateSpecification.Acceptance[SeatAssignmentsState] = {
+        case ( SeatAssignmentsCreated(id, orderId, seats), state ) => SeatAssignmentsState( id = id, orderId = orderId, seats = seats )
 
-        case SeatAssigned( id, position, seatTypeId, attendee ) => {
+        case ( SeatAssigned(id, position, seatTypeId, attendee), state ) => {
           updateSeats( state )( id, position, Some(seatTypeId), Some(attendee) )
         }
 
-        case SeatAssignmentsUpdated( id, position, attendee ) => updateSeats( state )( id, position, None, Some(attendee) )
+        case ( SeatAssignmentsUpdated(id, position, attendee), state ) => updateSeats( state )( id, position, None, Some(attendee) )
 
-        case SeatUnassigned( id, position ) => updateSeats( state )( id, position, None, None )
+        case ( SeatUnassigned(id, position), state ) => updateSeats( state )( id, position, None, None )
       }
 
       private def updateSeats(
