@@ -10,6 +10,7 @@ import Task._
 import peds.archetype.domain.model.core.Entity
 import peds.commons.V
 import peds.commons.log.Trace
+import peds.commons.util._
 import demesne.{ AggregateRootModule, AggregateStateSpecification }
 import demesne.module.{ BasicEntityModule, DemesneModuleError }
 import demesne.register.AggregateIndexSpec
@@ -43,6 +44,9 @@ override def idLens: shapeless.Lens[E, peds.commons.identifier.TaggedID[peds.com
 override def nameLens: shapeless.Lens[E, String] = nameLensO getOrElse { throw UndefinedLensError( "nameLens" ) }
     override def aggregateIdTag: Symbol = idTagO getOrElse { throw UndefinedAggregateIdTagError }
     override def eventFor( state: ActorState ): PartialFunction[Command, Any] = eventMap( state )
+    override def toString: String = {
+      s"""${getClass.safeSimpleName}[${entityClass.safeSimpleName}](${aggregateIdTag} indexes=${indexes.map(_.name).mkString("[", ",", "]")})"""
+    }
   }
 
   object BasicModule {
@@ -148,6 +152,6 @@ object BasicModuleBuilderInterpreter {
   extends IllegalArgumentException( "aggregateIdTag must be defined for Module" ) with DemesneModuleError
 
   final case class UndefinedLensError( lens: String ) 
-  extends IllegalArgumentException( "$lens must be defined for Module") with DemesneModuleError
+  extends IllegalArgumentException( s"$lens must be defined for Module") with DemesneModuleError
 
 }
