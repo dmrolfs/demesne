@@ -6,7 +6,6 @@ import akka.actor.Actor.Receive
 import scalaz.{ Lens => _, _ }, Scalaz._
 import scalaz.concurrent.Task
 import shapeless.Lens
-import Task._
 import peds.archetype.domain.model.core.Entity
 import peds.commons.V
 import peds.commons.log.Trace
@@ -18,7 +17,7 @@ import demesne.AggregateStateSpecification.Acceptance
 
 
 trait ModuleBuilderInterpreter {
-  def apply[A]( action: ModuleBuilderOp[A] ): Task[A]
+  def apply[A]( action: ModuleBuilderOp[A] ): Id[A]
 }
 
 case class BasicModuleBuilderInterpreter[E <: Entity : ClassTag]() extends ModuleBuilderInterpreter {
@@ -61,25 +60,24 @@ override def nameLens: shapeless.Lens[E, String] = nameLensO getOrElse { throw U
   var module: BasicModule = BasicModule()
 
   // def step[A]( action: ModuleBuilderOpF[ModuleBuilderOp[A]] ): \/[Throwable, ModuleBuilderOp[A]] = {
-  def step[A]( action: ModuleBuilderOpF[ModuleBuilderOp[A]] ): Task[ModuleBuilderOp[A]] = {
+  def step[A]( action: ModuleBuilderOpF[ModuleBuilderOp[A]] ): Id[ModuleBuilderOp[A]] = {
     // implicit val evAS = module.evEntity
     // implicit val evAcceptance = scala.reflect.ClassTag( classOf[Acceptance[BasicModuleBuilderInterpreter[E]#ActorState]] )
 
     action match {
       case SetIdTag( newIdTag, next ) => {
         module = module.copy( idTagO = Some(newIdTag) )
-        // next.right[Throwable]
-        now( next )
+        next
       }
 
       case SetIdLens( lens, next ) => {
         module = module.copy( idLensO = Some(lens.asInstanceOf[Lens[E, peds.commons.identifier.TaggedID[peds.commons.identifier.ShortUUID]]]) )
-        now( next )
+        next
       }
 
       case SetNameLens( lens, next ) => {
         module = module.copy( nameLensO = Some(lens.asInstanceOf[Lens[E, String]]) )
-        now( next )
+        next
       }
 
       case SetAcceptance( newAcceptance, next ) => {
@@ -88,23 +86,19 @@ override def nameLens: shapeless.Lens[E, String] = nameLensO getOrElse { throw U
         }
 
         result match {
-          // case Success(_) => next.right[Throwable]
-          // case Failure( ex ) => ex.left[ModuleBuilderOp[A]]
-          case scala.util.Success(_) => now( next )
-          case scala.util.Failure( ex ) => fail( ex )
+          case scala.util.Success(_) => next
+          case scala.util.Failure( ex ) => throw ex
         }
       }
 
       case AddIndex( index, next ) => {
         module = module.copy( indexes = module.indexes :+ index )
-        // next.right[Throwable]
-        now( next )
+        next
       }
 
       case SetReceiveCommand( newReceive, next ) => {
         module = module.copy( activeCommand = newReceive )
-        // next.right[Throwable]
-        now( next )
+        next
       }
 
       case Build( onBuild ) => {
@@ -115,8 +109,8 @@ override def nameLens: shapeless.Lens[E, String] = nameLensO getOrElse { throw U
         } yield module
 
         result match {
-          case \/-(m) => now( onBuild(m) )
-          case -\/(ex) => fail( ex )
+          case \/-(m) => onBuild(m)
+          case -\/(ex) => throw ex
         }
         // module.idTag match {
         //   // case Some(_) => onBuild( module ).right[Throwable]
@@ -142,9 +136,7 @@ override def nameLens: shapeless.Lens[E, String] = nameLensO getOrElse { throw U
     lens map { _.right } getOrElse { UndefinedLensError( "nameLens" ).left }
   }
 
-  // def apply[A]( action: ModuleBuilderOp[A] ): \/[Throwable, A] = {
-  //   implicit val monadBuilder = implicitly[Monad[ModuleBuilderOp]]
-  override def apply[A]( action: ModuleBuilderOp[A] ): Task[A] = action.runM( step )
+  override def apply[A]( action: ModuleBuilderOp[A] ): Id[A] = action.runM( step )
 }
 
 object BasicModuleBuilderInterpreter {
