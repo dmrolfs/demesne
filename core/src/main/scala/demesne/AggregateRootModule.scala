@@ -27,14 +27,8 @@ trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLo
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
 
 
-  trait Command extends CommandLike {
-    override type ID = module.ID
-  }
-
-
-  trait Event extends EventLike {
-    override type ID = module.ID
-  }
+  type Command = AggregateRootModule.Command[ID]
+  type Event = AggregateRootModule.Event[ID]
 
 
   private[this] lazy val _shardName: String = org.atteo.evo.inflector.English.plural( aggregateIdTag.name ).capitalize
@@ -42,6 +36,16 @@ trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLo
 }
 
 object AggregateRootModule {
+  trait Command[I] extends CommandLike {
+    override type ID = I
+  }
+
+
+  trait Event[I] extends EventLike {
+    override type ID = I
+  }
+
+
   val Module = """(\w+)Module""".r
   val Actor = """(\w+)Actor""".r
   val PersistentActor = """(\w+)PersistentActor""".r
