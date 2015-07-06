@@ -1,8 +1,9 @@
 package demesne
 
+import akka.actor.Actor.Receive
 import scalaz.Free
 
 
 package object scaladsl {
-  type ModuleBuilderOp[A] = Free[ModuleBuilderOpF, A]
+  type SimpleModuleBuilderOp[A] = Free[SimpleModuleBuilderOpF, A]
 }
