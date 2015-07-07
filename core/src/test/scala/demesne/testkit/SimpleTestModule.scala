@@ -2,7 +2,6 @@ package demesne.testkit
 
 import akka.actor.Props
 import demesne._
-import demesne.AggregateStateSpecification.Acceptance
 import demesne.register.{ AggregateIndexSpec, RegisterBus, RegisterBusSubscription, StackableRegisterBusPublisher }
 import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
 import peds.commons.log.Trace
@@ -11,7 +10,7 @@ import peds.commons.log.Trace
 trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregateActorType { module =>
   def name: String
   def indexes: Seq[AggregateIndexSpec[_, _]]
-  def acceptance: Acceptance[SimpleTestActor.State]
+  def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
   override val trace = Trace[SimpleTestModule]
@@ -24,12 +23,6 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
     }
   }
 
-
-  implicit val stateSpecification: AggregateStateSpecification[SimpleTestActor.State] = {
-    new AggregateStateSpecification[SimpleTestActor.State] {
-      override def acceptance: Acceptance[SimpleTestActor.State] = module.acceptance
-    }
-  }
 
   object SimpleTestActor {
     type State = Map[Symbol, Any]
@@ -50,6 +43,8 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
 
     override var state: State = Map.empty[Symbol, Any]
 
+    override val acceptance: AggregateRoot.Acceptance[State] = module.acceptance
+    
     override def receiveCommand: Receive = around {
       case command if module.eventFor(state).isDefinedAt( command ) => {
         persist( module.eventFor(state)(command) ) { event => acceptAndPublish( event ) }

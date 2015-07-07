@@ -1,9 +1,9 @@
 package demesne
 
 import scala.reflect.ClassTag
-import akka.actor.ActorContext
+import akka.actor.Props
 import akka.actor.Actor.Receive
-import akka.agent.Agent
+// import akka.agent.Agent
 import peds.commons.util._
 
 
@@ -11,7 +11,8 @@ import peds.commons.util._
  * Created by rolfsd on 5/23/15.
  */
 package object module {
-  type StatefulReceive[S] = AggregateRoot[S] => Agent[S] => Receive
+  type AggregateRootProps = (DomainModel, AggregateRootType) => Props
+  // type StatefulReceive[S] = AggregateRoot[S] => Agent[S] => ActorContext => Receive
 
 
   trait DemesneModuleError extends Throwable
