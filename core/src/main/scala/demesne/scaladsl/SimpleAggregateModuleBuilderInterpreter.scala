@@ -52,6 +52,11 @@ case class SimpleAggregateModuleBuilderInterpreter[S: ClassTag]() extends Module
         next
       }
 
+      case SetIndexes( indexes, next ) => {
+        module = module.copy( indexes = indexes )
+        next
+      }
+
       case AddIndex( index, next ) => {
         module = module.copy( indexes = module.indexes :+ index )
         next

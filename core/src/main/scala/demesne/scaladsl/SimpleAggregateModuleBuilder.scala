@@ -11,6 +11,8 @@ import demesne.register.AggregateIndexSpec
 trait SimpleAggregateModuleBuilder[A] {
   def setIdTag( newIdTag: Symbol ): SimpleModuleBuilderOp[Unit] = liftF( SetIdTag( newIdTag, () ) )
 
+  def setIndexes( indexes: List[AggregateIndexSpec[_, _]] ): SimpleModuleBuilderOp[Unit] = liftF( SetIndexes( indexes, () ) )
+
   def addIndex( index: AggregateIndexSpec[_, _] ): SimpleModuleBuilderOp[Unit] = liftF( AddIndex( index, () ) )
 
   def setProps( props: AggregateRootProps ): SimpleModuleBuilderOp[Unit] = liftF( SetProps( props, () ) )
@@ -20,5 +22,4 @@ trait SimpleAggregateModuleBuilder[A] {
   }
 
   def build: SimpleModuleBuilderOp[AggregateRootModule] = liftF( Build( identity ) )
-
 }

@@ -42,18 +42,20 @@ class RegisterAcceptanceSpecB extends AggregateRootSpec[RegisterAcceptanceSpecB]
     lazy val module: AggregateRootModule = materialize(
       for {
         _ <- builder.setIdTag( 'registerAcceptance )
-        _ <- List(
-              RegisterLocalAgent.spec[String, TID]( 'bus, RegisterBusSubscription ) {
-                case Added( sid, foo, _ ) => Directive.Record( foo, sid )
-                case Deleted( sid ) => Directive.Withdraw( sid )
-              },
-              RegisterLocalAgent.spec[Int, TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
-                case Added( sid, _, bar ) => Directive.Record( bar, sid )
-                case BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar, newBar )
-                case Deleted( sid ) => Directive.Withdraw( sid )
-              }
-            ).traverse( builder.addIndex )
         _ <- builder.setProps( TestAggregateActor.props( _, _ ) )
+        _ <- builder.addIndex(
+               RegisterLocalAgent.spec[String, TID]( 'bus, RegisterBusSubscription ) {
+                 case Added( sid, foo, _ ) => Directive.Record( foo, sid )
+                 case Deleted( sid ) => Directive.Withdraw( sid )
+               }
+             )
+        _ <- builder.addIndex(
+               RegisterLocalAgent.spec[Int, TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
+                 case Added( sid, _, bar ) => Directive.Record( bar, sid )
+                 case BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar, newBar )
+                 case Deleted( sid ) => Directive.Withdraw( sid )
+               }
+             )
         m <- builder.build
       } yield m
     )
