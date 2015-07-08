@@ -182,12 +182,13 @@ object OrderModule extends AggregateRootModule { module =>
 
   object OrderState {
     implicit val stateSpec = new AggregateStateSpecification[OrderState] {
-      override def acceptance( state: OrderState ): Acceptance = {
-        case OrderPlaced( _, conferenceId, seats, _, _ ) => state.copy( conferenceId = conferenceId, seats = seats )
-        case OrderUpdated( _, seats ) => state.copy( seats = seats )
-        case OrderPartiallyReserved( _, _, seats ) => state.copy( seats = seats )
-        case OrderReservationCompleted( _, _, seats ) => state.copy( seats = seats )
-        case OrderConfirmed | OrderPaymentConfirmed => state.copy( confirmed = true )
+      override def acceptance: AggregateStateSpecification.Acceptance[OrderState] = {
+        case ( OrderPlaced(_, conferenceId, seats, _, _ ), state ) => state.copy( conferenceId = conferenceId, seats = seats )
+        case ( OrderUpdated(_, seats), state ) => state.copy( seats = seats )
+        case ( OrderPartiallyReserved(_, _, seats), state ) => state.copy( seats = seats )
+        case ( OrderReservationCompleted(_, _, seats), state ) => state.copy( seats = seats )
+        case ( OrderConfirmed, state ) => state.copy( confirmed = true )
+        case ( OrderPaymentConfirmed, state ) => state.copy( confirmed = true )
       }
     }
   }

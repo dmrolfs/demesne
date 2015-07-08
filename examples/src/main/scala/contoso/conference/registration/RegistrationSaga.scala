@@ -76,8 +76,8 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   object RegistrationSagaState {
     implicit val stateSpec = new AggregateStateSpecification[RegistrationSagaState] {
-      override def acceptance( state: RegistrationSagaState ): Acceptance = {
-        case OrderPlaced(id, cid, seats, expiration, accessCode) => {
+      override def acceptance: AggregateStateSpecification.Acceptance[RegistrationSagaState] = {
+        case ( OrderPlaced(id, cid, seats, expiration, accessCode), state ) => {
           state.copy(
             conferenceId = cid,
             orderId = id,
@@ -88,13 +88,13 @@ object RegistrationSagaModule extends SagaModule { module =>
           )
         }
 
-        case (_: OrderUpdated, workId: WorkId ) => {
+        case ( (_: OrderUpdated, workId: WorkId), state ) => {
           state.copy( state = AwaitingReservationConfirmation, seatReservationWorkId = workId )
         }
 
-        case _: SeatsReserved => state.copy( state = ReservationConfirmationReceived )
-        case _: PaymentCompleted => state.copy( state = PaymentConfirmationReceived )
-        case _: OrderConfirmed => state.copy( state = FullyConfirmed )
+        case ( _: SeatsReserved, state ) => state.copy( state = ReservationConfirmationReceived )
+        case ( _: PaymentCompleted, state ) => state.copy( state = PaymentConfirmationReceived )
+        case ( _: OrderConfirmed, state ) => state.copy( state = FullyConfirmed )
       }
     }
   }

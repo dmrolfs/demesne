@@ -138,18 +138,18 @@ object ConferenceModule extends AggregateRootModule { module =>
     implicit val stateSpec = new AggregateStateSpecification[ConferenceState] {
       private val seatsLens = lens[ConferenceState] >> 'seats
       
-      override def acceptance( state: ConferenceState ): Acceptance = {
-        case ConferenceCreated( _, c ) => ConferenceState( c )
-        case ConferenceUpdated( _, c ) => ConferenceState( c )
-        case ConferencePublished => state.copy( isPublished = true )
-        case ConferenceUnpublished => state.copy( isPublished = false )
-        case SeatCreated( _, seatType ) => seatsLens.set( state )( state.seats + seatType )
-        case SeatUpdated( _, seatType ) => {
+      override def acceptance: AggregateStateSpecification.Acceptance[ConferenceState] = {
+        case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
+        case ( ConferenceUpdated(_, c), _ ) => ConferenceState( c )
+        case ( _: ConferencePublished, state ) => state.copy( isPublished = true )
+        case ( _: ConferenceUnpublished, state ) => state.copy( isPublished = false )
+        case ( SeatCreated(_, seatType), state ) => seatsLens.set( state )( state.seats + seatType )
+        case ( SeatUpdated(_, seatType), state ) => {
           // Set will not update member if it exists (by hashCode), so need to remove and add
           val reduced = state.seats - seatType
           seatsLens.set( state )( reduced + seatType )
         }
-        case SeatDeleted( _, seatTypeId ) => {
+        case ( SeatDeleted(_, seatTypeId), state ) => {
           val result = for {
             seatType <- state.seats find { _.id == seatTypeId }
           } yield {

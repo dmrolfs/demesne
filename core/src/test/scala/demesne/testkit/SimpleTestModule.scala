@@ -10,7 +10,7 @@ import peds.commons.log.Trace
 trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregateActorType { module =>
   def name: String
   def indexes: Seq[AggregateIndexSpec[_, _]]
-  def acceptance( state: SimpleTestActor.State ): stateSpecification.Acceptance
+  def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
   override val trace = Trace[SimpleTestModule]
@@ -23,12 +23,6 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
     }
   }
 
-
-  implicit val stateSpecification: AggregateStateSpecification[SimpleTestActor.State] = {
-    new AggregateStateSpecification[SimpleTestActor.State] {
-      override def acceptance( state: SimpleTestActor.State ): Acceptance = module.acceptance( state )
-    }
-  }
 
   object SimpleTestActor {
     type State = Map[Symbol, Any]
@@ -49,6 +43,8 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
 
     override var state: State = Map.empty[Symbol, Any]
 
+    override val acceptance: AggregateRoot.Acceptance[State] = module.acceptance
+    
     override def receiveCommand: Receive = around {
       case command if module.eventFor(state).isDefinedAt( command ) => {
         persist( module.eventFor(state)(command) ) { event => acceptAndPublish( event ) }

@@ -1,63 +1,103 @@
 package demesne.register
 
-import akka.testkit._
-import demesne._
-import demesne.register.local.RegisterLocalAgent
-import demesne.testkit.{ AggregateRootSpec, SimpleTestModule }
-import demesne.testkit.concurrent.CountDownFunction
-import org.scalatest.Tag
-import peds.akka.envelope._
-// import peds.akka.publish.ReliablePublisher.ReliableMessage
-import peds.commons.log.Trace
-
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
+import akka.actor.Props
+import akka.event.LoggingReceive
+import akka.testkit._
+import scalaz._, Scalaz._
+import demesne._
+// import demesne.module.
+import demesne.scaladsl._
+import demesne.register.local.RegisterLocalAgent
+import demesne.testkit.AggregateRootSpec
+import demesne.testkit.concurrent.CountDownFunction
+import org.scalatest.Tag
+import peds.akka.envelope._
+import peds.commons.identifier._
+import peds.commons.log.Trace
+import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
 
 
-class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] with ScalaFutures with LazyLogging {
+class RegisterAcceptanceSpecB extends AggregateRootSpec[RegisterAcceptanceSpecB] with ScalaFutures with LazyLogging {
+  import AggregateRootModule.{ Command, Event }
 
-  object TestModule extends SimpleTestModule { module =>
+  type TestAggregate = Map[Symbol, Any]
+  type ID = ShortUUID
+  type TID = TaggedID[ID]
 
-    case class Add( override val targetId: Add#TID, foo: String, bar: Int ) extends Command
-    case class ChangeBar( override val targetId: ChangeBar#TID, bar: Int ) extends Command
-    case class Delete( override val targetId: Delete#TID ) extends Command
+  object TestAggregate {
+    case class Add( override val targetId: Add#TID, foo: String, bar: Int ) extends Command[ID]
+    case class ChangeBar( override val targetId: ChangeBar#TID, bar: Int ) extends Command[ID]
+    case class Delete( override val targetId: Delete#TID ) extends Command[ID]
 
-    case class Added( override val sourceId: Added#TID, foo: String, bar: Int ) extends Event
-    case class BarChanged( override val sourceId: BarChanged#TID, oldBar: Int, newBar: Int ) extends Event
-    case class Deleted( override val sourceId: Deleted#TID ) extends Event
+    case class Added( override val sourceId: Added#TID, foo: String, bar: Int ) extends Event[ID]
+    case class BarChanged( override val sourceId: BarChanged#TID, oldBar: Int, newBar: Int ) extends Event[ID]
+    case class Deleted( override val sourceId: Deleted#TID ) extends Event[ID]
 
-    override def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any] = {
-      case Add( id, foo, bar ) => Added( id, foo, bar )
-      case ChangeBar( id, newBar ) => {
-        logger error s"state = $state"
-        BarChanged( id, state('bar).asInstanceOf[Int], newBar )
+    val builder = new SimpleAggregateModuleBuilder[TestAggregate] { }
+    val materialize = SimpleAggregateModuleBuilderInterpreter[TestAggregate]()
+
+    lazy val module: AggregateRootModule = materialize(
+      for {
+        _ <- builder.setIdTag( 'registerAcceptance )
+        _ <- builder.setProps( TestAggregateActor.props( _, _ ) )
+        _ <- builder.addIndex(
+               RegisterLocalAgent.spec[String, TID]( 'bus, RegisterBusSubscription ) {
+                 case Added( sid, foo, _ ) => Directive.Record( foo, sid )
+                 case Deleted( sid ) => Directive.Withdraw( sid )
+               }
+             )
+        _ <- builder.addIndex(
+               RegisterLocalAgent.spec[Int, TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
+                 case Added( sid, _, bar ) => Directive.Record( bar, sid )
+                 case BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar, newBar )
+                 case Deleted( sid ) => Directive.Withdraw( sid )
+               }
+             )
+        m <- builder.build
+      } yield m
+    )
+
+    object TestAggregateActor {
+      def props( model: DomainModel, meta: AggregateRootType ): Props = {
+        Props( new TestAggregateActor( model, meta ) with StackableStreamPublisher with StackableRegisterBusPublisher )
       }
-      case Delete( id ) => Deleted( id )
     }
 
-    override def name: String = "RegisterAcceptance"
+    class TestAggregateActor( override val model: DomainModel, override val meta: AggregateRootType ) 
+    extends AggregateRoot[TestAggregate] { publisher: EventPublisher =>
+      override var state: TestAggregate = Map.empty[Symbol, Any]
 
-    override def indexes: Seq[AggregateIndexSpec[_, _]] = {
-      Seq(
-        RegisterLocalAgent.spec[String, TestModule.TID]( 'bus, RegisterBusSubscription ) {
-          case Added( sid, foo, _ ) => Directive.Record( foo, sid )
-          case Deleted( sid ) => Directive.Withdraw( sid )
-        },
-        RegisterLocalAgent.spec[Int, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
-          case Added( sid, _, bar ) => Directive.Record( bar, sid )
-          case BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar, newBar )
-          case Deleted( sid ) => Directive.Withdraw( sid )
+      override def receiveCommand: Receive = around( active )
+      
+      val active: Receive = LoggingReceive {
+        case Add( id, foo, bar ) => persistAsync( Added(id, foo, bar) ) { e => trace.block( "persist-Add" ) { acceptAndPublish( e ) } }
+
+        case ChangeBar( id, newBar ) => persistAsync( BarChanged(id, state('bar).asInstanceOf[Int], newBar) ) { e => 
+          trace.block( "persist-ChangeBar" ) { acceptAndPublish( e ) }
         }
-      )
-    }
 
-    override val acceptance: AggregateRoot.Acceptance[SimpleTestActor.State] = {
-      case ( Added(id, foo, bar), state ) => state + ( 'id -> id ) + ( 'foo -> foo ) + ( 'bar -> bar )
-      case ( BarChanged(id, _, newBar), state ) => state + ( 'bar -> newBar )
-      case (_: Deleted, _) => Map.empty[Symbol, Any]
+        case Delete( id ) => persistAsync( Deleted(id) ) { e => trace.block( "persist-Delete" ) { acceptAndPublish( e ) } }
+      }
+
+      override val acceptance: AggregateRoot.Acceptance[TestAggregate] = {
+        case ( BarChanged(id, _, newBar), state ) => state + ( 'bar -> newBar )
+        case (_: Deleted, _) => Map.empty[Symbol, Any]
+        case ( Added(id, foo, bar), state ) => trace.block( "accept-Added" ) { 
+          trace( s"state=$state" )
+          trace( s"id=$id" )
+          trace( s"foo=$foo" )
+          trace( s"bar=$bar" )
+
+          Map[Symbol, Any]( 'id -> id, 'foo -> foo, 'bar -> bar ) 
+        }
+      }
+
     }
   }
+
 
   private val trace = Trace[RegisterAcceptanceSpec]
 
@@ -68,7 +108,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
 
     val bus: TestProbe = TestProbe()
 
-    def moduleCompanions: List[AggregateRootModule] = List( TestModule )
+    def moduleCompanions: List[AggregateRootModule] = List( TestAggregate.module )
 
     // override def context: Map[Symbol, Any] = trace.block( "context" ) {
     //   val result = super.context
@@ -81,7 +121,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
 
   object WIP extends Tag( "wip" )
 
-  "Index Register should" should {
+  "Index RegisterB should" should {
     // "config is okay" taggedAs(WIP) in { f: Fixture =>
     //   val config = f.system.settings.config
     //   config.getString( "akka.persistence.journal.plugin" ) mustBe "inmemory-journal"
@@ -280,7 +320,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     "recorded in registers after added" in { fixture: Fixture =>
       import fixture._
 
-      val rt = TestModule.aggregateRootType
+      val rt = TestAggregate.module.aggregateRootType
       val br = model.aggregateRegisterFor[String]( rt, 'bus )
       br.isRight mustBe true
       val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
@@ -289,15 +329,15 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         busRegister <- br 
         streamRegister <- sr
       } {
-        val id = TestModule.nextId
+        val id = TestAggregate.module.nextId
         val foo = "Test Foo"
         val bar = 17
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-        val aggregate = TestModule aggregateOf id
-        aggregate !+ TestModule.Add( id, foo, bar )
+        val aggregate = TestAggregate.module aggregateOf id
+        aggregate !+ TestAggregate.Add( id, foo, bar )
         bus.expectMsgPF( hint = "added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case Envelope( payload: TestAggregate.Added, _ ) => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -320,7 +360,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     "withdrawn from register after delete" in { fixture: Fixture =>
       import fixture._
 
-      val rt = TestModule.aggregateRootType
+      val rt = TestAggregate.module.aggregateRootType
       val br = model.aggregateRegisterFor[String]( rt, 'bus )
       br.isRight mustBe true
       val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
@@ -331,17 +371,17 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       } {
         val p = TestProbe()
 
-        val id = TestModule.nextId
+        val id = TestAggregate.module.nextId
         val foo = "Test Foo"
         val bar = 13
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
         system.eventStream.subscribe( p.ref, classOf[Envelope] )
 
-        val aggregate = TestModule aggregateOf id
-        aggregate !+ TestModule.Add( id, foo, bar )
+        val aggregate = TestAggregate.module aggregateOf id
+        aggregate !+ TestAggregate.Add( id, foo, bar )
 
         bus.expectMsgPF( hint = "bus-added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case Envelope( payload: TestAggregate.Added, _ ) => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -349,7 +389,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         }
 
         p.expectMsgPF( hint = "stream-added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case Envelope( payload: TestAggregate.Added, _ ) => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -364,14 +404,14 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
   //      countDown await 75.millis.dilated
         busRegister.get( "Test Foo" ) mustBe Some(id)
 
-        aggregate !+ TestModule.Delete( id )
+        aggregate !+ TestAggregate.Delete( id )
 
         bus.expectMsgPF( hint = "bus-deleted" ) {
-          case Envelope( payload: TestModule.Deleted, _ ) => payload.sourceId mustBe id
+          case Envelope( payload: TestAggregate.Deleted, _ ) => payload.sourceId mustBe id
         }
 
         p.expectMsgPF( hint = "stream-deleted" ) {
-          case Envelope( payload: TestModule.Deleted, _ ) => payload.sourceId mustBe id
+          case Envelope( payload: TestAggregate.Deleted, _ ) => payload.sourceId mustBe id
         }
 
         val countDownChange = new CountDownFunction[String]
@@ -392,7 +432,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     "revised in register after change" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
-      val rt = TestModule.aggregateRootType
+      val rt = TestAggregate.module.aggregateRootType
       val br = model.aggregateRegisterFor[String]( rt, 'bus )
       br.isRight mustBe true
       val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
@@ -403,17 +443,17 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       } {
         val p = TestProbe()
 
-        val id = TestModule.nextId
+        val id = TestAggregate.module.nextId
         val foo = "Test Foo"
         val bar = 7
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
         system.eventStream.subscribe( p.ref, classOf[Envelope] )
 
-        val aggregate = TestModule aggregateOf id
-        aggregate !+ TestModule.Add( id, foo, bar )
+        val aggregate = TestAggregate.module aggregateOf id
+        aggregate !+ TestAggregate.Add( id, foo, bar )
 
         bus.expectMsgPF( hint = "bus-added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case Envelope( payload: TestAggregate.Added, _ ) => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -421,7 +461,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         }
 
         p.expectMsgPF( hint = "stream-added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case Envelope( payload: TestAggregate.Added, _ ) => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -438,17 +478,17 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         busRegister.get( "Test Foo" ) mustBe Some(id)
         streamRegister.get( 7 ) mustBe Some(id)
 
-        aggregate !+ TestModule.ChangeBar( id, 13 )
+        aggregate !+ TestAggregate.ChangeBar( id, 13 )
 
         bus.expectMsgPF( hint = "bar-change" ) {
-          case Envelope( payload: TestModule.BarChanged, _ ) => {
+          case Envelope( payload: TestAggregate.BarChanged, _ ) => {
             payload.oldBar mustBe 7
             payload.newBar mustBe 13
           }
         }
 
         p.expectMsgPF( hint = "post-bar change stream" ) {
-          case Envelope( payload: TestModule.BarChanged, _ ) => {
+          case Envelope( payload: TestAggregate.BarChanged, _ ) => {
             payload.oldBar mustBe 7
             payload.newBar mustBe 13
           }

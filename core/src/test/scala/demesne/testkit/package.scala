@@ -33,8 +33,8 @@ package object testkit {
       |akka {
       |  loggers = ["akka.event.slf4j.Slf4jLogger"]
       |  logging-filter = "akka.event.DefaultLoggingFilter"
-      |  loglevel = INFO
-      |  stdout-loglevel = INFO
+      |  loglevel = DEBUG
+      |  stdout-loglevel = DEBUG
       |  log-dead-letters = on
       |  log-dead-letters-during-shutdown = on
       |

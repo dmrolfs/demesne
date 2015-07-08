@@ -115,12 +115,12 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       private val bodyLens = lens[State] >> 'content >> 'body
       private val titleLens = lens[State] >> 'content >> 'title
 
-      override def acceptance( state: State ): Acceptance = {
-        case PostAdded( id, c ) => State( id = id, content = c, published = false )
-        case BodyChanged( _, body: String ) => bodyLens.set( state )( body )
-        case TitleChanged( _, _, newTitle ) => titleLens.set( state )( newTitle )
-        case _: PostPublished => state.copy( published = true )
-        case _: Deleted => State()
+      override def acceptance: AggregateStateSpecification.Acceptance[State] = {
+        case ( PostAdded(id, c), _ )=> State( id = id, content = c, published = false )
+        case ( BodyChanged(_, body: String), state ) => bodyLens.set( state )( body )
+        case ( TitleChanged(_, _, newTitle), state ) => titleLens.set( state )( newTitle )
+        case ( _: PostPublished, state ) => state.copy( published = true )
+        case ( _: Deleted, _ ) => State()
       }
     }
   }
