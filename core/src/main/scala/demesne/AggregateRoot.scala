@@ -24,7 +24,11 @@ import scalaz.Kleisli._
 // support registration with "state" handler (context become state)
 //////////////////////////////////////
 
-abstract class AggregateRoot[S: AggregateStateSpecification]
+object AggregateRoot {
+  type Acceptance[S] = PartialFunction[(Any, S), S]
+}
+
+abstract class AggregateRoot[S]
 extends PersistentActor
 with EnvelopingActor
 with DomainModel.Provider
@@ -32,10 +36,14 @@ with AggregateRootType.Provider
 with ActorLogging {
   outer: EventPublisher =>
 
+  import AggregateRoot._
+
   type Valid[A] = NonEmptyList[Throwable] \/ A
   type StateOperation = Kleisli[Valid, S, S]
 
   val trace = Trace( "AggregateRoot", log )
+
+  def acceptance: Acceptance[S]
 
   override def persistenceId: String = self.path.toStringWithoutAddress
 
@@ -57,18 +65,29 @@ with ActorLogging {
 
   def accept( event: Any ): S = {
     acceptOp(event) run state match {
-      case \/-(s) => {
-        state = s
-        s
-      }
-
+      case \/-(s) => s
       case -\/(ex) => throw ex.head
     }
   }
 
   def acceptOp( event: Any ): StateOperation = kleisli[Valid, S, S] { (s: S) => 
     trace.block( s"acceptOp($event, $s)" ) {
-      \/.fromTryCatchNonFatal[S] { implicitly[AggregateStateSpecification[S]].accept( s, event ) } leftMap { NonEmptyList( _ ) }
+      \/.fromTryCatchNonFatal[S] {
+        val eventState = (event, s)
+        if ( acceptance.isDefinedAt( eventState ) ) {
+          val newState = acceptance( eventState )
+          log debug s"newState = $newState"
+          log debug s"BEFORE state = $state"
+          state = newState
+          log debug s"AFTER state = $state"
+          newState
+        } else {
+          log debug s"""${Option(s).map{_.getClass.safeSimpleName}} does not accept event ${event.getClass.safeSimpleName}"""
+          s
+        }
+      } leftMap { 
+        NonEmptyList( _ ) 
+      }
     }
   }
 
@@ -81,12 +100,7 @@ with ActorLogging {
     }
   }
 
-  def acceptAndPublishOp( event: Any ): StateOperation = {
-    for {
-      a <- acceptOp( event )
-      _ <- publishOp( event )
-    } yield a
-  }
+  def acceptAndPublishOp( event: Any ): StateOperation = acceptOp( event ) andThen publishOp( event )
 
   def acceptAndPublish( event: Any ): S = {
     acceptAndPublishOp( event ) run state match {
