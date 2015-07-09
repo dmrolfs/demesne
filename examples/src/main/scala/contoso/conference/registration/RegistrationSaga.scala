@@ -10,6 +10,7 @@ import contoso.conference.registration.OrderModule._
 import contoso.conference.registration.SeatsAvailabilityModule.{CancelSeatReservation, CommitSeatReservation, MakeSeatReservation, SeatsReserved}
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
@@ -74,30 +75,6 @@ object RegistrationSagaModule extends SagaModule { module =>
     def isCompleted: Boolean = state == FullyConfirmed || state == OrderExpired
   }
 
-  object RegistrationSagaState {
-    implicit val stateSpec = new AggregateStateSpecification[RegistrationSagaState] {
-      override def acceptance: AggregateStateSpecification.Acceptance[RegistrationSagaState] = {
-        case ( OrderPlaced(id, cid, seats, expiration, accessCode), state ) => {
-          state.copy(
-            conferenceId = cid,
-            orderId = id,
-            reservationId = id, // Use the order id as an opaque reservation id for the seat reservation. It could be anything else, as long as it is deterministic from the OrderPlaced event.
-            state = AwaitingReservationConfirmation,
-            reservationAutoExpiration = expiration,
-            lastUpdated = joda.DateTime.now
-          )
-        }
-
-        case ( (_: OrderUpdated, workId: WorkId), state ) => {
-          state.copy( state = AwaitingReservationConfirmation, seatReservationWorkId = workId )
-        }
-
-        case ( _: SeatsReserved, state ) => state.copy( state = ReservationConfirmationReceived )
-        case ( _: PaymentCompleted, state ) => state.copy( state = PaymentConfirmationReceived )
-        case ( _: OrderConfirmed, state ) => state.copy( state = FullyConfirmed )
-      }
-    }
-  }
 
   object RegistrationSaga {
     def props(
@@ -127,6 +104,27 @@ object RegistrationSagaModule extends SagaModule { module =>
 
     import context.dispatcher
     var expirationMessager: Cancellable = _
+
+    override def acceptance: Acceptance[RegistrationSagaState] = {
+      case ( OrderPlaced(id, cid, seats, expiration, accessCode), state ) => {
+        state.copy(
+          conferenceId = cid,
+          orderId = id,
+          reservationId = id, // Use the order id as an opaque reservation id for the seat reservation. It could be anything else, as long as it is deterministic from the OrderPlaced event.
+          state = AwaitingReservationConfirmation,
+          reservationAutoExpiration = expiration,
+          lastUpdated = joda.DateTime.now
+        )
+      }
+
+      case ( (_: OrderUpdated, workId: WorkId), state ) => {
+        state.copy( state = AwaitingReservationConfirmation, seatReservationWorkId = workId )
+      }
+
+      case ( _: SeatsReserved, state ) => state.copy( state = ReservationConfirmationReceived )
+      case ( _: PaymentCompleted, state ) => state.copy( state = PaymentConfirmationReceived )
+      case ( _: OrderConfirmed, state ) => state.copy( state = FullyConfirmed )
+    }
 
     def order( id: Option[OrderModule.TID] ): ActorRef = OrderModule.aggregateOf( id )( model )
 

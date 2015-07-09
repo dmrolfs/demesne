@@ -9,6 +9,7 @@ import com.typesafe.config.ConfigFactory
 import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
+import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
@@ -180,19 +181,6 @@ object OrderModule extends AggregateRootModule { module =>
     }
   }
 
-  object OrderState {
-    implicit val stateSpec = new AggregateStateSpecification[OrderState] {
-      override def acceptance: AggregateStateSpecification.Acceptance[OrderState] = {
-        case ( OrderPlaced(_, conferenceId, seats, _, _ ), state ) => state.copy( conferenceId = conferenceId, seats = seats )
-        case ( OrderUpdated(_, seats), state ) => state.copy( seats = seats )
-        case ( OrderPartiallyReserved(_, _, seats), state ) => state.copy( seats = seats )
-        case ( OrderReservationCompleted(_, _, seats), state ) => state.copy( seats = seats )
-        case ( OrderConfirmed, state ) => state.copy( confirmed = true )
-        case ( OrderPaymentConfirmed, state ) => state.copy( confirmed = true )
-      }
-    }
-  }
-
 
   object Order {
     def props( model: DomainModel, meta: AggregateRootType, pricingRetriever: ActorRef ): Props = {
@@ -209,6 +197,15 @@ object OrderModule extends AggregateRootModule { module =>
 
     override var state: OrderState = _
     var expirationMessager: Cancellable = _
+
+    override def acceptance: Acceptance[OrderState] = {
+      case ( OrderPlaced(_, conferenceId, seats, _, _ ), state ) => state.copy( conferenceId = conferenceId, seats = seats )
+      case ( OrderUpdated(_, seats), state ) => state.copy( seats = seats )
+      case ( OrderPartiallyReserved(_, _, seats), state ) => state.copy( seats = seats )
+      case ( OrderReservationCompleted(_, _, seats), state ) => state.copy( seats = seats )
+      case ( OrderConfirmed, state ) => state.copy( confirmed = true )
+      case ( OrderPaymentConfirmed, state ) => state.copy( confirmed = true )
+    }
 
     override def receiveCommand: Receive = around( quiescent )
 

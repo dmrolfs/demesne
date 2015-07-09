@@ -5,6 +5,7 @@ import akka.event.LoggingReceive
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
@@ -22,13 +23,10 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
 
   override type ID = ConferenceModule.ID // SeatsAvailability supports corresponding Conference
 
-  // override val aggregateIdTag: Symbol = 'seatsAvailability
-
   override val aggregateRootType: AggregateRootType = {
     new AggregateRootType {// def actorFactory: ActorFactory
       override def name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = SeatsAvailability.props( model, this )
-      // override  val toString: String = shardName + "AggregateRootType"
     }
   }
 
@@ -109,38 +107,6 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
     type SeatTypesRemaining = Map[SeatType.TID, Dimensionless]
     type PendingReservations = Map[OrderModule.TID, Seq[SeatQuantity]]
 
-    implicit val stateSpec = new AggregateStateSpecification[SeatsAvailabilityState] {
-      override def acceptance: AggregateStateSpecification.Acceptance[SeatsAvailabilityState] = {
-        // Conference/Registration/SeatsAvailability.cs[185-198]
-        case ( AvailableSeatsChanged(_, seats), state ) => {
-          val updated = addToRemainingSeats( state.remainingSeats, seats )
-          state.copy( remainingSeats = updated )
-        }
-
-        // Conference/Registration/SeatsAvailability.cs[223-231]
-        case ( SeatsReservationCancelled(_, reservationId, availableSeatsChanged), state ) => {
-          val updatedPending = state.pendingReservations - reservationId
-          val updatedRemaining = addToRemainingSeats( state.remainingSeats, availableSeatsChanged )
-          state.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
-        }
-
-        // Conference/Registration/SeatsAvailability.cs[218 - 221]
-        case ( SeatsReservationCommitted(_, reservationId), state ) => {
-          state.copy( pendingReservations = (state.pendingReservations - reservationId) )
-        }
-
-        // Conference/Registration/SeatsAvailability.cs[200-216]
-        case ( SeatsReserved(_, reservationId, reservationDetails, availableSeatsChanged), state ) => {
-          val updatedPending = (
-            if ( reservationDetails.size > 0 ) state.pendingReservations + (reservationId -> reservationDetails.toSeq)
-            else state.pendingReservations - reservationId
-          )
-          val updatedRemaining = addToRemainingSeats( state.remainingSeats, availableSeatsChanged )
-          state.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
-        }
-      }
-    }
-
     def addToRemainingSeats( original: SeatTypesRemaining, newAvailable: Set[SeatQuantity] ): SeatTypesRemaining = {
       val newRemainingSeats = for {
         avail <- newAvailable.toSeq
@@ -169,6 +135,36 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
     // override val registerBus: RegisterBus = model.registerBus
 
     override var state: SeatsAvailabilityState = _
+
+    override def acceptance: Acceptance[SeatsAvailabilityState] = {
+      // Conference/Registration/SeatsAvailability.cs[185-198]
+      case ( AvailableSeatsChanged(_, seats), state ) => {
+        val updated = SeatsAvailabilityState.addToRemainingSeats( state.remainingSeats, seats )
+        state.copy( remainingSeats = updated )
+      }
+
+      // Conference/Registration/SeatsAvailability.cs[223-231]
+      case ( SeatsReservationCancelled(_, reservationId, availableSeatsChanged), state ) => {
+        val updatedPending = state.pendingReservations - reservationId
+        val updatedRemaining = SeatsAvailabilityState.addToRemainingSeats( state.remainingSeats, availableSeatsChanged )
+        state.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
+      }
+
+      // Conference/Registration/SeatsAvailability.cs[218 - 221]
+      case ( SeatsReservationCommitted(_, reservationId), state ) => {
+        state.copy( pendingReservations = (state.pendingReservations - reservationId) )
+      }
+
+      // Conference/Registration/SeatsAvailability.cs[200-216]
+      case ( SeatsReserved(_, reservationId, reservationDetails, availableSeatsChanged), state ) => {
+        val updatedPending = (
+          if ( reservationDetails.size > 0 ) state.pendingReservations + (reservationId -> reservationDetails.toSeq)
+          else state.pendingReservations - reservationId
+        )
+        val updatedRemaining = SeatsAvailabilityState.addToRemainingSeats( state.remainingSeats, availableSeatsChanged )
+        state.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
+      }
+    }
 
     override def receiveCommand: Receive = around {
       LoggingReceive {

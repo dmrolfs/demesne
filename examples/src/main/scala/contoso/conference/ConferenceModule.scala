@@ -6,6 +6,7 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import com.github.nscala_time.time.{Imports => joda}
 import demesne._
+import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.commons.V
 import peds.akka.AskRetry._
@@ -134,32 +135,7 @@ object ConferenceModule extends AggregateRootModule { module =>
       )
     }
 
-
-    implicit val stateSpec = new AggregateStateSpecification[ConferenceState] {
-      private val seatsLens = lens[ConferenceState] >> 'seats
-      
-      override def acceptance: AggregateStateSpecification.Acceptance[ConferenceState] = {
-        case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
-        case ( ConferenceUpdated(_, c), _ ) => ConferenceState( c )
-        case ( _: ConferencePublished, state ) => state.copy( isPublished = true )
-        case ( _: ConferenceUnpublished, state ) => state.copy( isPublished = false )
-        case ( SeatCreated(_, seatType), state ) => seatsLens.set( state )( state.seats + seatType )
-        case ( SeatUpdated(_, seatType), state ) => {
-          // Set will not update member if it exists (by hashCode), so need to remove and add
-          val reduced = state.seats - seatType
-          seatsLens.set( state )( reduced + seatType )
-        }
-        case ( SeatDeleted(_, seatTypeId), state ) => {
-          val result = for {
-            seatType <- state.seats find { _.id == seatTypeId }
-          } yield {
-            val reduced = state.seats - seatType
-            seatsLens.set( state )( reduced )
-          }
-          result getOrElse state
-        }
-      }
-    }
+    val seatsLens = lens[ConferenceState] >> 'seats
   }
 
 
@@ -182,6 +158,28 @@ object ConferenceModule extends AggregateRootModule { module =>
     override val trace = Trace( "Conference", log )
 
     override var state: ConferenceState = _
+
+    override val acceptance: Acceptance[ConferenceState] = {
+      case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
+      case ( ConferenceUpdated(_, c), _ ) => ConferenceState( c )
+      case ( _: ConferencePublished, state ) => state.copy( isPublished = true )
+      case ( _: ConferenceUnpublished, state ) => state.copy( isPublished = false )
+      case ( SeatCreated(_, seatType), state ) => ConferenceState.seatsLens.set( state )( state.seats + seatType )
+      case ( SeatUpdated(_, seatType), state ) => {
+        // Set will not update member if it exists (by hashCode), so need to remove and add
+        val reduced = state.seats - seatType
+        ConferenceState.seatsLens.set( state )( reduced + seatType )
+      }
+      case ( SeatDeleted(_, seatTypeId), state ) => {
+        val result = for {
+          seatType <- state.seats find { _.id == seatTypeId }
+        } yield {
+          val reduced = state.seats - seatType
+          ConferenceState.seatsLens.set( state )( reduced )
+        }
+        result getOrElse state
+      }
+    }
 
     override def receiveCommand: Receive = around( quiescent )
 

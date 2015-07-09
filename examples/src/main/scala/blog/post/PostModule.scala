@@ -5,6 +5,7 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
+import demesne.AggregateRoot.Acceptance
 import demesne.register.local.RegisterLocalAgent
 import demesne.register._
 import peds.akka.envelope.Envelope
@@ -111,17 +112,9 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       published: Boolean = false
     )
 
-    implicit val stateSpecification = new AggregateStateSpecification[State] {
-      private val bodyLens = lens[State] >> 'content >> 'body
-      private val titleLens = lens[State] >> 'content >> 'title
-
-      override def acceptance: AggregateStateSpecification.Acceptance[State] = {
-        case ( PostAdded(id, c), _ )=> State( id = id, content = c, published = false )
-        case ( BodyChanged(_, body: String), state ) => bodyLens.set( state )( body )
-        case ( TitleChanged(_, _, newTitle), state ) => titleLens.set( state )( newTitle )
-        case ( _: PostPublished, state ) => state.copy( published = true )
-        case ( _: Deleted, _ ) => State()
-      }
+    object State {
+      val bodyLens = lens[State] >> 'content >> 'body
+      val titleLens = lens[State] >> 'content >> 'title
     }
   }
 
@@ -134,6 +127,14 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     override val trace = Trace( "Post", log )
 
     override var state: State = State()
+
+    override val acceptance: Acceptance[PostActor.State] = {
+      case ( PostAdded(id, c), _ )=> State( id = id, content = c, published = false )
+      case ( BodyChanged(_, body: String), state ) => State.bodyLens.set( state )( body )
+      case ( TitleChanged(_, _, newTitle), state ) => State.titleLens.set( state )( newTitle )
+      case ( _: PostPublished, state ) => state.copy( published = true )
+      case ( _: Deleted, _ ) => State()
+    }
 
     override def receiveCommand: Receive = around( quiescent )
 
