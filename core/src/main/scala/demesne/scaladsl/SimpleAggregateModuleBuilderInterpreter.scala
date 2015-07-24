@@ -3,7 +3,8 @@ package demesne.scaladsl
 import scala.reflect.ClassTag
 import akka.actor.Actor
 import akka.actor.Actor.Receive
-import scalaz._, Scalaz._
+import scalaz.{ Lens => _, _ }, Scalaz._
+import shapeless.{ Id => _, _ }
 import peds.commons.V
 import peds.commons.log.Trace
 import peds.commons.util._
@@ -12,25 +13,32 @@ import demesne.module.{ AggregateRootProps, DemesneModuleError, SimpleAggregateM
 import demesne.register.AggregateIndexSpec
 
 
-trait ModuleBuilderInterpreter {
-  def apply[A]( action: SimpleModuleBuilderOp[A] ): Id[A]
-}
-
-case class SimpleAggregateModuleBuilderInterpreter[S: ClassTag]() extends ModuleBuilderInterpreter {
-  import SimpleAggregateModuleBuilderInterpreter._
-
-  type Acceptance = AggregateRoot.Acceptance[S]
-
-  case class SimpleModule(
-    idTagO: Option[Symbol] = None,
+class SimpleAggregateModuleBuilderInterpreter[S: ClassTag]() extends AggregateModuleBuilderInterpreter[S] {
+  import SimpleAggregateModuleBuilder._
+  
+  case class SimpleModule private[scaladsl](
+    override val idTagO: Option[Symbol] = None,
     override val indexes: Seq[AggregateIndexSpec[_, _]] = Seq(),
-    // override val acceptance: Acceptance = SimpleModule.emptyAcceptance,
-    propsO: Option[AggregateRootProps] = None
-  ) extends SimpleAggregateModule[S] {
+    override val propsO: Option[AggregateRootProps] = None
+  ) extends BuilderModule {
     override def trace: Trace[_] = Trace[SimpleModule]
-    override val evState: ClassTag[S] = implicitly[ClassTag[S]]
-    override def aggregateIdTag: Symbol = idTagO getOrElse { throw UndefinedAggregateIdTagError }
-    override def aggregateRootPropsOp: AggregateRootProps = propsO getOrElse { throw UndefinedAggregateRootPropsError }
+    override def evState: ClassTag[S] = implicitly[ClassTag[S]]
+
+    override val idTagOLens: Lens[BuilderModule, Option[Symbol]] = new Lens[BuilderModule, Option[Symbol]] {
+      override def get( s: BuilderModule ): Option[Symbol] = s.idTagO
+      override def set( s: BuilderModule )( a: Option[Symbol] ): BuilderModule = {
+        BuilderModuleImpl( idTagO = a, propsO = s.propsO )
+      }
+    }
+
+    override val propsOLens: Lens[BuilderModule, Option[AggregateRootProps]] = {
+      new Lens[BuilderModule, Option[AggregateRootProps]] {
+        override def get( s: BuilderModule ): Option[AggregateRootProps] = s.propsO
+        override def set( s: BuilderModule )( a: Option[AggregateRootProps] ): BuilderModule = {
+          BuilderModuleImpl( idTagO = s.idTagO, propsO = a )
+        }
+      }
+    }
 
     override def toString: String = {
       s"${getClass.safeSimpleName}[${stateClass.safeSimpleName}](${aggregateIdTag} " +
@@ -38,69 +46,24 @@ case class SimpleAggregateModuleBuilderInterpreter[S: ClassTag]() extends Module
     }
   }
 
-  object SimpleModule {
-    val emptyAcceptance: Acceptance = peds.commons.util.emptyBehavior[(Any, S), S]
-  }
 
-
-  var module: SimpleModule = SimpleModule()
-
-  def step[A]( action: SimpleModuleBuilderOpF[SimpleModuleBuilderOp[A]] ): Id[SimpleModuleBuilderOp[A]] = {
-    action match {
-      case SetIdTag( newIdTag, next ) => {
-        module = module.copy( idTagO = Some(newIdTag) )
-        next
-      }
-
-      case SetIndexes( indexes, next ) => {
-        module = module.copy( indexes = indexes )
-        next
-      }
-
-      case AddIndex( index, next ) => {
-        module = module.copy( indexes = module.indexes :+ index )
-        next
-      }
-
-      case SetProps( props, next ) => {
-        module = module.copy( propsO = Some(props) )
-        next
-      }
-
-      case SetAcceptance( newAcceptance, next ) => {
-        val result = scala.util.Try {
-          // module = module.copy( acceptance = newAcceptance.asInstanceOf[Acceptance] )
-        }
-
-        result match {
-          case scala.util.Success(_) => next
-          case scala.util.Failure( ex ) => throw ex
-        }
-      }
-
-      case Build( onBuild ) => {
-        val result = for {
-          _ <- checkIdTag( module.idTagO )
-          _ <- checkProps( module.propsO )
-        } yield module
-
-        result match {
-          case \/-( m ) => onBuild( m )
-          case -\/( ex ) => throw ex
-        }
-      }
+  private var _module: SimpleModule = SimpleModule()
+  override def module: BuilderModule = _module
+  override def module_=( newModule: BuilderModule ): Unit = {
+    _module = newModule match {
+      case m: SimpleModule => m
+      case m: BuilderModule => SimpleModule( idTagO = m.idTagO, propsO = m.propsO )
     }
   }
 
-  def checkIdTag( tag: Option[Symbol] ): \/[DemesneModuleError, Symbol] = {
-    tag map { _.right } getOrElse { UndefinedAggregateIdTagError.left }
+  def myOpStep[A]: PartialFunction[ModuleBuilderOpF[A], (Id[A], BuilderModule)] = {
+    case SetIndexes( indexes, next ) => ( next, _module.copy( indexes = indexes ) )
+    case AddIndex( index, next ) => ( next, _module.copy( indexes = module.indexes :+ index ) )
   }
 
-  def checkProps( props: Option[AggregateRootProps] ): \/[DemesneModuleError, AggregateRootProps] = {
-    props map { _.right } getOrElse { UndefinedAggregateRootPropsError.left }
-  }
+  override def opStep[A]: PartialFunction[ModuleBuilderOpF[A], (Id[A], BuilderModule)] = myOpStep[A] orElse super.opStep[A] 
 
-  override def apply[A]( action: SimpleModuleBuilderOp[A] ): Id[A] = action.runM( step )
+  override def apply[A]( action: ModuleBuilderOp[A] ): Id[A] = action.runM( step )
 }
 
 object SimpleAggregateModuleBuilderInterpreter {

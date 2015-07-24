@@ -37,7 +37,7 @@ class RegisterAcceptanceSpecB extends AggregateRootSpec[RegisterAcceptanceSpecB]
     case class Deleted( override val sourceId: Deleted#TID ) extends Event[ID]
 
     val builder = new SimpleAggregateModuleBuilder[TestAggregate] { }
-    val materialize = SimpleAggregateModuleBuilderInterpreter[TestAggregate]()
+    val materialize = new SimpleAggregateModuleBuilderInterpreter[TestAggregate]()
 
     lazy val module: AggregateRootModule = materialize(
       for {

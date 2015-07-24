@@ -9,15 +9,17 @@ import demesne.module.AggregateRootProps
 import demesne.register.AggregateIndexSpec
 
 
-trait SimpleAggregateModuleBuilder[A] extends AggregateModuleBuilder[A] {
-  import SimpleAggregateModuleBuilder._
+trait AggregateModuleBuilder[A] {
+  import AggregateModuleBuilder._
+  
+  def setIdTag( newIdTag: Symbol ): ModuleBuilderOp[Unit] = liftF( SetIdTag( newIdTag, () ) )
 
-  def setIndexes( indexes: List[AggregateIndexSpec[_, _]] ): ModuleBuilderOp[Unit] = liftF( SetIndexes( indexes, () ) )
+  def setProps( props: AggregateRootProps ): ModuleBuilderOp[Unit] = liftF( SetProps( props, () ) )
 
-  def addIndex( index: AggregateIndexSpec[_, _] ): ModuleBuilderOp[Unit] = liftF( AddIndex( index, () ) )
+  def build: ModuleBuilderOp[AggregateRootModule] = liftF( Build( identity ) )
 }
 
-object SimpleAggregateModuleBuilder {
+object AggregateModuleBuilder {
   //DMR: normally this would be defined within SimpleModuleBuilderOpF, but moved to here in order to support DRY structure
 
   implicit val functor: Functor[ModuleBuilderOpF] = new Functor[ModuleBuilderOpF] {
@@ -27,8 +29,6 @@ object SimpleAggregateModuleBuilder {
         case SetProps( props, next ) => SetProps( props, f(next) )
         case SetAcceptance( acceptance, next ) => SetAcceptance( acceptance, f(next) )
         case Build( onBuild ) => Build( onBuild andThen f )
-        case SetIndexes( indexes, next ) => SetIndexes( indexes, f(next) )
-        case AddIndex( index, next ) => AddIndex( index, f(next) )
       }
     }
   }

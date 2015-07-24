@@ -3,6 +3,7 @@ package demesne
 import akka.actor.{ActorRef, Props, SupervisorStrategy}
 import akka.contrib.pattern.ShardRegion
 import demesne.register.AggregateIndexSpec
+import peds.archetype.domain.model.core.Identifiable
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.util._
@@ -17,7 +18,8 @@ object AggregateRootType {
 }
 
 trait AggregateRootType {
-  type TID
+  type ID
+  type TID = Identifiable.TID[ID]
   
   def name: String
   def repositoryName: String = name+"Repository"

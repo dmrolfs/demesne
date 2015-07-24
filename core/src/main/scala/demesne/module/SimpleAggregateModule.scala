@@ -13,11 +13,15 @@ trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggreg
   def stateClass: Class[_] = implicitly[ClassTag[S]].runtimeClass
   implicit def evState: ClassTag[S]
   
+  trait SimpleAggregateRootType extends AggregateRootType {
+    override def toString: String = name + "SimpleAggregateRootType"
+  }
+
   override val aggregateRootType: AggregateRootType = {
-    new AggregateRootType {
+    new SimpleAggregateRootType {
       override def name: String = module.shardName
       override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes
-      override def aggregateRootProps( implicit model: DomainModel ): Props = aggregateRootPropsOp( model, this )
+      override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
     }
   }
 }
