@@ -12,7 +12,6 @@ import peds.commons.util._
  */
 package object module {
   type AggregateRootProps = (DomainModel, AggregateRootType) => Props
-  // type StatefulReceive[S] = AggregateRoot[S] => Agent[S] => ActorContext => Receive
 
 
   trait DemesneModuleError extends Throwable

@@ -7,6 +7,7 @@ import peds.commons.log.Trace
 import peds.commons.util._
 
 
+// trait AggregateRootModule[AR <: Identifiable] extends CommonInitializeAggregateActorType with LazyLogging { module =>
 trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLogging { module =>
   def trace: Trace[_]
 
