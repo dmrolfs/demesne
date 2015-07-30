@@ -9,10 +9,10 @@ import peds.archetype.domain.model.core.Entity
 trait BasicEntityAggregateModuleBuilder[A] extends SimpleAggregateModuleBuilder[A] {
   import BasicEntityAggregateModuleBuilder._
 
-  def setIdLens( idLens: Lens[_, _] ): ModuleBuilderOp[Unit] = liftF( SetIdLens[Unit]( idLens, () ) )
-  def setNameLens( nameLens: Lens[_, String] ): ModuleBuilderOp[Unit] = liftF( SetNameLens[Unit]( nameLens, () ) )
-  def setSlugLens( slugLens: Lens[_, String] ): ModuleBuilderOp[Unit] = liftF( SetNameLens[Unit]( slugLens, () ) )
-  def setIsActiveLens( isActiveLens: Lens[_, Boolean] ): ModuleBuilderOp[Unit] = liftF( SetIsActiveLens[Unit]( isActiveLens, () ) )
+  def setIdLens( idLens: Lens[_, _] ): ModuleBuilderOp[Unit] = liftF( SetIdLens[Unit]( idLens, () ) ) // Lens[A, A#TID]
+  def setNameLens( nameLens: Lens[_, String] ): ModuleBuilderOp[Unit] = liftF( SetNameLens[Unit]( nameLens, () ) ) // Lens[A, String]
+  def setSlugLens( slugLens: Lens[_, String] ): ModuleBuilderOp[Unit] = liftF( SetNameLens[Unit]( slugLens, () ) ) // Lens[A, String]
+  def setIsActiveLens( isActiveLens: Lens[_, Boolean] ): ModuleBuilderOp[Unit] = liftF( SetIsActiveLens[Unit]( isActiveLens, () ) ) // Lens[A, Boolean]
 }
 
 object BasicEntityAggregateModuleBuilder {
