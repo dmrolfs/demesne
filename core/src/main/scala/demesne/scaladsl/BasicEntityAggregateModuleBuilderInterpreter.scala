@@ -10,6 +10,10 @@ import demesne.module.{ AggregateRootProps }
 import demesne.register.AggregateIndexSpec
 
 
+object BasicEntityAggregateModuleBuilderInterpreter {
+  def apply[S: ClassTag]: BasicEntityAggregateModuleBuilderInterpreter[S] = new BasicEntityAggregateModuleBuilderInterpreter[S]()
+}
+
 class BasicEntityAggregateModuleBuilderInterpreter[S: ClassTag]() extends SimpleAggregateModuleBuilderInterpreter[S] {
   trait BasicEntityModule extends SimpleModule {
     def idLensO: Option[Lens[_, _]]

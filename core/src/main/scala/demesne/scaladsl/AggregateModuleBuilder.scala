@@ -20,6 +20,8 @@ trait AggregateModuleBuilder[A] {
 }
 
 object AggregateModuleBuilder {
+  def apply[A]: AggregateModuleBuilder[A] = new AggregateModuleBuilder[A] { }
+
   //DMR: normally this would be defined within SimpleModuleBuilderOpF, but moved to here in order to support DRY structure
 
   implicit val functor: Functor[ModuleBuilderOpF] = new Functor[ModuleBuilderOpF] {

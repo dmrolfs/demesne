@@ -8,6 +8,10 @@ import peds.commons.util._
 import demesne.module.{ AggregateRootProps, DemesneModuleError }
 
 
+object AggregateModuleBuilderInterpreter {
+  def apply[S: ClassTag]: AggregateModuleBuilderInterpreter[S] = new AggregateModuleBuilderInterpreter[S]()
+}
+
 class AggregateModuleBuilderInterpreter[S: ClassTag]() extends ModuleBuilderInterpreter[S] {
   import ModuleBuilderInterpreter._
   import AggregateModuleBuilder._

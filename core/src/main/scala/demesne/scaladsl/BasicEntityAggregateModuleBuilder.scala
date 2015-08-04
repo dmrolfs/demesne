@@ -16,6 +16,8 @@ trait BasicEntityAggregateModuleBuilder[A] extends SimpleAggregateModuleBuilder[
 }
 
 object BasicEntityAggregateModuleBuilder {
+  def apply[A]: BasicEntityAggregateModuleBuilder[A] = new BasicEntityAggregateModuleBuilder[A] { }
+  
   //DMR: normally this would be defined within SimpleModuleBuilderOpF, but moved to here in order to support DRY structure
 
   implicit val functor: Functor[ModuleBuilderOpF] = new Functor[ModuleBuilderOpF] {

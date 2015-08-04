@@ -14,6 +14,10 @@ import demesne.module.{ AggregateRootProps, DemesneModuleError, SimpleAggregateM
 import demesne.register.AggregateIndexSpec
 
 
+object SimpleAggregateModuleBuilderInterpreter {
+  def apply[S: ClassTag]: SimpleAggregateModuleBuilderInterpreter[S] = new SimpleAggregateModuleBuilderInterpreter[S]()
+}
+
 class SimpleAggregateModuleBuilderInterpreter[S: ClassTag]() extends AggregateModuleBuilderInterpreter[S] {
   
   trait SimpleModule extends BuilderModule {
