@@ -25,6 +25,8 @@ trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLo
     model.aggregateOf( rootType = aggregateRootType, id = effId )
   }
 
+  override def toString: String = s"${getClass.safeSimpleName}(${aggregateIdTag})"
+
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
 
 
