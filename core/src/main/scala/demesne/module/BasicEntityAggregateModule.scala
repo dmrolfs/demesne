@@ -10,7 +10,7 @@ import demesne.register.{ AggregateIndexSpec, Directive, StackableRegisterBusPub
 import demesne.register.local.RegisterLocalAgent
 
 
-trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { module =>
+trait BasicEntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { module =>
   def idLens: Lens[E, E#TID]
   def nameLens: Lens[E, String]
   def slugLens: Lens[E, String]
