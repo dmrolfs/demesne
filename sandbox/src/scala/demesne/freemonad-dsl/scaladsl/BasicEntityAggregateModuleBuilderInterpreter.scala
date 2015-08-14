@@ -4,30 +4,55 @@ import scala.reflect.ClassTag
 import scalaz.{ Lens => _, _ }, Scalaz._
 import shapeless.Lens
 import shapeless.syntax.typeable._
+import peds.archetype.domain.model.core.Entity
 import peds.commons.log.Trace
 import peds.commons.util._
-import demesne.module.{ AggregateRootProps }
+import demesne.module.{ AggregateRootProps, BasicEntityAggregateModule }
 import demesne.register.AggregateIndexSpec
 
 
 object BasicEntityAggregateModuleBuilderInterpreter {
-  def apply[S: ClassTag]: BasicEntityAggregateModuleBuilderInterpreter[S] = new BasicEntityAggregateModuleBuilderInterpreter[S]()
+  def apply[S <: Entity : ClassTag]: BasicEntityAggregateModuleBuilderInterpreter[S] = new BasicEntityAggregateModuleBuilderInterpreter[S]()
 }
 
-class BasicEntityAggregateModuleBuilderInterpreter[S: ClassTag]() extends SimpleAggregateModuleBuilderInterpreter[S] {
-  trait BasicEntityModule extends SimpleModule {
+class BasicEntityAggregateModuleBuilderInterpreter[S <: Entity : ClassTag]() extends SimpleAggregateModuleBuilderInterpreter[S] {
+  trait BasicEntityModule extends SimpleModule with BasicEntityAggregateModule[S] {
+    import BasicEntityModule._
+
+    override def idLens: Lens[S, S#TID] = {
+      trace( s"ID lens = $idLensO" )
+      idLensO map { _.asInstanceOf[Lens[S, S#TID]] } getOrElse { throw UndefinedLensError( "id" ) }
+    }
     def idLensO: Option[Lens[_, _]]
     def idLensOLens: Lens[BasicEntityModule, Option[Lens[_, _]]]
 
+    override def nameLens: Lens[S, String] = {
+      trace( s"NAME lens = $nameLensO" )
+      nameLensO map { _.asInstanceOf[Lens[S, String]] } getOrElse { throw UndefinedLensError( "name" ) }
+    }
     def nameLensO: Option[Lens[_, String]]
     def nameLensOLens: Lens[BasicEntityModule, Option[Lens[_, String]]]
 
+    override def slugLens: Lens[S, String] = {
+      trace( s"SLUG lens = $slugLensO" )
+      slugLensO map { _.asInstanceOf[Lens[S, String]] } getOrElse { throw UndefinedLensError( "slug" ) }
+    }
     def slugLensO: Option[Lens[_, String]]
     def slugLensOLens: Lens[BasicEntityModule, Option[Lens[_, String]]]
 
+    def isActiveLens: Lens[S, Boolean] = {
+      trace( s"IS_ACTIVE lens = $isActiveLensO" )
+      isActiveLensO map { _.asInstanceOf[Lens[S, Boolean]] } getOrElse { throw UndefinedLensError( "isActive" ) }
+    }
     def isActiveLensO: Option[Lens[_, Boolean]]
     def isActiveLensOLens: Lens[BasicEntityModule, Option[Lens[_, Boolean]]]
   }
+
+  object BasicEntityModule {
+    case class UndefinedLensError private[scaladsl]( lens: String ) 
+    extends IllegalArgumentException( s"Must define lens [$lens] before building module" ) with demesne.module.DemesneModuleError
+  }
+
 
   case class BasicEntityModuleImpl private[scaladsl](
     override val idTagO: Option[Symbol] = None,
