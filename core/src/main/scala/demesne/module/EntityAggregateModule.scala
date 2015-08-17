@@ -10,7 +10,7 @@ import demesne.register.{ AggregateIndexSpec, Directive, StackableRegisterBusPub
 import demesne.register.local.RegisterLocalAgent
 
 
-trait BasicEntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { module =>
+trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { module =>
   def idLens: Lens[E, E#TID]
   def nameLens: Lens[E, String]
   def slugLens: Lens[E, String]
@@ -68,13 +68,13 @@ trait BasicEntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] {
   }
 
 
-  // object BasicEntityActor {
+  // object EntityAggregateActor {
   //   def props( model: DomainModel, meta: AggregateRootType ): Props = {
-  //     Props( new BasicEntityActor( model, meta) with StackableStreamPublisher with StackableRegisterBusPublisher )
+  //     Props( new EntityAggregateActor( model, meta) with StackableStreamPublisher with StackableRegisterBusPublisher )
   //   }
   // }
 
-  abstract class BasicEntityActor extends AggregateRoot[E] { publisher: EventPublisher =>
+  abstract class EntityAggregateActor extends AggregateRoot[E] { publisher: EventPublisher =>
     import AggregateRoot._
 
     override def acceptance: Acceptance[E] = entityAcceptance
