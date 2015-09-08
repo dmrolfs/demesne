@@ -53,7 +53,7 @@ object AggregateRootModule {
   val Actor = """(\w+)Actor""".r
   val PersistentActor = """(\w+)PersistentActor""".r
 
-  private def tagify( clazz: Class[_] ): Symbol = {
+  def tagify( clazz: Class[_] ): Symbol = {
     val name = clazz.safeSimpleName match {
       case Module(n) => n
       case Actor(n) => n
