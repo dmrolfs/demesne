@@ -42,12 +42,12 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
   case class Disabled( override val sourceId: Disabled#TID, slug: String ) extends Event with EntityProtocol
   case class Enabled( override val sourceId: Enabled#TID, slug: String ) extends Event with EntityProtocol
 
-  trait BasicEntityAggregateRootType extends SimpleAggregateRootType {
-    override def toString: String = name + "BasicEntityAggregateRootType"
+  trait EntityAggregateRootType extends SimpleAggregateRootType {
+    override def toString: String = name + "EntityAggregateRootType"
   }
   
   override val aggregateRootType: AggregateRootType = {
-    new BasicEntityAggregateRootType {
+    new EntityAggregateRootType {
       override def name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
       override def indexes: Seq[AggregateIndexSpec[_, _]] = {
