@@ -1,14 +1,74 @@
 package demesne.module
 
+import scala.reflect.ClassTag
 import akka.actor.Props
 import akka.event.LoggingReceive
 import shapeless._
 import peds.archetype.domain.model.core.Entity
 import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
-import demesne.{ AggregateRoot, AggregateRootType, DomainModel }
+import peds.commons.log.Trace
+import peds.commons.util._
+import demesne.{ AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel }
 import demesne.register.{ AggregateIndexSpec, Directive, StackableRegisterBusPublisher }
 import demesne.register.local.RegisterLocalAgent
+import com.github.harveywi.builder.HasBuilder
 
+
+object EntityAggregateModule {
+  def builderFor[E <: Entity : ClassTag]: BuilderFactory[E] = new BuilderFactory[E]
+
+  class BuilderFactory[E <: Entity : ClassTag] {
+    type CC = EntityAggregateModuleImpl[E]
+
+    def make[L <: HList]( implicit g: Generic.Aux[CC, L] ): Builder[L] = new Builder[L]
+
+    class Builder[L <: HList]( implicit val g: Generic.Aux[CC, L] ) extends HasBuilder[CC] {
+      object P {
+        object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
+        object Props extends Param[AggregateRootProps]
+        object Indexes extends OptParam[Seq[AggregateIndexSpec[_,_]]]( Seq.empty )
+        object IdLens extends Param[Lens[E, E#TID]]
+        object NameLens extends Param[Lens[E, String]]
+        object SlugLens extends OptParam[Option[Lens[E, String]]]( None )
+        object IsActiveLens extends OptParam[Option[Lens[E, Boolean]]]( None )
+      }
+
+      override val gen = Generic[CC]
+      override val fieldsContainer = createFieldsContainer( 
+        P.Tag :: 
+        P.Props :: 
+        P.Indexes :: 
+        P.IdLens :: 
+        P.NameLens :: 
+        P.SlugLens :: 
+        P.IsActiveLens :: 
+        HNil 
+      )
+    }
+  }
+
+
+  // this sub-module is required to provide enough information for the compiler to generate a Generic value for this
+  // builder, which had difficulty with the E#TID type param of the idLens property.
+  // I couldn't repro this issue in an isolated manner, and the solution was crafted through lots of experiementation
+  // after digging through results from -Xlog-implicits and -Ymacro-debug-verbose.
+  object EntityAggregateModuleImpl {
+    type TID[E <: Entity] = E#TID
+  }
+
+  final case class EntityAggregateModuleImpl[E <: Entity : ClassTag](
+    override val aggregateIdTag: Symbol,
+    override val aggregateRootPropsOp: AggregateRootProps,
+    override val indexes: Seq[AggregateIndexSpec[_,_]],
+    override val idLens: Lens[E, EntityAggregateModuleImpl.TID[E]],
+    override val nameLens: Lens[E, String],
+    override val slugLens: Option[Lens[E, String]],
+    override val isActiveLens: Option[Lens[E, Boolean]]
+  ) extends EntityAggregateModule[E] {
+    override val evState: ClassTag[E] = implicitly[ClassTag[E]]
+    override val trace: Trace[_] = Trace( s"EntityAggregateModule[${evState.runtimeClass.safeSimpleName}]" )
+  }
+}
 
 trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { module =>
   def idLens: Lens[E, E#TID]
