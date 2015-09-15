@@ -13,8 +13,10 @@ import demesne.register.local.RegisterLocalAgent
 trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { module =>
   def idLens: Lens[E, E#TID]
   def nameLens: Lens[E, String]
-  def slugLens: Lens[E, String]
-  def isActiveLens: Lens[E, Boolean]
+  def slugLens: Option[Lens[E, String]] = None
+  def isActiveLens: Option[Lens[E, Boolean]] = None
+
+  def getEntityKey( e: E ): String = slugLens map { _.get(e) } getOrElse { idLens.get(e).get.toString }
 
   type Info = E
 
@@ -55,7 +57,7 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
           RegisterLocalAgent.spec[String, module.TID]( 'slug ) { // or 'activeSlug
             case Added( info ) => {
               val e = module.infoToEntity( info )
-              Directive.Record( module.slugLens.get(e), module.idLens.get(e) )
+              Directive.Record( getEntityKey(e), module.idLens.get(e) )
             }
 
             case Reslugged( _, oldSlug, newSlug ) => Directive.Revise( oldSlug, newSlug )
@@ -82,9 +84,9 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
     def entityAcceptance: Acceptance[E] = {
       case (Added(info), _) => module.infoToEntity( info )
       case (Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
-      case (Reslugged(_, _, newSlug), s ) => module.slugLens.set( s )( newSlug )
-      case (_: Disabled, s) => module.isActiveLens.set( s )( false )
-      case (_: Enabled, s) => module.isActiveLens.set( s )( true )
+      case (Reslugged(_, _, newSlug), s ) if module.slugLens.isDefined => module.slugLens.get.set( s )( newSlug )
+      case (_: Disabled, s) if module.isActiveLens.isDefined => module.isActiveLens.get.set( s )( false )
+      case (_: Enabled, s) if module.isActiveLens.isDefined => module.isActiveLens.get.set( s )( true )
     }
 
     override def receiveCommand: Receive = around( quiescent )
@@ -100,17 +102,23 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
 
     def active: Receive = LoggingReceive {
       case Rename( id, name ) => persistAsync( Renamed(id, module.nameLens.get(state), name) ) { e => acceptAndPublish( e ) }
-      case Reslug( id, slug ) => persistAsync( Reslugged(id, module.slugLens.get(state), slug) ) { e => acceptAndPublish( e ) }
-      case Disable( id ) if id == module.idLens.get(state) => persistAsync( Disabled(id, module.slugLens.get(state)) ) { e => 
-        acceptAndPublish( e )
-        context become around( disabled )
+      case Reslug( id, slug ) if module.slugLens.isDefined => {
+        persistAsync( Reslugged(id, module.slugLens.get.get(state), slug) ) { e => acceptAndPublish( e ) }
+      }
+      case Disable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
+        persistAsync( Disabled(id, module.getEntityKey(state)) ) { e => 
+          acceptAndPublish( e )
+          context become around( disabled )
+        }
       }
     }
 
     def disabled: Receive = LoggingReceive {
-      case Enable( id ) if id == module.idLens.get(state) => persistAsync( Enabled(id, module.slugLens.get(state)) ) { e =>
-        acceptAndPublish( e )
-        context become around( active )
+      case Enable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
+        persistAsync( Enabled(id, module.getEntityKey(state)) ) { e =>
+          acceptAndPublish( e )
+          context become around( active )
+        }
       }
     }
   }
