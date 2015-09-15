@@ -14,6 +14,7 @@ trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggreg
   implicit def evState: ClassTag[S]
   
   trait SimpleAggregateRootType extends AggregateRootType {
+    override type ID = module.ID
     override def toString: String = name + "SimpleAggregateRootType"
   }
 
