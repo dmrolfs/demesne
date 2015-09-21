@@ -40,14 +40,14 @@ object SimpleAggregateModule {
     // def make[L <: HList]( implicit g: Generic.Aux[CC, L] ): ModuleBuilder[L] = new ModuleBuilder[L]
     def make: ModuleBuilder = new ModuleBuilder
 
-    class ModuleBuilder extends HasBuilder[SimpleAggregateModuleImpl[S]] {
+    class ModuleBuilder extends HasBuilder[CC] {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[S]].runtimeClass )
         object Props extends Param[AggregateRootProps]
         object Indexes extends OptParam[Seq[AggregateIndexSpec[_,_]]]( Seq.empty[AggregateIndexSpec[_,_]] )
       }
 
-      override val gen = Generic[SimpleAggregateModuleImpl[S]]
+      override val gen = Generic[CC]
       override val fieldsContainer = createFieldsContainer( 
         P.Tag :: 
         P.Props :: 
@@ -85,8 +85,8 @@ object SimpleAggregateModule {
     override val aggregateRootPropsOp: AggregateRootProps,
     override val indexes: Seq[AggregateIndexSpec[_,_]]
   ) extends SimpleAggregateModule[S] with Equals {
-    val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
-    val evState: ClassTag[S] = implicitly[ClassTag[S]]
+    override val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
+    override val evState: ClassTag[S] = implicitly[ClassTag[S]]
 
     override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]
 

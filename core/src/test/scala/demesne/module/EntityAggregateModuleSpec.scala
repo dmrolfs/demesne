@@ -1,20 +1,24 @@
 package demesne.module
 
+import scala.concurrent.duration._
 import akka.actor.Props
 import akka.testkit._
-import shapeless.Lens
+import shapeless._
 import demesne._
-import demesne.register.AggregateIndexSpec
+import demesne.register.{ AggregateIndexSpec, StackableRegisterBusPublisher }
 import demesne.testkit.AggregateRootSpec
+import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import peds.archetype.domain.model.core.{ Entity, EntityCompanion }
+import peds.akka.envelope._
+import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
 import peds.commons.log.Trace
 import peds.commons.identifier._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
 
 
-object SimpleAggregateModuleSpec {
+object EntityAggregateModuleSpec {
   trait Foo extends Entity {
     override type ID = ShortUUID
     override def idClass: Class[_] = classOf[ShortUUID]
@@ -69,37 +73,55 @@ object SimpleAggregateModuleSpec {
 
 
   object FooAggregateRoot {
+    def nullProps( model: DomainModel, meta: AggregateRootType ): Props = ???
+
     val trace = Trace[FooAggregateRoot.type]
-    val module: SimpleAggregateModule[Foo] = trace.block( "foo-module" ) {
-      val b = SimpleAggregateModule.builderFor[Foo].make
+    val module: EntityAggregateModule[Foo] = trace.block( "foo-module" ) {
+      val b = EntityAggregateModule.builderFor[Foo].make
       import b.P.{ Tag => BTag, Props => BProps, _ }
 
       b.builder
        .set( BTag, 'fooTAG )
        .set( BProps, FooActor.props(_,_) )
+       // .set( BProps, nullProps(_,_) )
+       .set( Indexes, Seq.empty[demesne.register.AggregateIndexSpec[_,_]] )
+       // .set( IdLens, Foo.idLens )
+       .set( NameLens, Foo.nameLens )
+       .set( SlugLens, Some(Foo.slugLens) )
+       .set( IsActiveLens, Some(Foo.isActiveLens) )
        .build()
     }
 
     object FooActor {
       def props( model: DomainModel, meta: AggregateRootType ): Props = ???
+      // def props( model: DomainModel, meta: AggregateRootType ): Props = {
+      //   Props( new FooActor(model, meta) with StackableStreamPublisher with StackableRegisterBusPublisher )
+      // }
     }
+
+    // class FooActor( override val model: DomainModel, override val meta: AggregateRootType )
+    // extends module.EntityAggregateActor { publisher: EventPublisher =>
+    //   override var state: Foo = _
+    // }
   }
 }
 
 
-class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleSpec] with ScalaFutures with LazyLogging {
+class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleSpec] with ScalaFutures with LazyLogging {
+  import EntityAggregateModuleSpec._
 
-  private val trace = Trace[SimpleAggregateModuleSpec]
+  private val trace = Trace[EntityAggregateModuleSpec]
 
   override type Fixture = TestFixture
 
   class TestFixture extends AggregateFixture {
     private val trace = Trace[TestFixture]
-    val bus: TestProbe = TestProbe()
-    // val rootType = SimpleAggregateModuleSpec.FooAggregateRoot.module.aggregateRootType
+    // val bus: TestProbe = TestProbe()
+    // val rootType = FooAggregateRoot.module.aggregateRootType
     // def slugIndex = model.aggregateRegisterFor[String]( rootType, 'slug ).toOption.get
 
-    def moduleCompanions: List[AggregateRootModule] = List() // List( SimpleAggregateModuleSpec.FooAggregateRoot.module )
+    // def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
+    def moduleCompanions: List[AggregateRootModule] = List(  )
   }
 
   override def createAkkaFixture(): Fixture = new TestFixture
@@ -110,37 +132,34 @@ class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleS
   object GOOD extends Tag( "good" )
 
   "Module should" should {
-    import SimpleAggregateModuleSpec._
-    // import FooAggregateRoot.{ module => Module }
-
-    "simple" in { fixture: Fixture =>
-      import fixture._
-      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo]( 
-        aggregateIdTag = 'fooTAG, 
-        aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
-        indexes = Seq.empty[AggregateIndexSpec[_,_]]
-      )
-
-      val b = SimpleAggregateModule.builderFor[Foo].make
-      import b.P.{ Tag => BTag, Props => BProps, _ }
-      val actual = b.builder
-                    .set( BTag, 'fooTAG )
-                    .set( BProps, FooAggregateRoot.FooActor.props(_, _) )
-                    .build
-
-      actual.aggregateIdTag must equal( 'fooTAG )
-    }
+    import FooAggregateRoot.{ module => Module }
 
     "build module" in { fixture: Fixture =>
       import fixture._
 
-      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl(
+      val expected = EntityAggregateModule.EntityAggregateModuleImpl(
         aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
-        indexes = Seq.empty[AggregateIndexSpec[_,_]]
+        indexes = Seq.empty[AggregateIndexSpec[_,_]],
+        // idLens = Foo.idLens,
+        nameLens = Foo.nameLens,
+        slugLens = Some(Foo.slugLens),
+        isActiveLens = Some(Foo.isActiveLens)
       )
 
       FooAggregateRoot.module must equal( expected )
+
+      // val b = EntityAggregateModule.builderFor[Foo].make
+      // import b.P.{ Tag => BTag, Props => BProps, _ }
+
+      // val actual = b.builder
+      //               .set( BTag, 'fooTAG )
+      //               .set( BProps, FooAggregateRoot.FooActor.props(_,_) )
+      //               .build()
+
+      // actual.aggregateIdTag must equal(expected.aggregateIdTag)
+      // actual.indexes must equal(expected.indexes)
+      // actual mustBe expected
     }
 
   //   "not respond before added" in { fixture: Fixture =>
