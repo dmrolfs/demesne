@@ -3,11 +3,11 @@ package demesne.module
 import scala.reflect.ClassTag
 import akka.actor.Props
 import shapeless._
+import peds.commons.builder._
 import peds.commons.util._
 import peds.commons.log.Trace
 import demesne._
 import demesne.register.AggregateIndexSpec
-import com.github.harveywi.builder._
 
 
 trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>

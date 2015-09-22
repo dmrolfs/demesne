@@ -6,12 +6,12 @@ import akka.event.LoggingReceive
 import shapeless._
 import peds.archetype.domain.model.core.Entity
 import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
+import peds.commons.builder.HasBuilder
 import peds.commons.log.Trace
 import peds.commons.util._
 import demesne.{ AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel }
 import demesne.register.{ AggregateIndexSpec, Directive, StackableRegisterBusPublisher }
 import demesne.register.local.RegisterLocalAgent
-import com.github.harveywi.builder._
 
 
 object EntityAggregateModule {
