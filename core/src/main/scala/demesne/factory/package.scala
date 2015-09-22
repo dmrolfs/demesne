@@ -20,6 +20,7 @@ package object factory extends StrictLogging {
    */
   implicit val typeableActorFactory = new Typeable[ActorFactory] {
     override def cast( t: Any ): Option[ActorFactory] = scala.util.Try[ActorFactory]{ t.asInstanceOf[ActorFactory] }.toOption
+    override val describe: String = "ActorFactory"
   }
 
   val systemFactory: ActorFactory = {

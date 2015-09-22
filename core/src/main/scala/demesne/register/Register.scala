@@ -73,7 +73,8 @@ trait Register[K, I] {
   /** Defines the default value computation for the map, returned when a key is not found
     *  The method implemented here throws an exception, but it might be overridden in subclasses.
     *  @param key the given key value for which a binding is missing.
-    *  @throws `NoSuchElementException`
+    *  
     */
+  @throws(classOf[NoSuchElementException])
   def default( key: K ): I = throw new NoSuchElementException( "key not found: " + key )
 }

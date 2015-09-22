@@ -35,21 +35,20 @@ object Dependencies {
   )
   
   val defaultDependencyOverrides = Set(
-      "org.scala-lang" % "scala-reflect" % "2.11.4",
-      // "com.google.guava" % "guava" % "15.0",
-      "org.scala-lang" % "scala-library" % "2.11.4",
-      "org.scala-lang" % "scalap" % "2.11.4",
-      "org.scala-lang" % "scala-compiler" % "2.11.4",
-      "org.scala-lang" % "scala-xml" % "2.11.4",
-      "com.chuusai" %% "shapeless" % "2.1.0",
-      "org.scalaz" %% "scalaz-core" % "7.1.1",
-      "org.slf4j" % "slf4j-api" % "1.7.12",
-      "org.parboiled" %% "parboiled-scala" % "1.1.7",
-      "com.typesafe" % "config" % "1.2.1",
-      "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
-      "org.scalatest" %% "scalatest" % "2.2.1" % "test",
-      "org.mockito" % "mockito-core" % "1.10.19" % "test"
-    )
+    // "org.scala-lang" % "scala-reflect" % "2.11.4",
+    // "org.scala-lang" % "scala-library" % "2.11.4",
+    // "org.scala-lang" % "scalap" % "2.11.4",
+    // "org.scala-lang" % "scala-compiler" % "2.11.4",
+    // "org.scala-lang" % "scala-xml" % "2.11.4",
+    // "com.chuusai" %% "shapeless" % "2.2.5",
+    "org.scalaz" %% "scalaz-core" % "7.1.4"
+    // "org.slf4j" % "slf4j-api" % "1.7.12",
+    // "org.parboiled" %% "parboiled-scala" % "1.1.7",
+    // "com.typesafe" % "config" % "1.3.0",
+    // "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
+    // "org.scalatest" %% "scalatest" % "2.2.4" % "test",
+    // "org.mockito" % "mockito-core" % "1.10.19" % "test"
+  )
 
   // val slf4j = "org.slf4j" % "slf4j-api" % "1.7.12"
   // val logbackVersion = "1.1.2"
