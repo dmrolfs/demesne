@@ -31,6 +31,7 @@ object EntityAggregateModuleSpec {
   object Foo extends EntityCompanion[Foo] {
     override def nextId: Foo#TID = ShortUUID()
     override val idTag: Symbol = 'foo
+    override implicit def tag( id: Foo#ID ): Foo#TID = TaggedID( idTag, id )
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo,  Foo#TID] {
       override def get( f: Foo ): Foo#TID = f.id
@@ -76,16 +77,16 @@ object EntityAggregateModuleSpec {
     def nullProps( model: DomainModel, meta: AggregateRootType ): Props = ???
 
     val trace = Trace[FooAggregateRoot.type]
+    val builderFactory: EntityAggregateModule.BuilderFactory[Foo] = EntityAggregateModule.builderFor[Foo]
     val module: EntityAggregateModule[Foo] = trace.block( "foo-module" ) {
-      val b = EntityAggregateModule.builderFor[Foo].make
+      val b = builderFactory.make
       import b.P.{ Tag => BTag, Props => BProps, _ }
 
       b.builder
        .set( BTag, 'fooTAG )
        .set( BProps, FooActor.props(_,_) )
-       // .set( BProps, nullProps(_,_) )
        .set( Indexes, Seq.empty[demesne.register.AggregateIndexSpec[_,_]] )
-       // .set( IdLens, Foo.idLens )
+       .set( IdLens, Foo.idLens )
        .set( NameLens, Foo.nameLens )
        .set( SlugLens, Some(Foo.slugLens) )
        .set( IsActiveLens, Some(Foo.isActiveLens) )
@@ -137,16 +138,20 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     "build module" in { fixture: Fixture =>
       import fixture._
 
-      val expected = EntityAggregateModule.EntityAggregateModuleImpl(
+      val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
         aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
         indexes = Seq.empty[AggregateIndexSpec[_,_]],
-        // idLens = Foo.idLens,
+        idLens = Foo.idLens,
         nameLens = Foo.nameLens,
         slugLens = Some(Foo.slugLens),
         isActiveLens = Some(Foo.isActiveLens)
       )
 
+      expected.canEqual( FooAggregateRoot.module ) must equal( true )
+      expected.## must equal( FooAggregateRoot.module.## )
+      FooAggregateRoot.module.aggregateIdTag must equal( expected.aggregateIdTag )
+      FooAggregateRoot.module.indexes must equal( expected.indexes )
       FooAggregateRoot.module must equal( expected )
 
       // val b = EntityAggregateModule.builderFor[Foo].make

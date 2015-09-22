@@ -18,7 +18,7 @@ object EntityAggregateModule {
   def builderFor[E <: Entity : ClassTag]: BuilderFactory[E] = new BuilderFactory[E]
 
   class BuilderFactory[E <: Entity : ClassTag] {
-    type CC = EntityAggregateModuleImpl[E]
+    type CC = EntityAggregateModuleImpl
 
     // def make[L <: HList]( implicit g: Generic.Aux[CC, L] ): EntityBuilder[L] = new EntityBuilder[L]
     def make: ModuleBuilder = new ModuleBuilder
@@ -36,18 +36,59 @@ object EntityAggregateModule {
       }
       import P.{ Props => PProps, _ }
 
+      // def generic[L <: HList]( implicit g: Generic.Aux[CC, L], evE: CC#A =:= E, evTID: CC#TID =:= E#TID ) = g
+      // override val gen = generic
       override val gen = Generic[CC]
 
       override val fieldsContainer = createFieldsContainer( 
         Tag :: 
         PProps :: 
         Indexes :: 
-        // IdLens :: 
+        IdLens :: 
         NameLens :: 
         SlugLens :: 
         IsActiveLens :: 
         HNil 
       )
+    }
+
+
+    // I'd prefer to define this class within EntityAggregateModule object, but that results in an inability for the
+    // compiler to find the implicit HasBuilder#ParamValueExtractor.
+    case class EntityAggregateModuleImpl(
+      override val aggregateIdTag: Symbol,
+      override val aggregateRootPropsOp: AggregateRootProps,
+      override val indexes: Seq[AggregateIndexSpec[_,_]],
+      override val idLens: Lens[E, E#TID],
+      override val nameLens: Lens[E, String],
+      override val slugLens: Option[Lens[E, String]],
+      override val isActiveLens: Option[Lens[E, Boolean]]
+    ) extends EntityAggregateModule[E] with Equals {
+      override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
+      override val evState: ClassTag[E] = implicitly[ClassTag[E]]
+
+
+      override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[EntityAggregateModuleImpl]
+
+      override def equals( rhs: Any ): Boolean = rhs match {
+        case that: EntityAggregateModuleImpl => {
+          if ( this eq that ) true
+          else {
+            ( that.## == this.## ) &&
+            ( that canEqual this ) &&
+            ( this.aggregateIdTag == that.aggregateIdTag ) &&
+            (this.indexes == that.indexes )
+          }
+        }
+
+        case _ => false
+      }
+
+      override def hashCode: Int = {
+        41 * (
+          41 + aggregateIdTag.##
+        ) + indexes.##
+      }
     }
   }
 
@@ -56,51 +97,14 @@ object EntityAggregateModule {
   // builder, which had difficulty with the E#TID type param of the idLens property.
   // I couldn't repro this issue in an isolated manner, and the solution was crafted through lots of experiementation
   // after digging through results from -Xlog-implicits and -Ymacro-debug-verbose.
-  object EntityAggregateModuleImpl {
-    type TID[E <: Entity] = E#TID
-  }
+  // object EntityAggregateModuleImpl {
+  //   type TID[E <: Entity] = E#TID
+  // }
 
-  // I'd prefer to define this class within EntityAggregateModule object, but that results in an inability for the
-  // compiler to find the implicit HasBuilder#ParamValueExtractor.
-  final case class EntityAggregateModuleImpl[E <: Entity : ClassTag](
-    override val aggregateIdTag: Symbol,
-    override val aggregateRootPropsOp: AggregateRootProps,
-    override val indexes: Seq[AggregateIndexSpec[_,_]],
-    // override val idLens: Lens[E, EntityAggregateModuleImpl.TID[E]],
-    override val nameLens: Lens[E, String],
-    override val slugLens: Option[Lens[E, String]],
-    override val isActiveLens: Option[Lens[E, Boolean]]
-  ) extends EntityAggregateModule[E] with Equals {
-    override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
-    override val evState: ClassTag[E] = implicitly[ClassTag[E]]
-
-
-    override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[EntityAggregateModuleImpl[E]]
-
-    override def equals( rhs: Any ): Boolean = rhs match {
-      case that: EntityAggregateModuleImpl[E] => {
-        if ( this eq that ) true
-        else {
-          ( that.## == this.## ) &&
-          ( that canEqual this ) &&
-          ( this.aggregateIdTag == that.aggregateIdTag ) &&
-          (this.indexes == that.indexes )
-        }
-      }
-
-      case _ => false
-    }
-
-    override def hashCode: Int = {
-      41 * (
-        41 + aggregateIdTag.##
-      ) + indexes.##
-    }
-  }
 }
 
 trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { module =>
-  // def idLens: Lens[E, E#TID]
+  def idLens: Lens[E, E#TID]
   def nameLens: Lens[E, String]
   def slugLens: Option[Lens[E, String]] = None
   def isActiveLens: Option[Lens[E, Boolean]] = None
