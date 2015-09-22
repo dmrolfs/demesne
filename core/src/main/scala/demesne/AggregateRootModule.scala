@@ -7,6 +7,7 @@ import peds.commons.log.Trace
 import peds.commons.util._
 
 
+// trait AggregateRootModule[AR <: Identifiable] extends CommonInitializeAggregateActorType with LazyLogging { module =>
 trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLogging { module =>
   def trace: Trace[_]
 
@@ -23,6 +24,8 @@ trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLo
     val effId = id getOrElse nextId
     model.aggregateOf( rootType = aggregateRootType, id = effId )
   }
+
+  override def toString: String = s"${getClass.safeSimpleName}(${aggregateIdTag})"
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
 
@@ -50,7 +53,7 @@ object AggregateRootModule {
   val Actor = """(\w+)Actor""".r
   val PersistentActor = """(\w+)PersistentActor""".r
 
-  private def tagify( clazz: Class[_] ): Symbol = {
+  def tagify( clazz: Class[_] ): Symbol = {
     val name = clazz.safeSimpleName match {
       case Module(n) => n
       case Actor(n) => n
