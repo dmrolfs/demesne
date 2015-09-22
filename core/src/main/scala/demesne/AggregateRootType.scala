@@ -19,7 +19,7 @@ object AggregateRootType {
 
 trait AggregateRootType {
   type ID
-  type TID = Identifiable.TID[ID]
+  type TID
   
   def name: String
   def repositoryName: String = name+"Repository"

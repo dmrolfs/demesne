@@ -27,6 +27,7 @@ object SimpleAggregateModuleSpec {
   object Foo extends EntityCompanion[Foo] {
     override def nextId: Foo#TID = ShortUUID()
     override val idTag: Symbol = 'foo
+    override implicit def tag( id: Foo#ID ): Foo#TID = TaggedID( idTag, id )
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo,  Foo#TID] {
       override def get( f: Foo ): Foo#TID = f.id
