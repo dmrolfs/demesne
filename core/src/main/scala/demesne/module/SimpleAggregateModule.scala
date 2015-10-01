@@ -16,7 +16,7 @@ import demesne.register.AggregateIndexSpec
 trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
   def indexes: Seq[AggregateIndexSpec[_, _]] = Seq.empty[AggregateIndexSpec[_, _]]
   def aggregateRootPropsOp: AggregateRootProps
-  def props: Map[Symbol, Any] = Map.empty[Symbol, Any]
+  def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
 
   def stateClass: Class[_] = implicitly[ClassTag[S]].runtimeClass
   implicit def evState: ClassTag[S]
@@ -71,7 +71,7 @@ object SimpleAggregateModule {
     override val evState: ClassTag[S] = implicitly[ClassTag[S]]
 
     var _props: Map[Symbol, Any] = Map()
-    override def props: Map[Symbol, Any] = _props
+    override def moduleProperties: Map[Symbol, Any] = _props
 
     override def initializer( 
       rootType: AggregateRootType, 
