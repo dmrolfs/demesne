@@ -1,11 +1,14 @@
 package demesne.module
 
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.reflect.ClassTag
 import akka.actor.Props
+import scalaz._, Scalaz._
 import shapeless._
 import peds.commons.builder._
 import peds.commons.util._
 import peds.commons.log.Trace
+import peds.commons.V
 import demesne._
 import demesne.register.AggregateIndexSpec
 
@@ -13,6 +16,7 @@ import demesne.register.AggregateIndexSpec
 trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
   def indexes: Seq[AggregateIndexSpec[_, _]] = Seq.empty[AggregateIndexSpec[_, _]]
   def aggregateRootPropsOp: AggregateRootProps
+  def props: Map[Symbol, Any] = Map.empty[Symbol, Any]
 
   def stateClass: Class[_] = implicitly[ClassTag[S]].runtimeClass
   implicit def evState: ClassTag[S]
@@ -55,31 +59,9 @@ object SimpleAggregateModule {
         HNil 
       )
     }
-
-  //   class ModuleBuilder[L <: HList]( implicit val g: Generic.Aux[CC, L] ) extends HasBuilder[CC] {
-  //     object P {
-  //       object Tag extends Param[Symbol]
-  // //       object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[S]].runtimeClass )
-  // //       object Props extends Param[AggregateRootProps]
-  // //       object Indexes extends OptParam[Seq[AggregateIndexSpec[_,_]]]( Seq.empty[AggregateIndexSpec[_,_]] )
-  //     }
-
-  //     // more specific type signature need to solve for implicit resolution of Selector type class.
-  //     // override val gen: Generic[SimpleAggregateModuleImpl[S]] { type Repr <: HList } = Generic[SimpleAggregateModuleImpl[S]]
-  //     // override val fieldsContainer: FieldsContainer = createFieldsContainer( P.Tag :: P.Props :: P.Indexes :: HNil )
-  //     override val gen = Generic[CC]
-  //     override val fieldsContainer = createFieldsContainer( 
-  //       P.Tag :: 
-  // //       P.Props :: 
-  // //       P.Indexes :: 
-  //       HNil 
-  //     )
-  //   }
   }
 
 
-  // I'd prefer to define this class within SimpleAggregateModule object, but that results in an inability for the
-  // compiler to find the implicit HasBuilder#ParamValueExtractor.
   final case class SimpleAggregateModuleImpl[S : ClassTag](
     override val aggregateIdTag: Symbol,
     override val aggregateRootPropsOp: AggregateRootProps,
@@ -87,6 +69,18 @@ object SimpleAggregateModule {
   ) extends SimpleAggregateModule[S] with Equals {
     override val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
     override val evState: ClassTag[S] = implicitly[ClassTag[S]]
+
+    var _props: Map[Symbol, Any] = Map()
+    override def props: Map[Symbol, Any] = _props
+
+    override def initializer( 
+      rootType: AggregateRootType, 
+      model: DomainModel, 
+      props: Map[Symbol, Any] 
+    )( 
+      implicit ec: ExecutionContext
+    ) : V[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ _props = props }.successNel }
+
 
     override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]
 
