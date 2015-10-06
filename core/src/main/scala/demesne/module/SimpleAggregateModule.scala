@@ -41,7 +41,6 @@ object SimpleAggregateModule {
   class BuilderFactory[S: ClassTag] {
     type CC = SimpleAggregateModuleImpl[S]
 
-    // def make[L <: HList]( implicit g: Generic.Aux[CC, L] ): ModuleBuilder[L] = new ModuleBuilder[L]
     def make: ModuleBuilder = new ModuleBuilder
 
     class ModuleBuilder extends HasBuilder[CC] {
