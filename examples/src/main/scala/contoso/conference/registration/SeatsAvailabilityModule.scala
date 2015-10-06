@@ -5,7 +5,6 @@ import akka.event.LoggingReceive
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
-import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
@@ -136,7 +135,7 @@ object SeatsAvailabilityModule extends AggregateRootModule{ module =>
 
     override var state: SeatsAvailabilityState = _
 
-    override def acceptance: Acceptance[SeatsAvailabilityState] = {
+    override def acceptance: Acceptance = {
       // Conference/Registration/SeatsAvailability.cs[185-198]
       case ( AvailableSeatsChanged(_, seats), state ) => {
         val updated = SeatsAvailabilityState.addToRemainingSeats( state.remainingSeats, seats )

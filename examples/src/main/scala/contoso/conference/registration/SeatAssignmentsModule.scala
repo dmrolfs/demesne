@@ -5,7 +5,6 @@ import akka.event.LoggingReceive
 import contoso.conference.SeatType
 import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
-import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
@@ -132,7 +131,7 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
       seats: Seq[SeatAssignment]
     ) extends Event
 
-    override def acceptance: Acceptance[SeatAssignmentsState] = {
+    override def acceptance: Acceptance = {
       case ( SeatAssignmentsCreated(id, orderId, seats), state ) => {
         SeatAssignmentsState( id = id, orderId = orderId, seats = seats )
       }

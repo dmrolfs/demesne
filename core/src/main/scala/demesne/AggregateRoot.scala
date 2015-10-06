@@ -36,14 +36,13 @@ with AggregateRootType.Provider
 with ActorLogging {
   outer: EventPublisher =>
 
-  import AggregateRoot._
-
   type Valid[A] = NonEmptyList[Throwable] \/ A
   type StateOperation = Kleisli[Valid, S, S]
 
   val trace = Trace( "AggregateRoot", log )
 
-  def acceptance: Acceptance[S]
+  type Acceptance = AggregateRoot.Acceptance[S]
+  def acceptance: Acceptance
 
   override def persistenceId: String = self.path.toStringWithoutAddress
 

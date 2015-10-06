@@ -5,7 +5,6 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
 import demesne._
-import demesne.AggregateRoot.Acceptance
 import demesne.register.local.RegisterLocalAgent
 import demesne.register._
 import peds.akka.envelope.Envelope
@@ -128,7 +127,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
     override var state: State = State()
 
-    override val acceptance: Acceptance[PostActor.State] = {
+    override val acceptance: Acceptance = {
       case ( PostAdded(id, c), _ )=> State( id = id, content = c, published = false )
       case ( BodyChanged(_, body: String), state ) => State.bodyLens.set( state )( body )
       case ( TitleChanged(_, _, newTitle), state ) => State.titleLens.set( state )( newTitle )

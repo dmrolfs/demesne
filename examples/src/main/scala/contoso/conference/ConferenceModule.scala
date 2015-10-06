@@ -6,7 +6,6 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import com.github.nscala_time.time.{Imports => joda}
 import demesne._
-import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.commons.V
 import peds.akka.AskRetry._
@@ -159,7 +158,7 @@ object ConferenceModule extends AggregateRootModule { module =>
 
     override var state: ConferenceState = _
 
-    override val acceptance: Acceptance[ConferenceState] = {
+    override val acceptance: Acceptance = {
       case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
       case ( ConferenceUpdated(_, c), _ ) => ConferenceState( c )
       case ( _: ConferencePublished, state ) => state.copy( isPublished = true )

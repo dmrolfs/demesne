@@ -9,7 +9,6 @@ import com.typesafe.config.ConfigFactory
 import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
-import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
@@ -198,7 +197,7 @@ object OrderModule extends AggregateRootModule { module =>
     override var state: OrderState = _
     var expirationMessager: Cancellable = _
 
-    override def acceptance: Acceptance[OrderState] = {
+    override def acceptance: Acceptance = {
       case ( OrderPlaced(_, conferenceId, seats, _, _ ), state ) => state.copy( conferenceId = conferenceId, seats = seats )
       case ( OrderUpdated(_, seats), state ) => state.copy( seats = seats )
       case ( OrderPartiallyReserved(_, _, seats), state ) => state.copy( seats = seats )

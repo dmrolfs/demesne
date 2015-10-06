@@ -10,7 +10,6 @@ import contoso.conference.registration.OrderModule._
 import contoso.conference.registration.SeatsAvailabilityModule.{CancelSeatReservation, CommitSeatReservation, MakeSeatReservation, SeatsReserved}
 import contoso.registration.SeatQuantity
 import demesne._
-import demesne.AggregateRoot.Acceptance
 import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
@@ -105,7 +104,7 @@ object RegistrationSagaModule extends SagaModule { module =>
     import context.dispatcher
     var expirationMessager: Cancellable = _
 
-    override def acceptance: Acceptance[RegistrationSagaState] = {
+    override def acceptance: Acceptance = {
       case ( OrderPlaced(id, cid, seats, expiration, accessCode), state ) => {
         state.copy(
           conferenceId = cid,

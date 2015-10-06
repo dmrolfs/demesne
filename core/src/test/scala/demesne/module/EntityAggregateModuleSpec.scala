@@ -74,7 +74,19 @@ object EntityAggregateModuleSpec {
 
 
   object FooAggregateRoot {
-    val myIndexes = () => trace.briefBlock( "myIndexes" ) { Seq.empty[AggregateIndexSpec[_,_]] }
+    val myIndexes = () => trace.briefBlock( "myIndexes" ) {
+      Seq(
+        demesne.register.local.RegisterLocalAgent.spec[String, Foo#TID]( 'name ) {
+          case module.Added( info ) => {
+            val e = module.infoToEntity( info )
+            demesne.register.Directive.Record( module.nameLens.get(e), module.idLens.get(e) )
+          }
+
+          // case module.Disabled( id, _ ) => Directive.Withdraw( id )
+          // case module.Enabled( id, slug ) => Directive.Record( slug, id )
+        }
+      )
+    }
 
     val trace = Trace[FooAggregateRoot.type]
     val builderFactory: EntityAggregateModule.BuilderFactory[Foo] = EntityAggregateModule.builderFor[Foo]

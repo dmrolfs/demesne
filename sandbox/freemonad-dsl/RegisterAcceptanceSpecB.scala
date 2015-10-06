@@ -82,7 +82,7 @@ class RegisterAcceptanceSpecB extends AggregateRootSpec[RegisterAcceptanceSpecB]
         case Delete( id ) => persistAsync( Deleted(id) ) { e => trace.block( "persist-Delete" ) { acceptAndPublish( e ) } }
       }
 
-      override val acceptance: AggregateRoot.Acceptance[TestAggregate] = {
+      override val acceptance: Acceptance = {
         case ( BarChanged(id, _, newBar), state ) => state + ( 'bar -> newBar )
         case (_: Deleted, _) => Map.empty[Symbol, Any]
         case ( Added(id, foo, bar), state ) => trace.block( "accept-Added" ) { 

@@ -43,7 +43,7 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
 
     override var state: State = Map.empty[Symbol, Any]
 
-    override val acceptance: AggregateRoot.Acceptance[State] = module.acceptance
+    override val acceptance: Acceptance = module.acceptance
     
     override def receiveCommand: Receive = around {
       case command if module.eventFor(state).isDefinedAt( command ) => {

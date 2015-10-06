@@ -161,9 +161,9 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
   abstract class EntityAggregateActor extends AggregateRoot[E] { publisher: EventPublisher =>
     import AggregateRoot._
 
-    override def acceptance: Acceptance[E] = entityAcceptance
+    override def acceptance: Acceptance = entityAcceptance
 
-    def entityAcceptance: Acceptance[E] = {
+    def entityAcceptance: Acceptance = {
       case (Added(info), _) => module.infoToEntity( info )
       case (Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
       case (Reslugged(_, _, newSlug), s ) if module.slugLens.isDefined => module.slugLens.get.set( s )( newSlug )
