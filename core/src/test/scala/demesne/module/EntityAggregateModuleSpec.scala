@@ -74,6 +74,8 @@ object EntityAggregateModuleSpec {
 
 
   object FooAggregateRoot {
+    val myIndexes = () => trace.briefBlock( "myIndexes" ) { Seq.empty[AggregateIndexSpec[_,_]] }
+
     val trace = Trace[FooAggregateRoot.type]
     val builderFactory: EntityAggregateModule.BuilderFactory[Foo] = EntityAggregateModule.builderFor[Foo]
     val module: EntityAggregateModule[Foo] = trace.block( "foo-module" ) {
@@ -83,7 +85,7 @@ object EntityAggregateModuleSpec {
       b.builder
        .set( BTag, 'fooTAG )
        .set( BProps, FooActor.props(_,_) )
-       .set( Indexes, Seq.empty[demesne.register.AggregateIndexSpec[_,_]] )
+       .set( Indexes, myIndexes )
        .set( IdLens, Foo.idLens )
        .set( NameLens, Foo.nameLens )
        .set( SlugLens, Some(Foo.slugLens) )
@@ -136,7 +138,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
         aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
-        indexes = Seq.empty[AggregateIndexSpec[_,_]],
+        _indexes = FooAggregateRoot.myIndexes,
         idLens = Foo.idLens,
         nameLens = Foo.nameLens,
         slugLens = Some(Foo.slugLens),

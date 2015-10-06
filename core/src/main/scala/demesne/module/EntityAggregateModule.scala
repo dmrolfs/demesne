@@ -15,6 +15,9 @@ import demesne.register.local.RegisterLocalAgent
 
 
 object EntityAggregateModule {
+  type MakeIndexSpec = Function0[Seq[AggregateIndexSpec[_,_]]]
+  val makeEmptyIndexSpec = () => Seq.empty[AggregateIndexSpec[_,_]]
+
   def builderFor[E <: Entity : ClassTag]: BuilderFactory[E] = new BuilderFactory[E]
 
   class BuilderFactory[E <: Entity : ClassTag] {
@@ -26,7 +29,7 @@ object EntityAggregateModule {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
         object Props extends Param[AggregateRootProps]
-        object Indexes extends OptParam[Seq[AggregateIndexSpec[_,_]]]( Seq.empty[AggregateIndexSpec[_,_]] )
+        object Indexes extends OptParam[MakeIndexSpec]( makeEmptyIndexSpec )
         object IdLens extends Param[Lens[E, E#TID]]
         object NameLens extends Param[Lens[E, String]]
         object SlugLens extends OptParam[Option[Lens[E, String]]]( None )
@@ -49,12 +52,12 @@ object EntityAggregateModule {
     }
 
 
-    // Impl CC required to be within BuilderFactory class in order to avoid the existential type issue preventing  matching
+    // Impl CC required to be within BuilderFactory class in order to avoid the existential type issue preventing matching
     // of L <: HList inferred types in shapeless Generic[CC] and HasBuilder
     case class EntityAggregateModuleImpl(
       override val aggregateIdTag: Symbol,
       override val aggregateRootPropsOp: AggregateRootProps,
-      override val indexes: Seq[AggregateIndexSpec[_,_]],
+      _indexes: MakeIndexSpec,
       override val idLens: Lens[E, E#TID],
       override val nameLens: Lens[E, String],
       override val slugLens: Option[Lens[E, String]],
@@ -63,6 +66,7 @@ object EntityAggregateModule {
       override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
       override val evState: ClassTag[E] = implicitly[ClassTag[E]]
 
+      override lazy val indexes: Seq[AggregateIndexSpec[_,_]] = _indexes()
 
       override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[EntityAggregateModuleImpl]
 
@@ -72,8 +76,7 @@ object EntityAggregateModule {
           else {
             ( that.## == this.## ) &&
             ( that canEqual this ) &&
-            ( this.aggregateIdTag == that.aggregateIdTag ) &&
-            (this.indexes == that.indexes )
+            ( this.aggregateIdTag == that.aggregateIdTag )
           }
         }
 
@@ -83,7 +86,7 @@ object EntityAggregateModule {
       override def hashCode: Int = {
         41 * (
           41 + aggregateIdTag.##
-        ) + indexes.##
+        ) 
       }
     }
   }
