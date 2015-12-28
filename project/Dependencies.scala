@@ -14,19 +14,11 @@ object Dependencies {
     akkaModule( "slf4j" ),
     "com.chuusai" %% "shapeless" % "2.2.5",
     "org.scalaz" %% "scalaz-core" % "7.2.0",
-    "org.typelevel" %% "scalaz-contrib-210"        % "0.2",
-    "org.typelevel" %% "scalaz-contrib-validation" % "0.2",
-    "org.typelevel" %% "scalaz-contrib-undo"       % "0.2",
-    // currently unavailable because there's no 2.11 build of Lift yet
-    // "org.typelevel" %% "scalaz-lift"               % "0.2",
-    "org.typelevel" %% "scalaz-nscala-time"        % "0.2",
-    "org.typelevel" %% "scalaz-spire"              % "0.2",
     "ch.qos.logback" % "logback-classic" % "1.1.3",
     "org.slf4j" % "slf4j-api" % "1.7.13",
     "com.github.dmrolfs" %% "peds-commons" % "0.1.6" % "compile" changing(),
     "com.github.dmrolfs" %% "peds-akka" % "0.1.6" % "compile" changing()
-    // "org.atteo" % "evo-inflector" % "1.2",
-  ) ++ test( 
+  ) ++ test(
     akkaModule( "remote" ),
     akkaModule( "testkit" ),
     "org.scalatest" %% "scalatest" % "2.2.4",
@@ -36,29 +28,10 @@ object Dependencies {
   )
   
   val defaultDependencyOverrides = Set(
-    // "org.scala-lang" % "scala-reflect" % "2.11.4",
-    // "org.scala-lang" % "scala-library" % "2.11.4",
-    // "org.scala-lang" % "scalap" % "2.11.4",
-    // "org.scala-lang" % "scala-compiler" % "2.11.4",
-    // "org.scala-lang" % "scala-xml" % "2.11.4",
-    // "com.chuusai" %% "shapeless" % "2.2.5",
     "org.scalaz" %% "scalaz-core" % "7.1.4"
-    // "org.slf4j" % "slf4j-api" % "1.7.12",
-    // "org.parboiled" %% "parboiled-scala" % "1.1.7",
-    // "com.typesafe" % "config" % "1.3.0",
-    // "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
-    // "org.scalatest" %% "scalatest" % "2.2.4" % "test",
-    // "org.mockito" % "mockito-core" % "1.10.19" % "test"
   )
 
-  // val slf4j = "org.slf4j" % "slf4j-api" % "1.7.12"
-  // val logbackVersion = "1.1.2"
-  // val logbackCore = "ch.qos.logback" % "logback-core" % logbackVersion
-  // val logbackClassic = "ch.qos.logback" % "logback-classic" % logbackVersion
-  // val loggingImplementations = Seq( logbackCore, logbackClassic )
-
   val sprayJson = "io.spray" %% "spray-json" % "1.3.1"
-
   val scopt = "com.github.scopt" %% "scopt" % "3.3.0"
 
 
@@ -69,6 +42,5 @@ object Dependencies {
   def container( deps: ModuleID* ): Seq[ModuleID] = deps map ( _ % "container" )
 
   def akkaModule( id: String ) = "com.typesafe.akka" %% s"akka-$id" % "2.4.1"
-//  def sprayModule( id: String ) = "io.spray" %% s"spray-$id" % "1.3.3"
   def peds( id: String ) = "com.github.dmrolfs" %% s"peds-$id" % "0.1.6" % "compile" changing()
 }
