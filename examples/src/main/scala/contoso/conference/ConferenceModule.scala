@@ -44,9 +44,9 @@ object ConferenceModule extends AggregateRootModule { module =>
     val result = for {
       cc <- props get 'ConferenceContext
       r <- scala.util.Try[ActorRef]{ cc.asInstanceOf[ActorRef] }.toOption
-    } yield r.successNel
+    } yield r.successNel[Throwable]
 
-    result getOrElse UnspecifiedConferenceContextError( 'ConferenceContext ).failureNel 
+    result getOrElse Validation.failureNel( UnspecifiedConferenceContextError('ConferenceContext) )
   }
 
 

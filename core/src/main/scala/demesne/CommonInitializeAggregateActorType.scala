@@ -41,14 +41,14 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
   }
 
   private def checkSystem( props: Map[Symbol, Any] ): V[ActorSystem] = trace.block( "checkSystem" ) {
-    props get demesne.SystemKey flatMap { _.cast[ActorSystem] } map { _.successNel } getOrElse { 
-      UnspecifiedActorSystemError( demesne.SystemKey ).failureNel 
+    props get demesne.SystemKey flatMap { _.cast[ActorSystem] } map { _.successNel[Throwable] } getOrElse {
+      Validation.failureNel( UnspecifiedActorSystemError(demesne.SystemKey) )
     }
   }
 
   private def checkModel( props: Map[Symbol, Any] ): V[DomainModel] = trace.block( "checkModel" ) {
-    props get demesne.ModelKey flatMap { _.cast[DomainModel] } map { _.successNel } getOrElse {
-      UnspecifiedDomainModelError( demesne.ModelKey ).failureNel
+    props get demesne.ModelKey flatMap { _.cast[DomainModel] } map { _.successNel[Throwable] } getOrElse {
+      Validation.failureNel( UnspecifiedDomainModelError(demesne.ModelKey) )
     }
   }
 

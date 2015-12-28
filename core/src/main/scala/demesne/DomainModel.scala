@@ -63,12 +63,14 @@ object DomainModel {
   }
 
   private def checkRegister( key: Key ): V[DomainModel] = {
-    modelRegistry().get( key ).map{ _.successNel } getOrElse{ DomainModelNotRegisteredError(key.name, key.system).failureNel }
+    modelRegistry().get( key ).map{ _.successNel[Throwable] } getOrElse{
+      Validation.failureNel( DomainModelNotRegisteredError(key.name, key.system) )
+    }
   }
 
   private def checkSystem( dm: DomainModel, expected: ActorSystem): V[ActorSystem] = {
     if ( dm.system == expected ) dm.system.successNel
-    else ActorSystemMismatchError( dm, expected ).failureNel
+    else Validation.failureNel( ActorSystemMismatchError(dm, expected) )
   }
 
 

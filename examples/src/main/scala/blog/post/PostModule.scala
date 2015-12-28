@@ -48,9 +48,9 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     val result = for {
       al <- context get 'authorListing
       r <- scala.util.Try[() => ActorRef]{ al.asInstanceOf[() => ActorRef] }.toOption
-    } yield r.successNel
+    } yield r.successNel[Throwable]
 
-    result getOrElse UnspecifiedMakeAuthorListError( 'authorListing ).failureNel 
+    result getOrElse Validation.failureNel( UnspecifiedMakeAuthorListError('authorListing) )
   }
 
   // override val aggregateIdTag: Symbol = 'post

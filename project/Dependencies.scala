@@ -28,7 +28,7 @@ object Dependencies {
   )
   
   val defaultDependencyOverrides = Set(
-    "org.scalaz" %% "scalaz-core" % "7.1.4"
+    "org.scalaz" %% "scalaz-core" % "7.2.0"
   )
 
   val sprayJson = "io.spray" %% "spray-json" % "1.3.1"
