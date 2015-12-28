@@ -72,7 +72,7 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
       test( sys )
     } finally {
       sys.after()
-      sys.system.shutdown()
+      sys.system.terminate()
     }
   }
 

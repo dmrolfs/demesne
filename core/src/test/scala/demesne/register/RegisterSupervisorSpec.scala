@@ -86,7 +86,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       test( sys )
     } finally {
       sys.after()
-      sys.system.shutdown()
+      sys.system.terminate()
     }
   }
 

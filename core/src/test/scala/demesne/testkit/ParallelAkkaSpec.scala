@@ -42,7 +42,7 @@ trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelT
     try {
       test( sys )
     } finally {
-      sys.system.shutdown()
+      sys.system.terminate()
     }
   }
 }

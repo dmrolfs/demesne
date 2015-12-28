@@ -68,7 +68,7 @@ abstract class AggregateRootSpec[A: ClassTag]
       test( sys )
     } finally {
       sys.after()
-      sys.system.shutdown()
+      sys.system.terminate()
     }
   }
 

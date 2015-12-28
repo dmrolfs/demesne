@@ -1,16 +1,15 @@
 package sample.blog
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import scala.concurrent.duration._
+import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
 import akka.cluster.Cluster
-import akka.contrib.pattern.ClusterSharding
+import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
 import demesne.DomainModel
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule
 import sample.blog.post._
-
-import scala.concurrent.duration._
 
 
 object Bot {

@@ -2,9 +2,8 @@ package demesne
 
 import scala.concurrent.{ ExecutionContext, Future, Await }
 import scala.concurrent.duration._
-import scala.util.{ Failure, Success }
 import scalaz._, Scalaz._
-import akka.actor.{ ActorRef, ActorSystem, Props }
+import akka.actor.{ Terminated, ActorRef, ActorSystem, Props }
 import akka.agent.Agent
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
@@ -15,7 +14,6 @@ import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ StartChild, ChildStar
 import peds.akka.supervision.{ IsolatedDefaultSupervisor, OneForOneStrategyFactory }
 import peds.commons.log.Trace
 import peds.commons.V
-
 
 
 trait DomainModel {
@@ -29,7 +27,7 @@ trait DomainModel {
     aggregateRegisterFor[K, rootType.TID]( rootType.name, name )
   }
   def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): DomainModel.AggregateRegisterE[K, TID]
-  def shutdown(): Unit
+  def shutdown(): Future[Terminated]
 }
 
 object DomainModel {
@@ -231,7 +229,7 @@ object DomainModel {
       Future.sequence( registers ) map { r => () }
     }
 
-    override def shutdown(): Unit = system.shutdown()
+    override def shutdown(): Future[Terminated] = system.terminate()
 
     override def toString: String = s"DomainModelImpl(name=$name, system=$system)"
   }

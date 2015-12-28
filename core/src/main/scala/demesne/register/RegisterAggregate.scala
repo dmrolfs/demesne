@@ -1,14 +1,13 @@
 package demesne.register
 
-import akka.actor.{ActorLogging, ActorRef, Props}
+import scala.reflect.ClassTag
+import akka.actor.{ ActorLogging, ActorRef, Props }
 import akka.cluster.Cluster
-import akka.contrib.pattern.DistributedPubSubExtension
+import akka.cluster.pubsub.DistributedPubSub
 import akka.event.LoggingReceive
-import akka.persistence.{PersistentActor, SnapshotOffer}
+import akka.persistence.{ PersistentActor, SnapshotOffer }
 import peds.commons.log.Trace
 import peds.commons.util._
-
-import scala.reflect.ClassTag
 
 
 object RegisterAggregate {
@@ -76,7 +75,7 @@ object RegisterAggregate {
 class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String )
 extends PersistentActor
 with ActorLogging {
-  import akka.contrib.pattern.DistributedPubSubMediator.Publish
+  import akka.cluster.pubsub.DistributedPubSubMediator.Publish
   import demesne.register.RegisterAggregate._
 
   val trace = Trace( getClass.safeSimpleName, log )
@@ -84,7 +83,7 @@ with ActorLogging {
   /**
    * Distributed pub/sub channel used to deliver news of aggregate root indexing.
    */
-  val mediator: ActorRef = DistributedPubSubExtension( context.system ).mediator
+  val mediator: ActorRef = DistributedPubSub( context.system ).mediator
   val keyType: Class[_] = implicitly[ClassTag[K]].runtimeClass
   val idType: Class[_] = implicitly[ClassTag[I]].runtimeClass
 

@@ -1,8 +1,10 @@
 package sample.blog
 
+import scala.concurrent.Await
+import scala.concurrent.duration._
 import scalaz._, Scalaz._
 import akka.actor._
-import akka.contrib.pattern.ClusterSharding
+import akka.cluster.sharding.ClusterSharding
 import akka.pattern.ask
 import akka.persistence.journal.leveldb.{SharedLeveldbJournal, SharedLeveldbStore}
 import akka.util.Timeout
@@ -11,9 +13,6 @@ import com.typesafe.scalalogging.StrictLogging
 import demesne._
 import sample.blog.author.AuthorListingModule
 import sample.blog.post.PostModule
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 
 object BlogApp extends StrictLogging {
@@ -78,13 +77,13 @@ object BlogApp extends StrictLogging {
         case ActorIdentity( _, Some(ref) ) => SharedLeveldbJournal.setStore( ref, system )
         case _ => {
           system.log.error( s"Shared journal not started at $path" )
-          system.shutdown()
+          system.terminate()
         }
       }
       f.onFailure {
         case _ => {
           system.log.error( s"Lookup of shared journal at ${path} timed out" )
-          system.shutdown()
+          system.terminate()
         }
       }
     }

@@ -1,7 +1,8 @@
 package contoso.conference.registration
 
+import scala.util.Random
 import akka.actor._
-import akka.contrib.pattern.ClusterSharding
+import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
 import com.github.nscala_time.time.Imports._
 import com.github.nscala_time.time.{Imports => joda}
@@ -9,12 +10,9 @@ import com.typesafe.config.ConfigFactory
 import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
-import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import squants._
-
-import scala.util.Random
 
 
 object OrderModule extends AggregateRootModule { module =>

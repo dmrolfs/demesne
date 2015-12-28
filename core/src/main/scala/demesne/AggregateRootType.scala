@@ -1,14 +1,10 @@
 package demesne
 
-import akka.actor.{ActorRef, Props, SupervisorStrategy}
-import akka.contrib.pattern.ShardRegion
-import demesne.register.AggregateIndexSpec
-import peds.archetype.domain.model.core.Identifiable
+import scala.concurrent.duration._
+import akka.actor.{ ActorRef, Props, SupervisorStrategy }
+import akka.cluster.sharding.ShardRegion
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliablePublisher.ReliableMessage
-import peds.commons.util._
-
-import scala.concurrent.duration._
 
 
 object AggregateRootType {
@@ -29,13 +25,13 @@ trait AggregateRootType {
   def aggregateIdOf( aggregateRoot: ActorRef ): String = aggregateRoot.path.name
 
   //todo: separate envelope & reliable like Relay's fillExtractor
-  def aggregateIdFor: ShardRegion.IdExtractor = {
+  def aggregateIdFor: ShardRegion.ExtractEntityId = {
     case cmd: CommandLike => ( cmd.targetId.toString, cmd )
     case e @ Envelope( payload, _ ) if aggregateIdFor.isDefinedAt( payload ) => ( aggregateIdFor( payload )._1, e ) // want MatchError on payload if not found
     case r @ ReliableMessage( _, msg ) if aggregateIdFor.isDefinedAt( msg ) => ( aggregateIdFor( msg )._1, r )  // want MatchError on msg if not found
   }
 
-  def shardIdFor: ShardRegion.ShardResolver = {
+  def shardIdFor: ShardRegion.ExtractShardId = {
     case cmd: CommandLike => ( math.abs( cmd.targetId.hashCode ) % 100 ).toString
     case e @ Envelope( payload, _ ) => shardIdFor( payload )
     case r @ ReliableMessage( _, msg ) => shardIdFor( msg )

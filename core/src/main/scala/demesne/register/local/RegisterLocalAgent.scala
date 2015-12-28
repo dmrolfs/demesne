@@ -1,17 +1,16 @@
 package demesne.register.local
 
-import akka.actor.{ActorRef, Actor, ActorLogging, Props}
+import scala.concurrent.{ ExecutionContext, Future, ExecutionContextExecutor }
+import scala.reflect.ClassTag
+import scala.util.Try
+import akka.actor.{ ActorRef, Actor, ActorLogging, Props }
 import akka.agent.Agent
-import akka.contrib.pattern.DistributedPubSubExtension
+import akka.cluster.pubsub.DistributedPubSub
 import akka.event.LoggingReceive
 import demesne.AggregateRootType
 import demesne.register._
 import peds.commons.log.Trace
 import peds.commons.util._
-
-import scala.concurrent.{ExecutionContext, Future, ExecutionContextExecutor}
-import scala.reflect.ClassTag
-import scala.util.Try
 
 
 object RegisterLocalAgent {
@@ -68,12 +67,12 @@ object RegisterLocalAgent {
  * Created by damonrolfs on 10/27/14.
  */
 class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Actor with ActorLogging {
-  import akka.contrib.pattern.DistributedPubSubMediator.{Subscribe, SubscribeAck}
+  import akka.cluster.pubsub.DistributedPubSubMediator.{ Subscribe, SubscribeAck }
   import demesne.register.local.RegisterLocalAgent._
 
   val trace = Trace( getClass.safeSimpleName, log )
 
-  DistributedPubSubExtension( context.system ).mediator ! Subscribe( topic, self ) // subscribe to the topic
+  DistributedPubSub( context.system ).mediator ! Subscribe( topic, self ) // subscribe to the topic
 
   val dispatcher: ExecutionContextExecutor = trace.block( "dispatcher" ) {
     val result = Try {

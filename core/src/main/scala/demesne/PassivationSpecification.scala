@@ -1,8 +1,7 @@
 package demesne
 
-import akka.contrib.pattern.ShardRegion.Passivate
-
-import scala.concurrent.duration._
+import scala.concurrent.duration.Duration
+import akka.cluster.sharding.ShardRegion.Passivate
 
 
 object PassivationSpecification {

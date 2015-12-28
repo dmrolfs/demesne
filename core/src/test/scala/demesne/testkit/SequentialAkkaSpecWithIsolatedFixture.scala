@@ -42,7 +42,7 @@ trait SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMa
     try {
       test( sys )
     } finally {
-      sys.system.shutdown()
+      sys.system.terminate()
     }
   }
 }

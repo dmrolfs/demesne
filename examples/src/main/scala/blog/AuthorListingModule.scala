@@ -3,15 +3,14 @@ package sample.blog.author
 import scala.concurrent.{ ExecutionContext, Future }
 import scalaz._, Scalaz._
 import peds.commons.V
-import akka.actor.{Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout}
-import akka.contrib.pattern.{ClusterSharding, ShardRegion}
+import akka.actor.{ Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout }
+import akka.cluster.sharding.{ ClusterShardingSettings, ClusterSharding, ShardRegion }
 import akka.event.LoggingReceive
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
 import peds.akka.envelope.EnvelopingActor
 import peds.akka.publish.ReliableReceiver
 import peds.commons.log.Trace
-import peds.commons.module._
 import sample.blog.post.PostPublished
 import demesne.InitializeAggregateActorType
 import scala.collection.immutable
@@ -27,9 +26,10 @@ object AuthorListingModule extends InitializeAggregateActorType with LazyLogging
       trace( "starting shard for: AuthorListingModule" )
       ClusterSharding( system ).start(
         typeName = AuthorListingModule.shardName,
-        entryProps = Some( AuthorListing.props ),
-        idExtractor = AuthorListing.idExtractor,
-        shardResolver = AuthorListing.shardResolver
+        entityProps = AuthorListing.props,
+        settings = ClusterShardingSettings( system ),
+        extractEntityId = AuthorListing.idExtractor,
+        extractShardId = AuthorListing.shardResolver
       )
     }.successNel
   }
@@ -46,7 +46,7 @@ object AuthorListingModule extends InitializeAggregateActorType with LazyLogging
 
     def props: Props = Props[AuthorListing]
 
-    val idExtractor: ShardRegion.IdExtractor = {
+    val idExtractor: ShardRegion.ExtractEntityId = {
       case p: PostPublished => ( p.author, p )
       case m: GetPosts => ( m.author, m )
 
@@ -55,7 +55,7 @@ object AuthorListingModule extends InitializeAggregateActorType with LazyLogging
       case r @ ReliableMessage( _, msg ) if idExtractor.isDefinedAt( msg ) => ( idExtractor( msg )._1, r )
     }
 
-    val shardResolver: ShardRegion.ShardResolver = {
+    val shardResolver: ShardRegion.ExtractShardId = {
       case PostPublished(_, author, _) => {
         // logger info s"AuthorListing.shardResolver: POST_PUBLISHED recognized: ${( math.abs( author.hashCode ) % 100 )}"
         (math.abs(author.hashCode) % 100).toString

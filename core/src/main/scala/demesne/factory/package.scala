@@ -1,9 +1,7 @@
 package demesne
 
-import scala.reflect.ClassTag
-import scala.reflect.runtime.universe._
-import akka.actor.{ActorContext, ActorRef}
-import akka.contrib.pattern.ClusterSharding
+import akka.actor.{ ActorContext, ActorRef }
+import akka.cluster.sharding.ClusterSharding
 import shapeless.Typeable
 import com.typesafe.scalalogging.StrictLogging
 import peds.commons.log.Trace

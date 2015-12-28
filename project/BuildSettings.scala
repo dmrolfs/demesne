@@ -10,7 +10,7 @@ object BuildSettings {
     Seq(
       version := VERSION,
       organization := "com.github.dmrolfs",
-      crossScalaVersions := Seq( "2.11.6" ),
+      crossScalaVersions := Seq( "2.11.7" ),
       scalaVersion <<= crossScalaVersions { (vs: Seq[String]) => vs.head },
       // updateOptions := updateOptions.value.withCachedResolution(true),
       scalacOptions ++= Seq(
