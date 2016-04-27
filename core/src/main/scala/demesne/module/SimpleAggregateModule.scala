@@ -8,7 +8,7 @@ import shapeless._
 import peds.commons.builder._
 import peds.commons.util._
 import peds.commons.log.Trace
-import peds.commons.V
+import peds.commons.Valid
 import demesne._
 import demesne.register.AggregateIndexSpec
 
@@ -78,7 +78,7 @@ object SimpleAggregateModule {
       props: Map[Symbol, Any] 
     )( 
       implicit ec: ExecutionContext
-    ) : V[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ _props = props }.successNel }
+    ) : Valid[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ _props = props }.successNel }
 
 
     override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]

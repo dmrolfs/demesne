@@ -1,7 +1,5 @@
-import sbt.Keys._
 import sbt._
-import spray.revolver.RevolverPlugin._
-
+import sbt.Keys._
 import BuildSettings._
 
 
@@ -10,26 +8,23 @@ object DemesneBuild extends Build {
     id = "root", 
     base = file( "." ) 
   ).settings (
-    publish := { },
-    publishTo := Some("bogus" at "http://nowhere.com"),
-    publishLocal := { }
-  ).aggregate( core )
+    doNotPublishSettings:_*
+  ).aggregate( core, testkit, examples )
 
   lazy val core = Project(
     id = "core",
-    base = file( "core" ),
-    settings = defaultBuildSettings
-  )
+    base = file( "core" )
+  ).settings( defaultBuildSettings ++ publishSettings )
 
   lazy val testkit = Project(
     id = "testkit",
-    base = file( "testkit" ),
-    settings = defaultBuildSettings
-  ) dependsOn( core )
+    base = file( "testkit" )
+  ).settings( defaultBuildSettings ++ publishSettings )
+  .dependsOn( core )
 
   lazy val examples = Project(
     id = "examples",
-    base = file( "examples" ),
-    settings = defaultBuildSettings
-  ) dependsOn( core, testkit )
+    base = file( "examples" )
+  ).settings( defaultBuildSettings ++ doNotPublishSettings )
+  .dependsOn( core, testkit )
 }

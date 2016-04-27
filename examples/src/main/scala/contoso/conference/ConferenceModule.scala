@@ -7,7 +7,7 @@ import akka.event.LoggingReceive
 import com.github.nscala_time.time.{Imports => joda}
 import demesne._
 import demesne.register.RegisterBus
-import peds.commons.V
+import peds.commons.Valid
 import peds.akka.AskRetry._
 import peds.akka.publish._
 import peds.commons.log.Trace
@@ -30,7 +30,7 @@ object ConferenceModule extends AggregateRootModule { module =>
     props: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ) : V[Future[Unit]] = {
+  ) : Valid[Future[Unit]] = {
     checkConferenceContext( props ) map { cc => 
       Future successful {
         conferenceContext = cc
@@ -40,7 +40,7 @@ object ConferenceModule extends AggregateRootModule { module =>
     super.initializer( rootType, model, props )
   }
 
-  private def checkConferenceContext( props: Map[Symbol, Any] ): V[ActorRef] = {
+  private def checkConferenceContext( props: Map[Symbol, Any] ): Valid[ActorRef] = {
     val result = for {
       cc <- props get 'ConferenceContext
       r <- scala.util.Try[ActorRef]{ cc.asInstanceOf[ActorRef] }.toOption

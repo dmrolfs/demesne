@@ -2,7 +2,7 @@ package sample.blog.author
 
 import scala.concurrent.{ ExecutionContext, Future }
 import scalaz._, Scalaz._
-import peds.commons.V
+import peds.commons.Valid
 import akka.actor.{ Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout }
 import akka.cluster.sharding.{ ClusterShardingSettings, ClusterSharding, ShardRegion }
 import akka.event.LoggingReceive
@@ -20,7 +20,7 @@ import scala.concurrent.duration._
 object AuthorListingModule extends InitializeAggregateActorType with LazyLogging {
   val trace = Trace[AuthorListingModule.type]
 
-  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V[Future[Unit]] = trace.block( "initialize" ) {
+  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): Valid[Future[Unit]] = trace.block( "initialize" ) {
     Future.successful[Unit] { 
       implicit lazy val system: ActorSystem = props get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
       trace( "starting shard for: AuthorListingModule" )

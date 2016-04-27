@@ -3,7 +3,7 @@ package demesne
 import scala.concurrent.{ ExecutionContext, Future }
 import scalaz._, Scalaz._
 import akka.cluster.sharding.{ ClusterShardingSettings, ClusterSharding }
-import peds.commons.V
+import peds.commons.Valid
 
 
 trait InitializeAggregateRootClusterSharding extends CommonInitializeAggregateActorType { self: AggregateRootModule =>
@@ -13,7 +13,7 @@ trait InitializeAggregateRootClusterSharding extends CommonInitializeAggregateAc
     props: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ): V[Future[Unit]] = peds.commons.log.Trace("InitializeAggregateRootClusterSharding").block( "initializer" ) {
+  ): Valid[Future[Unit]] = peds.commons.log.Trace("InitializeAggregateRootClusterSharding").block( "initializer" ) {
     super.initializer( rootType, model, props )
 
     ClusterSharding( model.system )

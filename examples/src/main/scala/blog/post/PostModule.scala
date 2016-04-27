@@ -9,7 +9,7 @@ import demesne.register.local.RegisterLocalAgent
 import demesne.register._
 import peds.akka.envelope.Envelope
 import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
-import peds.commons.V
+import peds.commons.Valid
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import scalaz._, Scalaz._
@@ -28,7 +28,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     context: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ) : V[Future[Unit]] = trace.block( s"initializer($rootType, $model, $context)" ) {
+  ) : Valid[Future[Unit]] = trace.block( s"initializer($rootType, $model, $context)" ) {
 
 //todo: I need to better determine how to support validation+Future or Task, esp to ensure order of operation and dev model.
 // I'm not confident this impl will always work for more complex scenarios since I haven't combined the local V[Future] with
@@ -44,7 +44,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     super.initializer( rootType, model, context )
   }
 
-  private def checkAuthorList( context: Map[Symbol, Any] ): V[() => ActorRef] = {
+  private def checkAuthorList( context: Map[Symbol, Any] ): Valid[() => ActorRef] = {
     val result = for {
       al <- context get 'authorListing
       r <- scala.util.Try[() => ActorRef]{ al.asInstanceOf[() => ActorRef] }.toOption

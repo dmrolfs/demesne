@@ -5,7 +5,7 @@ import akka.actor.ActorSystem
 import akka.util.Timeout
 import scalaz._, Scalaz._
 import shapeless.syntax.typeable._
-import peds.commons.V
+import peds.commons.Valid
 import peds.commons.log.Trace
 import demesne.factory._
 
@@ -19,10 +19,10 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
     props: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ) : V[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ }.successNel }
+  ) : Valid[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ }.successNel }
 
 
-  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): V[Future[Unit]] = trace.block( s"initialize" ) {
+  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): Valid[Future[Unit]] = trace.block( s"initialize" ) {
     import scalaz.Validation.FlatMap._
 
     val rootType = aggregateRootType
@@ -40,24 +40,30 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
     }
   }
 
-  private def checkSystem( props: Map[Symbol, Any] ): V[ActorSystem] = trace.block( "checkSystem" ) {
+  private def checkSystem( props: Map[Symbol, Any] ): Valid[ActorSystem] = trace.block( "checkSystem" ) {
     props get demesne.SystemKey flatMap { _.cast[ActorSystem] } map { _.successNel[Throwable] } getOrElse {
       Validation.failureNel( UnspecifiedActorSystemError(demesne.SystemKey) )
     }
   }
 
-  private def checkModel( props: Map[Symbol, Any] ): V[DomainModel] = trace.block( "checkModel" ) {
+  private def checkModel( props: Map[Symbol, Any] ): Valid[DomainModel] = trace.block( "checkModel" ) {
     props get demesne.ModelKey flatMap { _.cast[DomainModel] } map { _.successNel[Throwable] } getOrElse {
       Validation.failureNel( UnspecifiedDomainModelError(demesne.ModelKey) )
     }
   }
 
-  private def checkFactory( props: Map[Symbol, Any] ): V[ActorFactory] = trace.block( "checkFactory" ) {
+  private def checkFactory( props: Map[Symbol, Any] ): Valid[ActorFactory] = trace.block( "checkFactory" ) {
     val factory = props get demesne.FactoryKey flatMap { _.cast[ActorFactory] } getOrElse { demesne.factory.systemFactory }
     factory.successNel
   }
 
-  private def registerWithModel( model: DomainModel, rootType: AggregateRootType, factory: ActorFactory )( implicit to: Timeout ): Future[Unit] = trace.block( s"registerWithModel($rootType)" ) {
+  private def registerWithModel(
+    model: DomainModel,
+    rootType: AggregateRootType,
+    factory: ActorFactory
+  )(
+    implicit to: Timeout
+  ): Future[Unit] = trace.block( s"registerWithModel($rootType)" ) {
     model.registerAggregateType( rootType, factory )
   }
 }

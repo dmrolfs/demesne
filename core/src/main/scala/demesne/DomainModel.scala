@@ -13,7 +13,7 @@ import demesne.register.RegisterSupervisor.{ IndexRegistered, RegisterIndex }
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ StartChild, ChildStarted }
 import peds.akka.supervision.{ IsolatedDefaultSupervisor, OneForOneStrategyFactory }
 import peds.commons.log.Trace
-import peds.commons.V
+import peds.commons.Valid
 
 
 trait DomainModel {
@@ -42,7 +42,7 @@ object DomainModel {
   import scala.concurrent.ExecutionContext.global
   val trace = Trace[DomainModel.type]
 
-  def register( name: String )( implicit system: ActorSystem ): V[Future[DomainModel]] = trace.block( s"register($name)($system)" ) {
+  def register( name: String )( implicit system: ActorSystem ): Valid[Future[DomainModel]] = trace.block( s"register($name)($system)" ) {
     implicit val ec = global
     val key = Key( name, system )
     val model = DomainModelImpl( name, system )
@@ -50,7 +50,7 @@ object DomainModel {
     result.successNel
   }
 
-  def apply( name: String )( implicit system: ActorSystem ): V[DomainModel] = trace.block( s"apply(${name})(${system})" ) {
+  def apply( name: String )( implicit system: ActorSystem ): Valid[DomainModel] = trace.block( s"apply(${name})(${system})" ) {
     val k = Key( name, system )
     trace( s"key=$k" )
 
@@ -62,13 +62,13 @@ object DomainModel {
     } yield dm
   }
 
-  private def checkRegister( key: Key ): V[DomainModel] = {
+  private def checkRegister( key: Key ): Valid[DomainModel] = {
     modelRegistry().get( key ).map{ _.successNel[Throwable] } getOrElse{
       Validation.failureNel( DomainModelNotRegisteredError(key.name, key.system) )
     }
   }
 
-  private def checkSystem( dm: DomainModel, expected: ActorSystem): V[ActorSystem] = {
+  private def checkSystem( dm: DomainModel, expected: ActorSystem): Valid[ActorSystem] = {
     if ( dm.system == expected ) dm.system.successNel
     else Validation.failureNel( ActorSystemMismatchError(dm, expected) )
   }
