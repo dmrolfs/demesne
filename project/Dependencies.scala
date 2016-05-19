@@ -3,7 +3,7 @@ import sbt._
 
 object Dependencies {
   object peds {
-    val version = "0.2.5"
+    val version = "0.2.7"
     def module( id: String ) = "com.github.dmrolfs" %% s"peds-$id" % version
 
     val commons = module( "commons" )
@@ -12,7 +12,7 @@ object Dependencies {
   }
 
   object akka {
-    val version = "2.4.4"
+    val version = "2.4.5"
     def module( id: String ) = "com.typesafe.akka" %% s"akka-$id" % version
 
     val actor = module( "actor" )
