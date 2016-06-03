@@ -23,16 +23,16 @@ trait DomainModel {
   def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory )( implicit to: Timeout ): Future[Unit]
   def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = aggregateOf( rootType.name, id )
   def aggregateOf( name: String, id: Any ): ActorRef
-  def aggregateRegisterFor[K]( rootType: AggregateRootType, name: Symbol ): DomainModel.AggregateRegisterE[K, rootType.TID] = {
+  def aggregateRegisterFor[K]( rootType: AggregateRootType, name: Symbol ): DomainModel.AggregateRegisterV[K, rootType.TID] = {
     aggregateRegisterFor[K, rootType.TID]( rootType.name, name )
   }
-  def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): DomainModel.AggregateRegisterE[K, TID]
+  def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): DomainModel.AggregateRegisterV[K, TID]
   def shutdown(): Future[Terminated]
 }
 
 object DomainModel {
   type AggregateRegister[K, TID] = Register[K, TID]
-  type AggregateRegisterE[K, TID] = \/[Throwable, AggregateRegister[K, TID]]
+  type AggregateRegisterV[K, TID] = \/[Throwable, AggregateRegister[K, TID]]
 
   trait Provider {
     def model: DomainModel
@@ -89,7 +89,7 @@ object DomainModel {
 
 
   final case class DomainModelImpl private[demesne](
-    override val name: String, 
+    override val name: String,
     override val system: ActorSystem
   ) extends DomainModel with LazyLogging {
     // default dispatcher is okay since mutations are limited to bootstrap.
@@ -114,7 +114,7 @@ object DomainModel {
       trace( s"""name = $name; system = $system; id = $id; aggregateTypeRegistry = ${aggregateRegistry().mkString("[", ",", "]")} """ )
 
       val registry = aggregateRegistry()
-      registry.get( name ) match { 
+      registry.get( name ) match {
         case Some(rr) => {
           val (aggregateRepository, _) = rr
           aggregateRepository
@@ -124,7 +124,7 @@ object DomainModel {
       }
     }
 
-    override def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): AggregateRegisterE[K, TID] = trace.block( s"registerFor($rootName, $registerName)" ) {
+    override def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): AggregateRegisterV[K, TID] = trace.block( s"registerFor($rootName, $registerName)" ) {
       trace( s"""aggregateRegistry = ${aggregateRegistry().mkString("[",",","]")}""")
       trace( s"""specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""" )
 
@@ -168,6 +168,7 @@ object DomainModel {
 
     /**
      * Returns the individual timeout budget components for aggregate type registration.
+ *
      * @return (Register Index, Get Agent Register, Start Supervised Child)
      */
     private def timeoutBudgets( to: Timeout ): (Timeout, Timeout, Timeout) = {

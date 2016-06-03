@@ -5,10 +5,13 @@ import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
+import peds.archetype.domain.model.core.Identifiable
+import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
 import peds.commons.util._
 
-import scalaz._, Scalaz._
+import scalaz._
+import Scalaz._
 import scalaz.Kleisli._
 
 
@@ -44,12 +47,23 @@ with ActorLogging {
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
-  override def persistenceId: String = self.path.toStringWithoutAddress
+  override def persistenceId: String = self.path.toStringWithoutAddress + "-" + stateId
 
   // var state: S
   def state: S
   def state_=( newState: S ): Unit
 
+  //todo figure out how to achieve via TypeClass?
+  def stateId: String = {
+    Option( state )
+    .map { s =>
+      s match {
+        case i: Identifiable => i.id.id.toString
+        case s => s.##.toString
+      }
+    }
+    .getOrElse { "null" }
+  }
 
   override def around( r: Receive ): Receive = LoggingReceive {
     case SaveSnapshot => {

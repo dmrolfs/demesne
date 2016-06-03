@@ -5,7 +5,7 @@ import akka.event.LoggingReceive
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
-import demesne.register.RegisterBus
+//import demesne.register.RegisterBus
 import peds.akka.publish.EventPublisher
 import peds.commons.log.Trace
 import squants.{Dimensionless, Each}

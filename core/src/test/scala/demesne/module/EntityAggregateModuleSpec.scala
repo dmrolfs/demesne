@@ -5,6 +5,7 @@ import akka.actor.Props
 import akka.testkit._
 import shapeless._
 import demesne._
+import demesne.AggregateRoot._
 import demesne.register.{ AggregateIndexSpec, StackableRegisterBusPublisher }
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
@@ -74,10 +75,10 @@ object EntityAggregateModuleSpec {
 
 
   object FooAggregateRoot {
-    val myIndexes = () => trace.briefBlock( "myIndexes" ) {
+    val myIndexes: () => Seq[AggregateIndexSpec[_, _]] = () => trace.briefBlock( "myIndexes" ) {
       Seq(
         demesne.register.local.RegisterLocalAgent.spec[String, Foo#TID]( 'name ) {
-          case module.Added( info ) => {
+          case module.EntityProtocol.Added( info ) => {
             val e = module.infoToEntity( info )
             demesne.register.Directive.Record( module.nameLens.get(e), module.idLens.get(e) )
           }
@@ -105,6 +106,12 @@ object EntityAggregateModuleSpec {
        .build()
     }
 
+    object Protocol extends module.Protocol {
+      case class Bar( targetId: Bar#TID, b: Int ) extends Command
+      case class Barred( sourceId: Barred#TID, b: Int ) extends Event
+    }
+
+    
     object FooActor {
       def props( model: DomainModel, meta: AggregateRootType ): Props = {
         Props( new FooActor(model, meta) with StackableStreamPublisher with StackableRegisterBusPublisher )
@@ -114,6 +121,12 @@ object EntityAggregateModuleSpec {
     class FooActor( override val model: DomainModel, override val meta: AggregateRootType )
     extends module.EntityAggregateActor { publisher: EventPublisher =>
       override var state: Foo = _
+
+      override val active: Receive = super.active orElse {
+        case Protocol.Bar( _, b ) => {
+          sender() ! Protocol.Barred( state.id, b )
+        }
+      }
     }
   }
 }
@@ -121,6 +134,8 @@ object EntityAggregateModuleSpec {
 
 class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleSpec] with ScalaFutures with LazyLogging {
   import EntityAggregateModuleSpec._
+  import FooAggregateRoot.Protocol
+  
 
   private val trace = Trace[EntityAggregateModuleSpec]
 
@@ -143,6 +158,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
   "Module should" should {
     import FooAggregateRoot.{ module => Module }
+    import Module.EntityProtocol
 
     "build module" in { fixture: Fixture =>
       import fixture._
@@ -183,7 +199,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val id = Module.nextId
       val t = Module aggregateOf id
-      t !+ Module.Rename( id, "foobar" )
+      t !+ Protocol.Entity.Rename( id, "foobar" )
       bus.expectNoMsg( 200.millis.dilated )
     }
 
@@ -195,9 +211,9 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId
       val foo = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
       val f = Module aggregateOf id
-      f !+ Module.Add( foo )
+      f !+ Protocol.Entity.Add( foo )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case Envelope( payload: Module.Added, _ ) => payload.info.name mustBe "foo1"
+        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
       }
     }
 
@@ -207,14 +223,14 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val id = Module.nextId
       val f = Module aggregateOf id
-      f !+ Module.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
+      f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
-        case Envelope( payload: Module.Added, _ ) => payload.info.name mustBe "foo1"
+        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
       }
 
-      f !+ Module.Rename( id, "good-foo" )
+      f !+ Protocol.Entity.Rename( id, "good-foo" )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo renamed" ) {
-        case Envelope( payload: Module.Renamed, _ ) => {
+        case Envelope( payload: Protocol.Entity.Renamed, _ ) => {
           payload.sourceId mustBe id
           payload.oldName mustBe "foo1"
           payload.newName mustBe "good-foo"
@@ -228,15 +244,15 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val id = Module.nextId
       val f = Module aggregateOf id
-      f !+ Module.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
+      f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
-        case Envelope( payload: Module.Added, _ ) => payload.info.name mustBe "foo1"
+        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
       }
 
       val newSlug = "gt"
-      f !+ Module.Reslug( id, newSlug )
+      f !+ Protocol.Entity.Reslug( id, newSlug )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo slug changed" ) {
-        case Envelope( payload: Module.Reslugged, _ ) => {
+        case Envelope( payload: Protocol.Entity.Reslugged, _ ) => {
           payload.sourceId mustBe id
           payload.oldSlug mustBe "f1"
           payload.newSlug mustBe "gt"
@@ -250,14 +266,14 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val id = Module.nextId
       val f = Module aggregateOf id
-      f !+ Module.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
+      f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
-        case Envelope( payload: Module.Added, _ ) => payload.info.name mustBe "foo1"
+        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
       }
 
-      f !+ Module.Disable( id )
+      f !+ Protocol.Entity.Disable( id )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo disabled" ) {
-        case Envelope( payload: Module.Disabled, _ ) => {
+        case Envelope( payload: Protocol.Entity.Disabled, _ ) => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
         }
@@ -270,22 +286,22 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val id = Module.nextId
       val f = Module aggregateOf id
-      f !+ Module.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
+      f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
-        case Envelope( payload: Module.Added, _ ) => payload.info.name mustBe "foo1"
+        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
       }
 
-      f !+ Module.Disable( id )
+      f !+ Protocol.Entity.Disable( id )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo disabled" ) {
-        case Envelope( payload: Module.Disabled, _ ) => {
+        case Envelope( payload: Protocol.Entity.Disabled, _ ) => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
         }
       }
 
-      f !+ Module.Enable( id )
+      f !+ Protocol.Entity.Enable( id )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo enabled" ) {
-        case Envelope( payload: Module.Enabled, _ ) => {
+        case Envelope( payload: Protocol.Entity.Enabled, _ ) => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
         }
@@ -301,9 +317,9 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
       val f = Module aggregateOf id
-      f !+ Module.Add( f1 )
+      f !+ Protocol.Entity.Add( f1 )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case Envelope( payload: Module.Added, _ ) => payload.info.name mustBe "foo1"
+        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
       }
 
       val countDown = new CountDownFunction[String]
@@ -314,7 +330,32 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       slugIndex.get( "f1" ) mustBe Some(id)
     }
 
-    "enablement actions translate in slug index" taggedAs(WIP) in { fixture: Fixture =>
+    "bar command to force concrete protocol implementation" taggedAs (WIP) in { fixture: Fixture =>
+      import fixture._
+
+      val id = Module.nextId
+      val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster" )
+
+      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+
+      val f = Module aggregateOf id
+      f !+ Protocol.Entity.Add( f1 )
+      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+      }
+
+      new CountDownFunction[String] await 200.millis.dilated
+      whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
+      trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
+      slugIndex.get( "f1" ) mustBe Some(id)
+
+      import akka.pattern.ask
+      implicit val timeout = akka.util.Timeout( 1.second )
+      val bevt = ( f ? Protocol.Bar( id, 17 ) ).mapTo[Protocol.Barred]
+      whenReady( bevt ) { e => e.b mustBe 17 }
+    }
+
+    "enablement actions translate in slug index" in { fixture: Fixture =>
       import fixture._
 
       val id = Module.nextId
@@ -323,9 +364,9 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
       val f = Module aggregateOf id
-      f !+ Module.Add( f1 )
+      f !+ Protocol.Entity.Add( f1 )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case Envelope( payload: Module.Added, _ ) => payload.info.name mustBe "foo1"
+        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
       }
 
       new CountDownFunction[String] await 200.millis.dilated
@@ -333,19 +374,19 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
 
-      f !+ Module.Disable( id )
+      f !+ Protocol.Entity.Disable( id )
       new CountDownFunction[String] await 200.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe None }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe None
 
-      f !+ Module.Enable( id )
+      f !+ Protocol.Entity.Enable( id )
       new CountDownFunction[String] await 200.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
 
-      f !+ Module.Enable( id )
+      f !+ Protocol.Entity.Enable( id )
       new CountDownFunction[String] await 200.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )

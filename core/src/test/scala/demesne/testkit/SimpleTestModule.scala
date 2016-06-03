@@ -2,8 +2,8 @@ package demesne.testkit
 
 import akka.actor.Props
 import demesne._
-import demesne.register.{ AggregateIndexSpec, RegisterBus, RegisterBusSubscription, StackableRegisterBusPublisher }
-import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
+import demesne.register.{AggregateIndexSpec, RegisterBus, RegisterBusSubscription, StackableRegisterBusPublisher}
+import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.log.Trace
 
 
@@ -34,7 +34,10 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
     }
   }
 
-  class SimpleTestActor( override val model: DomainModel, override val meta: AggregateRootType ) extends AggregateRoot[SimpleTestActor.State] {
+  class SimpleTestActor(
+    override val model: DomainModel,
+    override val meta: AggregateRootType
+  ) extends AggregateRoot[SimpleTestActor.State] {
     outer: EventPublisher =>
 
     import SimpleTestActor._

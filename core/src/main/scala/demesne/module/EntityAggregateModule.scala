@@ -104,27 +104,35 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
 
   def infoToEntity( from: Info ): E = from
 
-
-  sealed trait EntityProtocol
-
-  case class Add( info: Info ) extends Command with EntityProtocol {
-    override def targetId: Add#TID = idLens.get( infoToEntity(info) ).asInstanceOf[Add#TID]
+  trait Protocol {
+    type Command = module.Command
+    type Event = module.Event
+    val Entity = EntityProtocol
   }
 
-  case class Rename( override val targetId: Rename#TID, name: String ) extends Command with EntityProtocol
-  case class Reslug( override val targetId: Reslug#TID, slug: String ) extends Command with EntityProtocol
-  case class Disable( override val targetId: Disable#TID ) extends Command with EntityProtocol
-  case class Enable( override val targetId: Enable#TID ) extends Command with EntityProtocol
+  object EntityProtocol {
+    sealed trait EntityMessage
+
+    case class Add( info: Info ) extends Command with EntityMessage {
+      override def targetId: Add#TID = idLens.get( infoToEntity(info) ).asInstanceOf[Add#TID]
+    }
+
+    case class Rename( override val targetId: Rename#TID, name: String ) extends Command with EntityMessage
+    case class Reslug( override val targetId: Reslug#TID, slug: String ) extends Command with EntityMessage
+    case class Disable( override val targetId: Disable#TID ) extends Command with EntityMessage
+    case class Enable( override val targetId: Enable#TID ) extends Command with EntityMessage
 
 
-  case class Added( info: Info ) extends Event with EntityProtocol {
-    override def sourceId: Added#TID = idLens.get( infoToEntity(info) ).asInstanceOf[Added#TID]
+    case class Added( info: Info ) extends Event with EntityMessage {
+      override def sourceId: Added#TID = idLens.get( infoToEntity(info) ).asInstanceOf[Added#TID]
+    }
+
+    case class Renamed( override val sourceId: Renamed#TID, oldName: String, newName: String ) extends Event with EntityMessage
+    case class Reslugged( override val sourceId: Reslugged#TID, oldSlug: String, newSlug: String ) extends Event with EntityMessage
+    case class Disabled( override val sourceId: Disabled#TID, slug: String ) extends Event with EntityMessage
+    case class Enabled( override val sourceId: Enabled#TID, slug: String ) extends Event with EntityMessage
   }
 
-  case class Renamed( override val sourceId: Renamed#TID, oldName: String, newName: String ) extends Event with EntityProtocol
-  case class Reslugged( override val sourceId: Reslugged#TID, oldSlug: String, newSlug: String ) extends Event with EntityProtocol
-  case class Disabled( override val sourceId: Disabled#TID, slug: String ) extends Event with EntityProtocol
-  case class Enabled( override val sourceId: Enabled#TID, slug: String ) extends Event with EntityProtocol
 
   trait EntityAggregateRootType extends SimpleAggregateRootType {
     override def toString: String = name + "EntityAggregateRootType"
@@ -137,14 +145,14 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
       override def indexes: Seq[AggregateIndexSpec[_, _]] = {
         module.indexes ++ Seq(
           RegisterLocalAgent.spec[String, module.TID]( 'slug ) { // or 'activeSlug
-            case Added( info ) => {
+            case EntityProtocol.Added( info ) => {
               val e = module.infoToEntity( info )
               Directive.Record( getEntityKey(e), module.idLens.get(e) )
             }
 
-            case Reslugged( _, oldSlug, newSlug ) => Directive.Revise( oldSlug, newSlug )
-            case Disabled( id, _ ) => Directive.Withdraw( id )
-            case Enabled( id, slug ) => Directive.Record( slug, id )
+            case EntityProtocol.Reslugged( _, oldSlug, newSlug ) => Directive.Revise( oldSlug, newSlug )
+            case EntityProtocol.Disabled( id, _ ) => Directive.Withdraw( id )
+            case EntityProtocol.Enabled( id, slug ) => Directive.Record( slug, id )
           }
         )
       }
@@ -160,46 +168,49 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
 
   abstract class EntityAggregateActor extends AggregateRoot[E] { publisher: EventPublisher =>
     import AggregateRoot._
+    import EntityProtocol._
 
     override def acceptance: Acceptance = entityAcceptance
 
     def entityAcceptance: Acceptance = {
       case (Added(info), _) => module.infoToEntity( info )
       case (Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
-      case (Reslugged(_, _, newSlug), s ) if module.slugLens.isDefined => module.slugLens.get.set( s )( newSlug )
-      case (_: Disabled, s) if module.isActiveLens.isDefined => module.isActiveLens.get.set( s )( false )
-      case (_: Enabled, s) if module.isActiveLens.isDefined => module.isActiveLens.get.set( s )( true )
+      case (Reslugged(_, _, newSlug), s ) => module.slugLens map { _.set( s )( newSlug ) } getOrElse s
+      case (_: Disabled, s) => module.isActiveLens map { _.set( s )( false ) } getOrElse s
+      case (_: Enabled, s) => module.isActiveLens map { _.set( s )( true ) } getOrElse s
     }
 
-    override def receiveCommand: Receive = around( quiescent )
+    override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
-    def quiescent: Receive = LoggingReceive {
+    def quiescent: Receive = {
       case Add( info ) => {
-        persistAsync( Added(info) ) { e => 
+        persist( Added(info) ) { e =>
           acceptAndPublish( e )
-          context become around( active )
+          context become LoggingReceive{ around( active ) }
         }
       }
     }
 
-    def active: Receive = LoggingReceive {
-      case Rename( id, name ) => persistAsync( Renamed(id, module.nameLens.get(state), name) ) { e => acceptAndPublish( e ) }
+    def active: Receive = {
+      case Rename( id, name ) => {
+        persist( Renamed(id, module.nameLens.get(state), name) ) { e => acceptAndPublish( e ) }
+      }
       case Reslug( id, slug ) if module.slugLens.isDefined => {
-        persistAsync( Reslugged(id, module.slugLens.get.get(state), slug) ) { e => acceptAndPublish( e ) }
+        persist( Reslugged(id, module.slugLens.get.get(state), slug) ) { e => acceptAndPublish( e ) }
       }
       case Disable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persistAsync( Disabled(id, module.getEntityKey(state)) ) { e => 
+        persist( Disabled(id, module.getEntityKey(state)) ) { e =>
           acceptAndPublish( e )
-          context become around( disabled )
+          context become LoggingReceive { around( disabled ) }
         }
       }
     }
 
     def disabled: Receive = LoggingReceive {
       case Enable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persistAsync( Enabled(id, module.getEntityKey(state)) ) { e =>
+        persist( Enabled(id, module.getEntityKey(state)) ) { e =>
           acceptAndPublish( e )
-          context become around( active )
+          context become LoggingReceive { around( active ) }
         }
       }
     }
