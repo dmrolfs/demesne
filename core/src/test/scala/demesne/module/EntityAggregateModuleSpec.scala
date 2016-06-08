@@ -23,11 +23,6 @@ import scala.reflect.ClassTag
 
 
 object EntityAggregateModuleSpec {
-  implicit val suuidIdentifying = new Identifying[ShortUUID] {
-    import scalaz._, Scalaz._
-    override def nextId: TryV[ShortUUID] = ShortUUID().right
-  }
-
   trait Foo extends Entity {
     override type ID = ShortUUID
     override def evId: ClassTag[ID] = ClassTag( classOf[ShortUUID] )

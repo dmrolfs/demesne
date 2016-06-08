@@ -1,5 +1,6 @@
 package demesne.module
 
+import scala.reflect.ClassTag
 import akka.actor.Props
 import akka.testkit._
 import shapeless.Lens
@@ -12,17 +13,9 @@ import peds.commons.log.Trace
 import peds.commons.identifier._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
-import peds.commons.TryV
-
-import scala.reflect.ClassTag
 
 
 object SimpleAggregateModuleSpec {
-  implicit val suuidIdentifying = new Identifying[ShortUUID] {
-    import scalaz._, Scalaz._
-    override def nextId: TryV[ShortUUID] = ShortUUID().right
-  }
-
   trait Foo extends Entity {
     override type ID = ShortUUID
     override def evId: ClassTag[ID] = ClassTag( classOf[ShortUUID] )

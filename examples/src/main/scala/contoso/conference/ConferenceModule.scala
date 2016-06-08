@@ -1,7 +1,8 @@
 package contoso.conference
 
 import scala.concurrent.Future
-import scalaz._, Scalaz._
+import scalaz._
+import Scalaz._
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import com.github.nscala_time.time.{Imports => joda}
@@ -10,6 +11,7 @@ import demesne.register.RegisterBus
 import peds.commons.Valid
 import peds.akka.AskRetry._
 import peds.akka.publish._
+import peds.commons.identifier.ShortUUID
 import peds.commons.log.Trace
 import shapeless._
 
@@ -18,7 +20,7 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 
-object ConferenceModule extends AggregateRootModule { module =>
+object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
   //DMR move these into common AggregateModuleCompanion trait
   val trace = Trace[ConferenceModule.type]
 
@@ -52,7 +54,7 @@ object ConferenceModule extends AggregateRootModule { module =>
 
   override val aggregateIdTag: Symbol = 'conference
 
-  override val aggregateRootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
 
@@ -139,8 +141,8 @@ object ConferenceModule extends AggregateRootModule { module =>
 
 
   object Conference {
-    def props( model: DomainModel, meta: AggregateRootType, conferenceContext: ActorRef ): Props = {
-      Props( new Conference( model, meta, conferenceContext ) with EventPublisher )
+    def props( model: DomainModel, rt: AggregateRootType, conferenceContext: ActorRef ): Props = {
+      Props( new Conference( model, rt, conferenceContext ) with EventPublisher )
     }
 
     class ConferenceCreateException( cause: Throwable )
@@ -149,7 +151,7 @@ object ConferenceModule extends AggregateRootModule { module =>
 
   class Conference(
     override val model: DomainModel,
-    override val meta: AggregateRootType,
+    override val rootType: AggregateRootType,
     conferenceContext: ActorRef
   ) extends AggregateRoot[ConferenceState] { outer: EventPublisher =>
     import contoso.conference.ConferenceModule.Conference._

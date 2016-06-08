@@ -1,15 +1,18 @@
 package sample.blog
 
 import scala.concurrent.duration._
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
 import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
 import demesne.DomainModel
+import peds.archetype.domain.model.core.Identifying
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule
 import sample.blog.post._
+
+import scalaz.{-\/, \/-}
 
 
 object Bot {
@@ -29,7 +32,7 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
   // val postRegion = ClusterSharding( context.system ).shardRegion( PostModule.shardName )
   def postRegion( id: ShortUUID ): ActorRef = trace.block( s"postRegion( $id) " ) {
     implicit val system = context.system
-    val result = model.aggregateOf( PostModule.aggregateRootType, id )
+    val result = model.aggregateOf( PostModule.rootType, id )
     // log warning s"post AR = ${result}"
     result
   }
@@ -53,12 +56,20 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
 
   val create: Receive = LoggingReceive {
     case Tick => {
-      val postId = ShortUUID()
-      n += 1
-      log.info( s"bot CREATING post $n" )
-      val title = s"Post $n from $from"
-      postRegion( postId ) ! AddPost( postId, PostContent( currentAuthor, title, "..." ) )
-      context become edit( postId )
+      val addPost = for {
+        postId <- implicitly[Identifying[PostModule.ID]].nextId
+      } yield {
+        n += 1
+        log.info( s"bot CREATING post $n" )
+        val title = s"Post $n from $from"
+        postRegion( postId ) ! AddPost( postId, PostContent( currentAuthor, title, "..." ) )
+        context become edit( postId )
+      }
+
+      addPost match {
+        case \/-(_) => ()
+        case -\/( ex ) => throw ex
+      }
     }
   }
 

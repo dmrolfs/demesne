@@ -7,10 +7,7 @@ import demesne.testkit.{AggregateRootSpec, SimpleTestModule}
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import peds.akka.envelope._
-import peds.archetype.domain.model.core.Identifying
-import peds.commons.TryV
 import peds.commons.identifier.ShortUUID
-// import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.log.Trace
 
 import scala.concurrent.duration._
@@ -19,12 +16,6 @@ import com.typesafe.scalalogging.LazyLogging
 
 
 class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] with ScalaFutures with LazyLogging {
-
-  implicit val suuidIdentifying = new Identifying[ShortUUID] {
-    import scalaz._, Scalaz._
-    override def nextId: TryV[ShortUUID] = ShortUUID().right
-  }
-
   object TestModule extends SimpleTestModule[ShortUUID] { module =>
 
     case class Add( override val targetId: Add#TID, foo: String, bar: Int ) extends Command
