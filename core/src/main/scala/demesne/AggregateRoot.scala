@@ -1,17 +1,17 @@
 package demesne
 
+import scala.reflect.ClassTag
 import akka.actor.{ActorLogging, ReceiveTimeout}
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.archetype.domain.model.core.Identifiable
-import peds.commons.identifier.TaggedID
+import peds.commons.{KOp, TryV}
 import peds.commons.log.Trace
 import peds.commons.util._
 
 import scalaz._
-import Scalaz._
 import scalaz.Kleisli._
 
 
@@ -31,7 +31,7 @@ object AggregateRoot {
   type Acceptance[S] = PartialFunction[(Any, S), S]
 }
 
-abstract class AggregateRoot[S]
+abstract class AggregateRoot[S: ClassTag]
 extends PersistentActor
 with EnvelopingActor
 with DomainModel.Provider
@@ -39,10 +39,9 @@ with AggregateRootType.Provider
 with ActorLogging {
   outer: EventPublisher =>
 
-  type Valid[A] = NonEmptyList[Throwable] \/ A
-  type StateOperation = Kleisli[Valid, S, S]
+  type StateOperation = KOp[S, S]
 
-  val trace = Trace( "AggregateRoot", log )
+  val trace = Trace( s"AggregateRoot[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]", log )
 
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
@@ -79,11 +78,11 @@ with ActorLogging {
   def accept( event: Any ): S = {
     acceptOp(event) run state match {
       case \/-(s) => s
-      case -\/(ex) => throw ex.head
+      case -\/(ex) => throw ex
     }
   }
 
-  def acceptOp( event: Any ): StateOperation = kleisli[Valid, S, S] { (s: S) => 
+  def acceptOp( event: Any ): StateOperation = kleisli[TryV, S, S] { s =>
     trace.block( s"acceptOp($event, $s)" ) {
       \/.fromTryCatchNonFatal[S] {
         val eventState = (event, s)
@@ -98,18 +97,16 @@ with ActorLogging {
           log debug s"""${Option(s).map{_.getClass.safeSimpleName}} does not accept event ${event.getClass.safeSimpleName}"""
           s
         }
-      } leftMap { 
-        NonEmptyList( _ ) 
       }
     }
   }
 
-  def publishOp( event: Any ): StateOperation = kleisli[Valid, S, S] { (s: S) =>
+  def publishOp( event: Any ): StateOperation = kleisli[TryV, S, S] { s =>
     trace.block( s"publishOp($event, $s)" ) {
       \/.fromTryCatchNonFatal[S] { 
         publish( event ) 
         s
-      } leftMap { NonEmptyList( _ ) }
+      }
     }
   }
 
@@ -118,7 +115,7 @@ with ActorLogging {
   def acceptAndPublish( event: Any ): S = {
     acceptAndPublishOp( event ) run state match {
       case \/-(s) => s
-      case -\/(ex) => throw ex.head
+      case -\/(ex) => throw ex
     }
   }
 
