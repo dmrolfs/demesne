@@ -2,20 +2,21 @@ package demesne.testkit
 
 import akka.actor.Props
 import demesne._
-import demesne.register.{AggregateIndexSpec, RegisterBus, RegisterBusSubscription, StackableRegisterBusPublisher}
+import demesne.register.{AggregateIndexSpec, StackableRegisterBusPublisher}
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
+import peds.archetype.domain.model.core.Identifying
 import peds.commons.log.Trace
 
 
-trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregateActorType { module =>
+abstract class SimpleTestModule[I: Identifying] extends AggregateRootModule[I] with CommonInitializeAggregateActorType { module =>
   def name: String
   def indexes: Seq[AggregateIndexSpec[_, _]]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
-  override val trace = Trace[SimpleTestModule]
+  override val trace = Trace[SimpleTestModule[I]]
 
-  override def aggregateRootType: AggregateRootType = {
+  override def rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.name
       override def aggregateRootProps( implicit model: DomainModel ): Props = SimpleTestActor.props( model, this )
@@ -27,16 +28,16 @@ trait SimpleTestModule extends AggregateRootModule with CommonInitializeAggregat
   object SimpleTestActor {
     type State = Map[Symbol, Any]
 
-    def props( model: DomainModel, meta: AggregateRootType ): Props = {
+    def props( model: DomainModel, rt: AggregateRootType ): Props = {
       Props( 
-        new SimpleTestActor( model, meta ) with StackableStreamPublisher with StackableRegisterBusPublisher
+        new SimpleTestActor( model, rt ) with StackableStreamPublisher with StackableRegisterBusPublisher
       )
     }
   }
 
   class SimpleTestActor(
     override val model: DomainModel,
-    override val meta: AggregateRootType
+    override val rootType: AggregateRootType
   ) extends AggregateRoot[SimpleTestActor.State] {
     outer: EventPublisher =>
 

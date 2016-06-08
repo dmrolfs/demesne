@@ -3,10 +3,13 @@ package demesne.register
 import akka.testkit._
 import demesne._
 import demesne.register.local.RegisterLocalAgent
-import demesne.testkit.{ AggregateRootSpec, SimpleTestModule }
+import demesne.testkit.{AggregateRootSpec, SimpleTestModule}
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import peds.akka.envelope._
+import peds.archetype.domain.model.core.Identifying
+import peds.commons.TryV
+import peds.commons.identifier.ShortUUID
 // import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.log.Trace
 
@@ -17,7 +20,12 @@ import com.typesafe.scalalogging.LazyLogging
 
 class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] with ScalaFutures with LazyLogging {
 
-  object TestModule extends SimpleTestModule { module =>
+  implicit val suuidIdentifying = new Identifying[ShortUUID] {
+    import scalaz._, Scalaz._
+    override def nextId: TryV[ShortUUID] = ShortUUID().right
+  }
+
+  object TestModule extends SimpleTestModule[ShortUUID] { module =>
 
     case class Add( override val targetId: Add#TID, foo: String, bar: Int ) extends Command
     case class ChangeBar( override val targetId: ChangeBar#TID, bar: Int ) extends Command
@@ -68,7 +76,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
 
     val bus: TestProbe = TestProbe()
 
-    def moduleCompanions: List[AggregateRootModule] = List( TestModule )
+    def moduleCompanions: List[AggregateRootModule[_]] = List( TestModule )
 
     // override def context: Map[Symbol, Any] = trace.block( "context" ) {
     //   val result = super.context
@@ -280,7 +288,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     "recorded in registers after added" in { fixture: Fixture =>
       import fixture._
 
-      val rt = TestModule.aggregateRootType
+      val rt = TestModule.rootType
       val br = model.aggregateRegisterFor[String, TestModule.TID]( rt, 'bus )
       br.isRight mustBe true
       val sr = model.aggregateRegisterFor[Int, TestModule.TID]( rt, 'stream )
@@ -289,7 +297,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         busRegister <- br 
         streamRegister <- sr
       } {
-        val id = TestModule.nextId
+        val id = TestModule.nextId.toOption.get
         val foo = "Test Foo"
         val bar = 17
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
@@ -320,7 +328,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     "withdrawn from register after delete" in { fixture: Fixture =>
       import fixture._
 
-      val rt = TestModule.aggregateRootType
+      val rt = TestModule.rootType
       val br = model.aggregateRegisterFor[String, TestModule.TID]( rt, 'bus )
       br.isRight mustBe true
       val sr = model.aggregateRegisterFor[Int, TestModule.TID]( rt, 'stream )
@@ -331,7 +339,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       } {
         val p = TestProbe()
 
-        val id = TestModule.nextId
+        val id = TestModule.nextId.toOption.get
         val foo = "Test Foo"
         val bar = 13
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
@@ -392,7 +400,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     "revised in register after change" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
-      val rt = TestModule.aggregateRootType
+      val rt = TestModule.rootType
       val br = model.aggregateRegisterFor[String, TestModule.TID]( rt, 'bus )
       br.isRight mustBe true
       val sr = model.aggregateRegisterFor[Int, TestModule.TID]( rt, 'stream )
@@ -403,7 +411,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       } {
         val p = TestProbe()
 
-        val id = TestModule.nextId
+        val id = TestModule.nextId.toOption.get
         val foo = "Test Foo"
         val bar = 7
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
