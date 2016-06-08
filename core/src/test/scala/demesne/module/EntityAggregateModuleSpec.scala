@@ -10,13 +10,14 @@ import demesne.register.{AggregateIndexSpec, StackableRegisterBusPublisher}
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
-import peds.archetype.domain.model.core.{Entity, EntityCompanion}
+import peds.archetype.domain.model.core.{Entity, EntityCompanion, Identifying}
 import peds.akka.envelope._
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.log.Trace
 import peds.commons.identifier._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
+import peds.commons.TryV
 
 import scala.reflect.ClassTag
 
@@ -116,12 +117,12 @@ object EntityAggregateModuleSpec {
 
     
     object FooActor {
-      def props( model: DomainModel, meta: AggregateRootType ): Props = {
-        Props( new FooActor(model, meta) with StackableStreamPublisher with StackableRegisterBusPublisher )
+      def props( model: DomainModel, rt: AggregateRootType ): Props = {
+        Props( new FooActor(model, rt) with StackableStreamPublisher with StackableRegisterBusPublisher )
       }
     }
 
-    class FooActor( override val model: DomainModel, override val meta: AggregateRootType )
+    class FooActor( override val model: DomainModel, override val rootType: AggregateRootType )
     extends module.EntityAggregateActor { publisher: EventPublisher =>
       override var state: Foo = _
 
@@ -147,9 +148,9 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
   class TestFixture extends AggregateFixture {
     private val trace = Trace[TestFixture]
     val bus: TestProbe = TestProbe()
-    val rootType = FooAggregateRoot.module.aggregateRootType
+    val rootType = FooAggregateRoot.module.rootType
     def slugIndex = model.aggregateRegisterFor[String, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
-    def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
+    def moduleCompanions: List[AggregateRootModule[_]] = List( FooAggregateRoot.module )
   }
 
   override def createAkkaFixture(): Fixture = new TestFixture
@@ -200,7 +201,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val t = Module aggregateOf id
       t !+ Protocol.Entity.Rename( id, "foobar" )
       bus.expectNoMsg( 200.millis.dilated )
@@ -211,7 +212,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val foo = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( foo )
@@ -224,7 +225,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
@@ -245,7 +246,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
@@ -267,7 +268,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
@@ -287,7 +288,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
@@ -314,7 +315,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     "recorded in slug index" in { fixture: Fixture =>
       import fixture._
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
 
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
@@ -336,7 +337,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     "bar command to force concrete protocol implementation" taggedAs (WIP) in { fixture: Fixture =>
       import fixture._
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster" )
 
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
@@ -361,7 +362,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     "enablement actions translate in slug index" in { fixture: Fixture =>
       import fixture._
 
-      val id = Module.nextId
+      val id = Module.nextId.toOption.get
       val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
 
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )

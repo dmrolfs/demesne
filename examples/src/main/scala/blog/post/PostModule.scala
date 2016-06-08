@@ -17,7 +17,7 @@ import shapeless._
 import shapeless.syntax.typeable._
 
 
-object PostModule extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
+object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregateRootClusterSharding { module =>
   override val trace = Trace[PostModule.type]
 
   var makeAuthorListing: () => ActorRef = _
@@ -56,7 +56,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
   // override val aggregateIdTag: Symbol = 'post
 
 
-  override def aggregateRootType: AggregateRootType = {
+  override def rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = PostActor.props( model, this, makeAuthorListing )
@@ -79,11 +79,11 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
 
   object PostActor {
-    def props( model: DomainModel, meta: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = trace.block(s"props(_,$meta, $makeAuthorListing)") {
+    def props( model: DomainModel, rt: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = trace.block(s"props(_,${rt}, $makeAuthorListing)") {
       import peds.akka.publish._
 
       Props(
-        new PostActor( model, meta ) 
+        new PostActor( model, rt )
         with ReliablePublisher  
         with StackableRegisterBusPublisher 
         with StackableStreamPublisher 
@@ -118,7 +118,10 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
   }
 
 
-  class PostActor( override val model: DomainModel, override val meta: AggregateRootType ) extends AggregateRoot[PostActor.State] {
+  class PostActor(
+    override val model: DomainModel,
+    override val rootType: AggregateRootType
+  ) extends AggregateRoot[PostActor.State] {
     outer: EventPublisher =>
 
     import PostActor._

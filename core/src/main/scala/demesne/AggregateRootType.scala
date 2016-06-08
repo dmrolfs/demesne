@@ -9,7 +9,7 @@ import peds.akka.publish.ReliablePublisher.ReliableMessage
 
 object AggregateRootType {
   trait Provider {
-    def meta: AggregateRootType
+    def rootType: AggregateRootType
   }
 }
 

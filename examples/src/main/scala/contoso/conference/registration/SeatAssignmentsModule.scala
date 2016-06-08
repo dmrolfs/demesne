@@ -7,19 +7,20 @@ import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
 import demesne.register.RegisterBus
 import peds.akka.publish.EventPublisher
+import peds.commons.identifier.ShortUUID
 import peds.commons.log.Trace
 
 import scala.annotation.tailrec
 
 
-object SeatAssignmentsModule extends AggregateRootModule { module =>
+object SeatAssignmentsModule extends AggregateRootModule[ShortUUID] { module =>
   import com.wix.accord._
 
   val trace = Trace[SeatAssignmentsModule.type]
 
   // override val aggregateIdTag: Symbol = 'seatsAssignment
 
-  override val aggregateRootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = SeatAssignments.props( model, this )
@@ -112,14 +113,14 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
 
 
   object SeatAssignments {
-    def props( model: DomainModel, meta: AggregateRootType ): Props = {
-      Props( new SeatAssignments( model, meta ) with EventPublisher )
+    def props( model: DomainModel, rootType: AggregateRootType ): Props = {
+      Props( new SeatAssignments( model, rootType ) with EventPublisher )
     }
   }
 
   class SeatAssignments(
     override val model: DomainModel,
-    override val meta: AggregateRootType
+    override val rootType: AggregateRootType
   ) extends AggregateRoot[SeatAssignmentsState] {  outer: EventPublisher =>
     override val trace = Trace( "SeatsAssignment", log )
 

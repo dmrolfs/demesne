@@ -13,6 +13,7 @@ import demesne._
 import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
+import peds.commons.identifier.ShortUUID
 import peds.commons.log.Trace
 
 import scala.concurrent.duration._
@@ -24,20 +25,20 @@ import scala.concurrent.duration._
 *
 * Created by damonrolfs on 9/11/14.
 */
-object RegistrationSagaModule extends SagaModule { module =>
+object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
   val trace = Trace[RegistrationSagaModule.type]
   // override val aggregateIdTag: Symbol = 'registration
 
-  override val aggregateRootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new AggregateRootType {
       override def name: String = module.shardName
 
       override def aggregateRootProps( implicit model: DomainModel ): Props = {
         RegistrationSaga.props(
-          meta = this,
+          rootType = this,
           model = model,
-          orderType = OrderModule.aggregateRootType,
-          availabilityType = SeatsAvailabilityModule.aggregateRootType
+          orderType = OrderModule.rootType,
+          availabilityType = SeatsAvailabilityModule.rootType
         )
       }
 
@@ -77,12 +78,12 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   object RegistrationSaga {
     def props(
-      meta: AggregateRootType,
+      rootType: AggregateRootType,
       model: DomainModel,
       orderType: AggregateRootType,
       availabilityType: AggregateRootType
     ): Props = {
-      Props( new RegistrationSaga( meta, model, orderType, availabilityType ) with EventPublisher )
+      Props( new RegistrationSaga( rootType, model, orderType, availabilityType ) with EventPublisher )
     }
 
     //DMR: det where to locate this b/h; e.g., pull-req into nscala-time, peds?
@@ -90,7 +91,7 @@ object RegistrationSagaModule extends SagaModule { module =>
   }
 
   class RegistrationSaga(
-    override val meta: AggregateRootType,
+    override val rootType: AggregateRootType,
     override val model: DomainModel,
     orderType: AggregateRootType,
     seatsAvailabilityType: AggregateRootType
@@ -125,10 +126,12 @@ object RegistrationSagaModule extends SagaModule { module =>
       case ( _: OrderConfirmed, state ) => state.copy( state = FullyConfirmed )
     }
 
-    def order( id: Option[OrderModule.TID] ): ActorRef = OrderModule.aggregateOf( id )( model )
+    def order( id: Option[OrderModule.TID] ): ActorRef = {
+      OrderModule.aggregateOf( id getOrElse ShortUUID() )( model )
+    }
 
     def seatsAvailability( id: Option[SeatsAvailabilityModule.TID] ): ActorRef = {
-      SeatsAvailabilityModule.aggregateOf( id )( model )
+      SeatsAvailabilityModule.aggregateOf( id getOrElse ShortUUID() )( model )
     }
 
 

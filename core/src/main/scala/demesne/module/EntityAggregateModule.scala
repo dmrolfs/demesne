@@ -4,23 +4,24 @@ import scala.reflect.ClassTag
 import akka.actor.Props
 import akka.event.LoggingReceive
 import shapeless._
-import peds.archetype.domain.model.core.Entity
-import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
+import peds.archetype.domain.model.core.{Entity, Identifying}
+import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.builder.HasBuilder
 import peds.commons.log.Trace
 import peds.commons.util._
-import demesne.{ AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel }
-import demesne.register.{ AggregateIndexSpec, Directive, StackableRegisterBusPublisher }
+import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel}
+import demesne.register.{AggregateIndexSpec, Directive, StackableRegisterBusPublisher}
 import demesne.register.local.RegisterLocalAgent
+import peds.commons.TryV
 
 
 object EntityAggregateModule {
   type MakeIndexSpec = Function0[Seq[AggregateIndexSpec[_,_]]]
   val makeEmptyIndexSpec = () => Seq.empty[AggregateIndexSpec[_,_]]
 
-  def builderFor[E <: Entity : ClassTag]: BuilderFactory[E] = new BuilderFactory[E]
+  def builderFor[E <: Entity : ClassTag]( implicit identifying: Identifying[E#ID] ): BuilderFactory[E] = new BuilderFactory[E]
 
-  class BuilderFactory[E <: Entity : ClassTag] {
+  class BuilderFactory[E <: Entity : ClassTag]( implicit identifying: Identifying[E#ID] ) {
     type CC = EntityAggregateModuleImpl
 
     def make: ModuleBuilder = new ModuleBuilder
@@ -62,9 +63,13 @@ object EntityAggregateModule {
       override val nameLens: Lens[E, String],
       override val slugLens: Option[Lens[E, String]],
       override val isActiveLens: Option[Lens[E, Boolean]]
+    )(
+      implicit identifying: Identifying[E#ID]
     ) extends EntityAggregateModule[E] with Equals {
       override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
       override val evState: ClassTag[E] = implicitly[ClassTag[E]]
+
+      override def nextId: TryV[TID] = implicitly[Identifying[E#ID]].nextId map { tagId }
 
       override lazy val indexes: Seq[AggregateIndexSpec[_,_]] = _indexes()
 
@@ -92,7 +97,7 @@ object EntityAggregateModule {
   }
 }
 
-trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { module =>
+trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E, E#ID] { module =>
   def idLens: Lens[E, E#TID]
   def nameLens: Lens[E, String]
   def slugLens: Option[Lens[E, String]] = None
@@ -138,7 +143,7 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E] { modu
     override def toString: String = name + "EntityAggregateRootType"
   }
   
-  override val aggregateRootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new EntityAggregateRootType {
       override def name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )

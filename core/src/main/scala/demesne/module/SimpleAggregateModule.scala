@@ -3,33 +3,31 @@ package demesne.module
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import akka.actor.Props
-
 import scalaz._
 import Scalaz._
 import shapeless._
+import peds.archetype.domain.model.core.Identifying
 import peds.commons.builder._
 import peds.commons.util._
 import peds.commons.log.Trace
-import peds.commons.Valid
+import peds.commons.{TryV, Valid}
 import demesne._
 import demesne.register.AggregateIndexSpec
-import peds.commons.identifier.ShortUUID
 
 
-trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
+trait SimpleAggregateModule[S, I] extends AggregateRootModule[I] with InitializeAggregateRootClusterSharding { module =>
   def indexes: Seq[AggregateIndexSpec[_, _]] = Seq.empty[AggregateIndexSpec[_, _]]
   def aggregateRootPropsOp: AggregateRootProps
   def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
 
-  def stateClass: Class[_] = implicitly[ClassTag[S]].runtimeClass
+//  def stateClass: Class[_] = implicitly[ClassTag[S]].runtimeClass
   implicit def evState: ClassTag[S]
   
   trait SimpleAggregateRootType extends AggregateRootType {
-//    override type ID = module.ID
     override def toString: String = name + "SimpleAggregateRootType"
   }
 
-  override val aggregateRootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new SimpleAggregateRootType {
       override def name: String = module.shardName
       override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes
@@ -39,10 +37,10 @@ trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggreg
 }
 
 object SimpleAggregateModule {
-  def builderFor[S: ClassTag]: BuilderFactory[S] = new BuilderFactory[S]
+  def builderFor[S: ClassTag, I: ClassTag : Identifying]: BuilderFactory[S, I] = new BuilderFactory[S, I]
 
-  class BuilderFactory[S: ClassTag] {
-    type CC = SimpleAggregateModuleImpl[S]
+  class BuilderFactory[S: ClassTag, I: ClassTag : Identifying] {
+    type CC = SimpleAggregateModuleImpl[S, I]
 
     def make: ModuleBuilder = new ModuleBuilder
 
@@ -64,13 +62,15 @@ object SimpleAggregateModule {
   }
 
 
-  final case class SimpleAggregateModuleImpl[S : ClassTag](
+  final case class SimpleAggregateModuleImpl[S: ClassTag, I: ClassTag : Identifying](
     override val aggregateIdTag: Symbol,
     override val aggregateRootPropsOp: AggregateRootProps,
     override val indexes: Seq[AggregateIndexSpec[_,_]]
-  ) extends SimpleAggregateModule[S] with Equals {
+  ) extends SimpleAggregateModule[S, I] with Equals {
     override val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
     override val evState: ClassTag[S] = implicitly[ClassTag[S]]
+
+    override def nextId: TryV[TID] = implicitly[Identifying[ID]].nextId map { tagId }
 
     var _props: Map[Symbol, Any] = Map()
     override def moduleProperties: Map[Symbol, Any] = _props
@@ -84,10 +84,10 @@ object SimpleAggregateModule {
     ) : Valid[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ _props = props }.successNel }
 
 
-    override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]
+    override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S, I]]
 
     override def equals( rhs: Any ): Boolean = rhs match {
-      case that: SimpleAggregateModuleImpl[S] => {
+      case that: SimpleAggregateModuleImpl[S, I] => {
         if ( this eq that ) true
         else {
           ( that.## == this.## ) &&

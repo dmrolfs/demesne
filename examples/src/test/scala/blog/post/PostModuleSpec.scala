@@ -30,7 +30,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     val author: TestProbe = TestProbe()
 
     // override val module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
-    def moduleCompanions: List[AggregateRootModule] = List( PostModule )
+    def moduleCompanions: List[AggregateRootModule[_]] = List( PostModule )
 
     override def context: Map[Symbol, Any] = trace.block( "context" ) {
       val result = super.context
@@ -57,7 +57,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
       post !+ AddPost( id, content )
@@ -72,7 +72,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
       post !+ ChangeBody( id, "dummy content" )
       post !+ Publish( id )
@@ -85,7 +85,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
       post !+ AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
       bus.expectNoMsg( 200.millis.dilated )
@@ -96,7 +96,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "have empty contents before use" in { fixture: Fixture =>
       import fixture._
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
       post.send( GetContent( id ) )( author.ref )
       author.expectMsgPF( max = 200.millis.dilated, hint = "empty contents" ){
@@ -112,7 +112,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "have contents after posting" in { fixture: Fixture =>
       import fixture._
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
       val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
 
@@ -127,7 +127,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "have changed contents after change" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
       val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
       val updated = "updated contents"
@@ -155,7 +155,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "have changed contents after change and published" in { fixture: Fixture =>
       import fixture._
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
       val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
       val updated = "updated contents"
@@ -173,7 +173,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "dont change contents after published" in { fixture: Fixture =>
       import fixture._
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
       val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
       val updated = "updated contents"
@@ -192,7 +192,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "follow happy path" in { fixture: Fixture =>
       import fixture._
 
-      val id = PostModule.nextId
+      val id = PostModule.nextId.toOption.get
       val content = PostContent( author = "Damon", title = "Test Add", body = "testing happy path" )
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
@@ -228,13 +228,13 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "recorded in author register after post added via bus" in { fixture: Fixture =>
       import fixture._
 
-      val rt = PostModule.aggregateRootType
+      val rt = PostModule.rootType
       val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
       for {
         register <- ar 
       } {
-        val id = PostModule.nextId
+        val id = PostModule.nextId.toOption.get
         val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
@@ -256,7 +256,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "recorded in title register after post added via event stream" in { fixture: Fixture =>
       import fixture._
 
-      val rt = PostModule.aggregateRootType
+      val rt = PostModule.rootType
       val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
       ar.isRight mustBe true
       for {
@@ -264,7 +264,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       } {
         val p = TestProbe()
 
-        val id = PostModule.nextId
+        val id = PostModule.nextId.toOption.get
         val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
         system.eventStream.subscribe( p.ref, classOf[Envelope] )
@@ -293,7 +293,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "withdrawn title in register after post delete via event stream" in { fixture: Fixture =>
       import fixture._
 
-      val rt = PostModule.aggregateRootType
+      val rt = PostModule.rootType
       val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
       val tr = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
@@ -304,7 +304,8 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       } {
         val p = TestProbe()
 
-        val id = PostModule.nextId
+        val id = PostModule.nextId.toOption.get
+
         val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
         system.eventStream.subscribe( p.ref, classOf[Envelope] )
@@ -356,7 +357,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     "revised title in register after post title change via event stream" in { fixture: Fixture =>
       import fixture._
 
-      val rt = PostModule.aggregateRootType
+      val rt = PostModule.rootType
       val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
       val tr = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
@@ -367,7 +368,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       } {
         val p = TestProbe()
 
-        val id = PostModule.nextId
+        val id = PostModule.nextId.toOption.get
         val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
         system.eventStream.subscribe( bus.ref, classOf[Envelope] )
         system.eventStream.subscribe( p.ref, classOf[Envelope] )

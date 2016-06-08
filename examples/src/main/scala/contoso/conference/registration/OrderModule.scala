@@ -12,10 +12,11 @@ import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
+import peds.commons.identifier.ShortUUID
 import squants._
 
 
-object OrderModule extends AggregateRootModule { module =>
+object OrderModule extends AggregateRootModule[ShortUUID] { module =>
   import com.wix.accord._
   import com.wix.accord.dsl._
   import peds.commons.log.Trace
@@ -34,7 +35,7 @@ object OrderModule extends AggregateRootModule { module =>
 
   // override val aggregateIdTag: Symbol = 'order
 
-  override val aggregateRootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = {
@@ -180,14 +181,14 @@ object OrderModule extends AggregateRootModule { module =>
 
 
   object Order {
-    def props( model: DomainModel, meta: AggregateRootType, pricingRetriever: ActorRef ): Props = {
-      Props( new Order( model, meta, pricingRetriever ) with EventPublisher )
+    def props( model: DomainModel, rt: AggregateRootType, pricingRetriever: ActorRef ): Props = {
+      Props( new Order( model, rt, pricingRetriever ) with EventPublisher )
     }
   }
 
   class Order(
     override val model: DomainModel,
-    override val meta: AggregateRootType,
+    override val rootType: AggregateRootType,
     pricingRetriever: ActorRef
   ) extends AggregateRoot[OrderState] { outer: EventPublisher =>
     override val trace = Trace( "Order", log )

@@ -2,28 +2,26 @@ package demesne
 
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
-import peds.commons.identifier._
+import peds.archetype.domain.model.core.Identifying
+import peds.commons.TryV
+import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
 import peds.commons.util._
 
 
-// trait AggregateRootModule[AR <: Identifiable] extends CommonInitializeAggregateActorType with LazyLogging { module =>
-trait AggregateRootModule extends CommonInitializeAggregateActorType with LazyLogging { module =>
+abstract class AggregateRootModule[I: Identifying]
+extends AggregateRootType.Provider
+with CommonInitializeAggregateActorType
+with LazyLogging { module =>
   def trace: Trace[_]
 
-  type ID = ShortUUID
+  type ID = I
   type TID = TaggedID[ID]
-  def nextId: TID = ShortUUID()
+  def nextId: TryV[TID] = implicitly[Identifying[ID]].nextId map { tagId }
   def aggregateIdTag: Symbol = _aggregateIdTag
   def shardName: String = _shardName
-  def aggregateRootType: AggregateRootType
 
-  def aggregateOf( id: TID )( implicit model: DomainModel ): ActorRef = aggregateOf( Some(id) )
-
-  def aggregateOf( id: Option[TID] )( implicit model: DomainModel ): ActorRef = trace.block( s"aggregateOf($id)($model)" ) {
-    val effId = id getOrElse nextId
-    model.aggregateOf( rootType = aggregateRootType, id = effId )
-  }
+  def aggregateOf( id: TID )( implicit model: DomainModel ): ActorRef = model.aggregateOf( rootType = module.rootType, id )
 
   override def toString: String = s"${getClass.safeSimpleName}(${aggregateIdTag})"
 

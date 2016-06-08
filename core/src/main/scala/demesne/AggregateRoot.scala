@@ -132,13 +132,13 @@ with ActorLogging {
 
   override def preStart(): Unit = {
     super.preStart()
-    context setReceiveTimeout meta.passivation.inactivityTimeout
-    meta.snapshot.schedule( context.system, self )( context.dispatcher )
+    context setReceiveTimeout rootType.passivation.inactivityTimeout
+    rootType.snapshot.schedule( context.system, self )( context.dispatcher )
   }
 
   override def unhandled( message: Any ): Unit = {
     message match {
-      case m: ReceiveTimeout => context.parent ! meta.passivation.passivationMessage( m )
+      case m: ReceiveTimeout => context.parent ! rootType.passivation.passivationMessage( m )
       case m => {
         log debug s"aggregate root unhandled $m"
         super.unhandled( m )
