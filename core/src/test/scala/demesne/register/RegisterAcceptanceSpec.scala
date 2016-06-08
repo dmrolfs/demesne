@@ -281,9 +281,9 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       import fixture._
 
       val rt = TestModule.aggregateRootType
-      val br = model.aggregateRegisterFor[String]( rt, 'bus )
+      val br = model.aggregateRegisterFor[String, TestModule.TID]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
+      val sr = model.aggregateRegisterFor[Int, TestModule.TID]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br 
@@ -321,9 +321,9 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       import fixture._
 
       val rt = TestModule.aggregateRootType
-      val br = model.aggregateRegisterFor[String]( rt, 'bus )
+      val br = model.aggregateRegisterFor[String, TestModule.TID]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
+      val sr = model.aggregateRegisterFor[Int, TestModule.TID]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br
@@ -393,9 +393,9 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       import fixture._
 
       val rt = TestModule.aggregateRootType
-      val br = model.aggregateRegisterFor[String]( rt, 'bus )
+      val br = model.aggregateRegisterFor[String, TestModule.TID]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor[Int]( rt, 'stream )
+      val sr = model.aggregateRegisterFor[Int, TestModule.TID]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br

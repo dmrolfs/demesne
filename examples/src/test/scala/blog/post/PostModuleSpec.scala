@@ -229,7 +229,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       import fixture._
 
       val rt = PostModule.aggregateRootType
-      val ar = model.aggregateRegisterFor[String]( rt, 'author )
+      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
       for {
         register <- ar 
@@ -257,7 +257,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       import fixture._
 
       val rt = PostModule.aggregateRootType
-      val ar = model.aggregateRegisterFor[String]( rt, 'title )
+      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
       ar.isRight mustBe true
       for {
         register <- ar 
@@ -294,9 +294,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       import fixture._
 
       val rt = PostModule.aggregateRootType
-      val ar = model.aggregateRegisterFor[String]( rt, 'author )
+      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
-      val tr = model.aggregateRegisterFor[String]( rt, 'title )
+      val tr = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
       tr.isRight mustBe true
       for {
         authorRegister <- ar
@@ -357,9 +357,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       import fixture._
 
       val rt = PostModule.aggregateRootType
-      val ar = model.aggregateRegisterFor[String]( rt, 'author )
+      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
-      val tr = model.aggregateRegisterFor[String]( rt, 'title )
+      val tr = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
       tr.isRight mustBe true
       for {
         authorRegister <- ar

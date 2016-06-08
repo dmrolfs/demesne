@@ -1,38 +1,48 @@
 package demesne
 
-import scala.concurrent.{ ExecutionContext, Future, Await }
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
-import scalaz._, Scalaz._
-import akka.actor.{ Terminated, ActorRef, ActorSystem, Props }
+import scalaz._
+import Scalaz._
+import akka.actor.{ActorRef, ActorSystem, Props, Terminated}
 import akka.agent.Agent
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
 import demesne.factory._
 import demesne.register._
-import demesne.register.RegisterSupervisor.{ IndexRegistered, RegisterIndex }
-import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ StartChild, ChildStarted }
-import peds.akka.supervision.{ IsolatedDefaultSupervisor, OneForOneStrategyFactory }
+import demesne.register.RegisterSupervisor.{IndexRegistered, RegisterIndex}
+import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
+import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
-import peds.commons.Valid
+import peds.commons.{TryV, Valid}
 
 
 trait DomainModel {
   def name: String
+
   def system: ActorSystem
+
   def registerBus: RegisterBus
+
   def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory )( implicit to: Timeout ): Future[Unit]
+
   def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = aggregateOf( rootType.name, id )
+
   def aggregateOf( name: String, id: Any ): ActorRef
-  def aggregateRegisterFor[K]( rootType: AggregateRootType, name: Symbol ): DomainModel.AggregateRegisterV[K, rootType.TID] = {
-    aggregateRegisterFor[K, rootType.TID]( rootType.name, name )
+
+  import DomainModel.AggregateRegister
+  def aggregateRegisterFor[K, TID]( rootType: AggregateRootType, name: Symbol ): TryV[AggregateRegister[K, TID]] = {
+    aggregateRegisterFor[K, TID]( rootType.name, name )
   }
-  def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): DomainModel.AggregateRegisterV[K, TID]
+
+  def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): TryV[AggregateRegister[K, TID]]
+
   def shutdown(): Future[Terminated]
 }
 
 object DomainModel {
   type AggregateRegister[K, TID] = Register[K, TID]
-  type AggregateRegisterV[K, TID] = \/[Throwable, AggregateRegister[K, TID]]
+//  type AggregateRegisterV[K, TID] = \/[Throwable, AggregateRegister[K, TID]]
 
   trait Provider {
     def model: DomainModel
@@ -124,7 +134,7 @@ object DomainModel {
       }
     }
 
-    override def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): AggregateRegisterV[K, TID] = trace.block( s"registerFor($rootName, $registerName)" ) {
+    override def aggregateRegisterFor[K, TID]( rootName: String, registerName: Symbol ): TryV[AggregateRegister[K, TID]] = trace.block( s"registerFor($rootName, $registerName)" ) {
       trace( s"""aggregateRegistry = ${aggregateRegistry().mkString("[",",","]")}""")
       trace( s"""specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""" )
 
