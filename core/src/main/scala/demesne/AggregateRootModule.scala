@@ -23,13 +23,6 @@ with LazyLogging { module =>
 
   def aggregateOf( id: TID )( implicit model: DomainModel ): ActorRef = model.aggregateOf( rootType = module.rootType, id )
 
-//  def aggregateOf( id: Option[TID] )( implicit model: DomainModel ): ActorRef = trace.block( s"aggregateOf($id)($model)" ) {
-//    val effId = id getOrElse nextId
-//    model.aggregateOf( rootType = module.rootType, id = effId )
-//  }
-//
-//  def aggregateOf( id: TryV[TID] )( implicit model: DomainModel ): ActorRef
-
   override def toString: String = s"${getClass.safeSimpleName}(${aggregateIdTag})"
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
