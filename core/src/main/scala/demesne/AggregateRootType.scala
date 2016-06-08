@@ -14,9 +14,6 @@ object AggregateRootType {
 }
 
 trait AggregateRootType { outer =>
-  type ID
-  type TID
-  
   def name: String
   def repositoryName: String = name+"Repository"
 

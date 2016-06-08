@@ -7,17 +7,20 @@ import demesne._
 import demesne.register.AggregateIndexSpec
 import demesne.testkit.AggregateRootSpec
 import org.scalatest.Tag
-import peds.archetype.domain.model.core.{ Entity, EntityCompanion }
+import peds.archetype.domain.model.core.{Entity, EntityCompanion}
 import peds.commons.log.Trace
 import peds.commons.identifier._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
 
+import scala.reflect.ClassTag
+
 
 object SimpleAggregateModuleSpec {
   trait Foo extends Entity {
     override type ID = ShortUUID
-    override def idClass: Class[_] = classOf[ShortUUID]
+    override def evId: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
+
     def isActive: Boolean
     def f: Int
     def b: Double

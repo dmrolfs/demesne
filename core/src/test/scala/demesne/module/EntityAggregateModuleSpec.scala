@@ -6,23 +6,26 @@ import akka.testkit._
 import shapeless._
 import demesne._
 import demesne.AggregateRoot._
-import demesne.register.{ AggregateIndexSpec, StackableRegisterBusPublisher }
+import demesne.register.{AggregateIndexSpec, StackableRegisterBusPublisher}
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
-import peds.archetype.domain.model.core.{ Entity, EntityCompanion }
+import peds.archetype.domain.model.core.{Entity, EntityCompanion}
 import peds.akka.envelope._
-import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
+import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.log.Trace
 import peds.commons.identifier._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
 
+import scala.reflect.ClassTag
+
 
 object EntityAggregateModuleSpec {
   trait Foo extends Entity {
     override type ID = ShortUUID
-    override def idClass: Class[_] = classOf[ShortUUID]
+    override def evId: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
+
     def isActive: Boolean
     def f: Int
     def b: Double
@@ -145,7 +148,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     private val trace = Trace[TestFixture]
     val bus: TestProbe = TestProbe()
     val rootType = FooAggregateRoot.module.aggregateRootType
-    def slugIndex = model.aggregateRegisterFor[String]( rootType, 'slug ).toOption.get
+    def slugIndex = model.aggregateRegisterFor[String, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
     def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
   }
 

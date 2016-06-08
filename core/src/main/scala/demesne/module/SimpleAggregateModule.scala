@@ -1,9 +1,11 @@
 package demesne.module
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import akka.actor.Props
-import scalaz._, Scalaz._
+
+import scalaz._
+import Scalaz._
 import shapeless._
 import peds.commons.builder._
 import peds.commons.util._
@@ -11,6 +13,7 @@ import peds.commons.log.Trace
 import peds.commons.Valid
 import demesne._
 import demesne.register.AggregateIndexSpec
+import peds.commons.identifier.ShortUUID
 
 
 trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
@@ -22,7 +25,7 @@ trait SimpleAggregateModule[S] extends AggregateRootModule with InitializeAggreg
   implicit def evState: ClassTag[S]
   
   trait SimpleAggregateRootType extends AggregateRootType {
-    override type ID = module.ID
+//    override type ID = module.ID
     override def toString: String = name + "SimpleAggregateRootType"
   }
 
