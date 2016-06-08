@@ -10,7 +10,7 @@ trait StackableRegisterBusPublisher extends EventPublisher { outer: DomainModel.
   private val trace = Trace[StackableRegisterBusPublisher]
 
   abstract override def publish: Publisher = trace.block( "publish" ) {
-    val bus = RegisterBus.bus( model.registerBus, meta )( _: AggregateIndexSpec[_, _] )
-    meta.indexes.filter( _.relaySubscription == RegisterBusSubscription ).foldLeft( super.publish ){ _ +> bus(_) }
+    val bus = RegisterBus.bus( model.registerBus, outer.rootType )( _: AggregateIndexSpec[_, _] )
+    outer.rootType.indexes.filter( _.relaySubscription == RegisterBusSubscription ).foldLeft( super.publish ){ _ +> bus(_) }
   }
 }

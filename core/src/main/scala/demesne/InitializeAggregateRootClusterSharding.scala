@@ -6,7 +6,7 @@ import akka.cluster.sharding.{ ClusterShardingSettings, ClusterSharding }
 import peds.commons.Valid
 
 
-trait InitializeAggregateRootClusterSharding extends CommonInitializeAggregateActorType { self: AggregateRootModule =>
+trait InitializeAggregateRootClusterSharding extends CommonInitializeAggregateActorType { self: AggregateRootType.Provider =>
   abstract override def initializer( 
     rootType: AggregateRootType, 
     model: DomainModel, 

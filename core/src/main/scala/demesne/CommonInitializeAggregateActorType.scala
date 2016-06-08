@@ -10,7 +10,7 @@ import peds.commons.log.Trace
 import demesne.factory._
 
 
-trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  { self: AggregateRootModule =>
+trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  { self: AggregateRootType.Provider =>
   import CommonInitializeAggregateActorType._
 
   def initializer( 
@@ -25,17 +25,17 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
   override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): Valid[Future[Unit]] = trace.block( s"initialize" ) {
     import scalaz.Validation.FlatMap._
 
-    val rootType = aggregateRootType
+    val rt = self.rootType
 
     for {
       smf <- ( checkSystem(props) |@| checkModel(props) |@| checkFactory(props) ) { (s, m, f) => (s, m, f) }
       (system, model, factory) = smf
-      f1 <- initializer( rootType, model, props )
+      f1 <- initializer( rt, model, props )
     } yield {
   //todo: combine this with above for-comp via a monad transformer?
       for {
         _ <- f1
-        _ <- registerWithModel( model, rootType, factory )
+        _ <- registerWithModel( model, rt, factory )
       } yield ()
     }
   }
