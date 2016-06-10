@@ -3,7 +3,7 @@ import sbt._
 
 object Dependencies {
   object peds {
-    val version = "0.2.6"
+    val version = "0.2.6-SNAPSHOT"
     def module( id: String ) = "com.github.dmrolfs" %% s"peds-$id" % version
 
     val commons = module( "commons" )
