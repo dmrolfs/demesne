@@ -48,7 +48,7 @@ object Dependencies {
   object facility {
     val uuid = "com.eaio.uuid" % "uuid" % "3.4"
     val config = "com.typesafe" % "config" % "1.3.0"
-    val shapeless = "com.chuusai" %% "shapeless" % "2.2.5"
+    val shapeless = "com.chuusai" %% "shapeless" % "2.3.1"
     val inflector = "org.atteo" % "evo-inflector" % "1.2.1"
     val squants = "com.squants"  %% "squants"  % "0.5.3"
     val accord = "com.wix" %% "accord-core" % "0.5"

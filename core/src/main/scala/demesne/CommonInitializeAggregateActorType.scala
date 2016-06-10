@@ -1,13 +1,18 @@
 package demesne
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
+import scala.reflect.ClassTag
 import akka.actor.ActorSystem
 import akka.util.Timeout
-import scalaz._, Scalaz._
-import shapeless.syntax.typeable._
+
+import scalaz._
+import Scalaz._
+import shapeless._
 import peds.commons.Valid
 import peds.commons.log.Trace
+import peds.commons.util._
 import demesne.factory._
+
 
 
 trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  { self: AggregateRootType.Provider =>
@@ -41,20 +46,33 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
   }
 
   private def checkSystem( props: Map[Symbol, Any] ): Valid[ActorSystem] = trace.block( "checkSystem" ) {
-    props get demesne.SystemKey flatMap { _.cast[ActorSystem] } map { _.successNel[Throwable] } getOrElse {
-      Validation.failureNel( UnspecifiedActorSystemError(demesne.SystemKey) )
+    val System = TypeCase[ActorSystem]
+
+    props.get( demesne.SystemKey ) match {
+      case Some( System(sys) ) => sys.successNel[Throwable]
+      case Some( x ) => Validation failureNel IncompatibleTypeForPropertyError[ActorSystem]( demesne.SystemKey, x )
+      case None => Validation failureNel UnspecifiedActorSystemError( demesne.SystemKey )
     }
   }
 
   private def checkModel( props: Map[Symbol, Any] ): Valid[DomainModel] = trace.block( "checkModel" ) {
-    props get demesne.ModelKey flatMap { _.cast[DomainModel] } map { _.successNel[Throwable] } getOrElse {
-      Validation.failureNel( UnspecifiedDomainModelError(demesne.ModelKey) )
+    val Model = TypeCase[DomainModel]
+
+    props.get( demesne.ModelKey ) match {
+      case Some( Model(m) ) => m.successNel[Throwable]
+      case Some( x ) => Validation failureNel IncompatibleTypeForPropertyError[DomainModel]( demesne.ModelKey, x )
+      case None => Validation failureNel UnspecifiedDomainModelError( demesne.ModelKey )
     }
   }
 
   private def checkFactory( props: Map[Symbol, Any] ): Valid[ActorFactory] = trace.block( "checkFactory" ) {
-    val factory = props get demesne.FactoryKey flatMap { _.cast[ActorFactory] } getOrElse { demesne.factory.systemFactory }
-    factory.successNel
+    val Factory = TypeCase[ActorFactory]
+
+    props.get( demesne.FactoryKey ) match {
+      case Some( Factory(f) ) => f.successNel[Throwable]
+      case Some( x ) => Validation failureNel IncompatibleTypeForPropertyError[ActorFactory]( demesne.FactoryKey, x )
+      case None => demesne.factory.systemFactory.successNel[Throwable]
+    }
   }
 
   private def registerWithModel(
@@ -70,6 +88,12 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
 
 object CommonInitializeAggregateActorType { 
   val trace = Trace[CommonInitializeAggregateActorType.type]
+
+  final case class IncompatibleTypeForPropertyError[T: ClassTag] private[demesne]( key: Symbol, value: Any )
+  extends IllegalArgumentException(
+    s"For key[${key.name}] expected type:[${implicitly[ClassTag[T]].runtimeClass.safeSimpleName}] " +
+    s"but got type:[${value.getClass.safeSimpleName}]"
+  )
 
   final case class UnspecifiedActorSystemError private[demesne]( expectedKey: Symbol )
   extends IllegalArgumentException( s"ActorSystem required at initialization property [$expectedKey]" ) with DemesneError

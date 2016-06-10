@@ -24,7 +24,7 @@ class EnvelopingAggregateRootRepository(
     case message => {
       val originalSender = sender()
       trace( s"in EnvelopingAggregateRootRepository RECEIVE" )
-      aggregateFor( message ).send( message )( originalSender )
+      aggregateFor( message ).sendEnvelope( message )( originalSender )
     }
   }
 }

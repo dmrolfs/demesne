@@ -98,7 +98,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
       val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
-      post.send( GetContent( id ) )( author.ref )
+      post.sendEnvelope( GetContent( id ) )( author.ref )
       author.expectMsgPF( max = 200.millis.dilated, hint = "empty contents" ){
         case Envelope( payload: PostContent, h ) => {
           payload mustBe PostContent( "", "", "" )
@@ -118,7 +118,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
       val clientProbe = TestProbe()
       post !+ AddPost( id, content )
-      post.send( GetContent( id ))( clientProbe.ref )
+      post.sendEnvelope( GetContent( id ))( clientProbe.ref )
       clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "initial contents" ){
         case Envelope( payload: PostContent, h ) if payload == content => true
       }
@@ -146,7 +146,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         case Envelope( payload: BodyChanged, _ ) => payload.body mustBe updated
       }
 
-      post.send( GetContent( id ) )( clientProbe.ref )
+      post.sendEnvelope( GetContent( id ) )( clientProbe.ref )
       clientProbe.expectMsgPF( max = 200.millis.dilated, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
       }
@@ -164,7 +164,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       post !+ AddPost( id, content )
       post !+ ChangeBody( id, updated )
       post !+ Publish( id )
-      post.send( GetContent( id ) )( clientProbe.ref )
+      post.sendEnvelope( GetContent( id ) )( clientProbe.ref )
       clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
       }
@@ -183,7 +183,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       post !+ ChangeBody( id, updated )
       post !+ Publish( id )
       post !+ ChangeBody( id, "BAD CONTENT" )
-      post.send( GetContent( id ) )( clientProbe.ref )
+      post.sendEnvelope( GetContent( id ) )( clientProbe.ref )
       clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
         case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
       }
