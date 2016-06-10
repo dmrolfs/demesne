@@ -67,7 +67,7 @@ object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregat
             case PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId)
             case Deleted( sourceId ) => Directive.Withdraw( sourceId )
           },
-          RegisterLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[PostAdded] ) ) {
+          RegisterLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[Event] ) ) {
             case PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record(title, sourceId)
             case TitleChanged( sourceId, oldTitle, newTitle ) => Directive.Revise( oldTitle, newTitle )
             case Deleted( sourceId ) => Directive.Withdraw( sourceId )
@@ -98,8 +98,9 @@ object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregat
           }
 
           val filter: Publisher = {
-            case e @ Envelope( _: PostPublished, _ ) => Left( e )
-            case _ => Right( () )
+            case e @ Envelope( _: PostPublished, _ ) => logger.info("PASSED TO RELIABLE_PUBLISH:[{}]", e); Left( e )
+            case e: PostPublished => logger.info("PASSED TO RELIABLE_PUBLISH:[{}]", e); Left( e )
+            case x => logger.info("blocked from reliable_publish:[{}]", x.toString); Right( () )
           }
         }
       )

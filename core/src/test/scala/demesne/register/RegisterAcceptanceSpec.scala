@@ -43,7 +43,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
           case Added( sid, foo, _ ) => Directive.Record( foo, sid )
           case Deleted( sid ) => Directive.Withdraw( sid )
         },
-        RegisterLocalAgent.spec[Int, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
+        RegisterLocalAgent.spec[Int, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Event] ) ) {
           case Added( sid, _, bar ) => Directive.Record( bar, sid )
           case BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar, newBar )
           case Deleted( sid ) => Directive.Withdraw( sid )
@@ -291,12 +291,12 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         val id = TestModule.nextId.toOption.get
         val foo = "Test Foo"
         val bar = 17
-        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+        system.eventStream.subscribe( bus.ref, classOf[TestModule.Added] )
 
         val aggregate = TestModule aggregateOf id
         aggregate !+ TestModule.Add( id, foo, bar )
         bus.expectMsgPF( hint = "added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case payload: TestModule.Added => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -333,14 +333,14 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         val id = TestModule.nextId.toOption.get
         val foo = "Test Foo"
         val bar = 13
-        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-        system.eventStream.subscribe( p.ref, classOf[Envelope] )
+        system.eventStream.subscribe( bus.ref, classOf[TestModule.Event] )
+        system.eventStream.subscribe( p.ref, classOf[TestModule.Event] )
 
         val aggregate = TestModule aggregateOf id
         aggregate !+ TestModule.Add( id, foo, bar )
 
         bus.expectMsgPF( hint = "bus-added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case payload: TestModule.Added => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -348,7 +348,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         }
 
         p.expectMsgPF( hint = "stream-added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case payload: TestModule.Added => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -366,11 +366,11 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         aggregate !+ TestModule.Delete( id )
 
         bus.expectMsgPF( hint = "bus-deleted" ) {
-          case Envelope( payload: TestModule.Deleted, _ ) => payload.sourceId mustBe id
+          case payload: TestModule.Deleted => payload.sourceId mustBe id
         }
 
         p.expectMsgPF( hint = "stream-deleted" ) {
-          case Envelope( payload: TestModule.Deleted, _ ) => payload.sourceId mustBe id
+          case payload: TestModule.Deleted => payload.sourceId mustBe id
         }
 
         val countDownChange = new CountDownFunction[String]
@@ -405,14 +405,14 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         val id = TestModule.nextId.toOption.get
         val foo = "Test Foo"
         val bar = 7
-        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-        system.eventStream.subscribe( p.ref, classOf[Envelope] )
+        system.eventStream.subscribe( bus.ref, classOf[TestModule.Event] )
+        system.eventStream.subscribe( p.ref, classOf[TestModule.Event] )
 
         val aggregate = TestModule aggregateOf id
         aggregate !+ TestModule.Add( id, foo, bar )
 
         bus.expectMsgPF( hint = "bus-added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case payload: TestModule.Added => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -420,7 +420,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         }
 
         p.expectMsgPF( hint = "stream-added" ) {
-          case Envelope( payload: TestModule.Added, _ ) => {
+          case payload: TestModule.Added => {
             payload.sourceId mustBe id
             payload.foo mustBe foo
             payload.bar mustBe bar
@@ -440,14 +440,14 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         aggregate !+ TestModule.ChangeBar( id, 13 )
 
         bus.expectMsgPF( hint = "bar-change" ) {
-          case Envelope( payload: TestModule.BarChanged, _ ) => {
+          case payload: TestModule.BarChanged => {
             payload.oldBar mustBe 7
             payload.newBar mustBe 13
           }
         }
 
         p.expectMsgPF( hint = "post-bar change stream" ) {
-          case Envelope( payload: TestModule.BarChanged, _ ) => {
+          case payload: TestModule.BarChanged => {
             payload.oldBar mustBe 7
             payload.newBar mustBe 13
           }

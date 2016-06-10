@@ -21,7 +21,7 @@ object RegisterBus extends LazyLogging {
    * create a publisher corresponding to the system's register bus and a topic based on the root type.
    */
   def bus( b: RegisterBus, rootType: AggregateRootType )( spec: AggregateIndexSpec[_,_] ): Publisher = {
-    ( event: Envelope ) => trace.block( "bus" ) {
+    ( event: Any ) => trace.block( "bus" ) {
       b.publish( RegisterBus.RecordingEvent( topic = spec.relayClassifier(rootType), recording = event ) )
       Left( event )
     }

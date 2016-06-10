@@ -210,31 +210,31 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     "add foo" taggedAs(ADD) in { fixture: Fixture =>
       import fixture._
 
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val id = Module.nextId.toOption.get
       val foo = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( foo )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+        case payload: Protocol.Entity.Added => payload.info.name mustBe "foo1"
       }
     }
 
     "update name" taggedAs(UPDATE) in { fixture: Fixture =>
       import fixture._
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
-        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+        case payload: Protocol.Entity.Added => payload.info.name mustBe "foo1"
       }
 
       f !+ Protocol.Entity.Rename( id, "good-foo" )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo renamed" ) {
-        case Envelope( payload: Protocol.Entity.Renamed, _ ) => {
+        case payload: Protocol.Entity.Renamed => {
           payload.sourceId mustBe id
           payload.oldName mustBe "foo1"
           payload.newName mustBe "good-foo"
@@ -244,19 +244,19 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
     "update slug" in { fixture: Fixture =>
       import fixture._
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
-        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+        case payload: Protocol.Entity.Added => payload.info.name mustBe "foo1"
       }
 
       val newSlug = "gt"
       f !+ Protocol.Entity.Reslug( id, newSlug )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo slug changed" ) {
-        case Envelope( payload: Protocol.Entity.Reslugged, _ ) => {
+        case payload: Protocol.Entity.Reslugged => {
           payload.sourceId mustBe id
           payload.oldSlug mustBe "f1"
           payload.newSlug mustBe "gt"
@@ -266,18 +266,18 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
     "disable aggregate" in { fixture: Fixture =>
       import fixture._
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
-        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+        case payload: Protocol.Entity.Added => payload.info.name mustBe "foo1"
       }
 
       f !+ Protocol.Entity.Disable( id )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo disabled" ) {
-        case Envelope( payload: Protocol.Entity.Disabled, _ ) => {
+        case payload: Protocol.Entity.Disabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
         }
@@ -286,18 +286,18 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
     "enable from disable aggregate" in { fixture: Fixture =>
       import fixture._
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
-        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+        case payload: Protocol.Entity.Added => payload.info.name mustBe "foo1"
       }
 
       f !+ Protocol.Entity.Disable( id )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo disabled" ) {
-        case Envelope( payload: Protocol.Entity.Disabled, _ ) => {
+        case payload: Protocol.Entity.Disabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
         }
@@ -305,7 +305,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       f !+ Protocol.Entity.Enable( id )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo enabled" ) {
-        case Envelope( payload: Protocol.Entity.Enabled, _ ) => {
+        case payload: Protocol.Entity.Enabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
         }
@@ -318,12 +318,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
 
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( f1 )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+        case payload: Protocol.Entity.Added => payload.info.name mustBe "foo1"
       }
 
       val countDown = new CountDownFunction[String]
@@ -340,12 +340,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster" )
 
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( f1 )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+        case payload: Protocol.Entity.Added => payload.info.name mustBe "foo1"
       }
 
       new CountDownFunction[String] await 200.millis.dilated
@@ -365,12 +365,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
 
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val f = Module aggregateOf id
       f !+ Protocol.Entity.Add( f1 )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case Envelope( payload: Protocol.Entity.Added, _ ) => payload.info.name mustBe "foo1"
+        case payload: Protocol.Entity.Added => payload.info.name mustBe "foo1"
       }
 
       new CountDownFunction[String] await 200.millis.dilated
