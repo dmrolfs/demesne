@@ -23,8 +23,9 @@ class EnvelopingAggregateRootRepository(
   override def receive: Actor.Receive = LoggingReceive {
     case message => {
       val originalSender = sender()
-      trace( s"in EnvelopingAggregateRootRepository RECEIVE" )
-      aggregateFor( message ).sendEnvelope( message )( originalSender )
+      val aggregate = aggregateFor( message )
+      log.debug( "in EnvelopingAggregateRootRepository RECEIVE: aggregate=[{}]", aggregate )
+      Option( aggregate ) foreach { _.sendEnvelope( message )( originalSender ) }
     }
   }
 }
@@ -53,13 +54,13 @@ with ActorLogging {
 
   override val supervisorStrategy: SupervisorStrategy = rootType.repositorySupervisionStrategy
 
-  override def receive: Actor.Receive = LoggingReceive {
-    case c => trace.block( s"AggregateRootRepository.receive:$c" ) { aggregateFor( c ) forward c }
-  }
+  override def receive: Actor.Receive = LoggingReceive { case c => aggregateFor( c ) forward c }
 
   def aggregateFor( command: Any ): ActorRef = trace.block( "aggregateFor" ) {
-    trace( s"command = $command" )
-    trace( s"system = ${context.system}" )
+    log.debug( "command=[{}]", command.toString )
+    if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
+      log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
+    }
     val (id, _) = rootType aggregateIdFor command
     val result = context.child( id )
     result getOrElse { factory( model, Some(context) )( rootType, id ) }
