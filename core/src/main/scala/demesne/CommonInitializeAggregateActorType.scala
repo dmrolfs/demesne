@@ -71,7 +71,7 @@ trait CommonInitializeAggregateActorType extends InitializeAggregateActorType  {
     props.get( demesne.FactoryKey ) match {
       case Some( Factory(f) ) => f.successNel[Throwable]
       case Some( x ) => Validation failureNel IncompatibleTypeForPropertyError[ActorFactory]( demesne.FactoryKey, x )
-      case None => demesne.factory.systemFactory.successNel[Throwable]
+      case None => demesne.factory.contextFactory.successNel[Throwable]
     }
   }
 
