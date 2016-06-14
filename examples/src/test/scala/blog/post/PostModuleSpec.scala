@@ -55,14 +55,14 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       import fixture._
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
 
       val id = PostModule.nextId.toOption.get
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
       post !+ AddPost( id, content )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
-        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        case payload: PostAdded => payload.content mustBe content
       }
     }
 
@@ -70,7 +70,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       import fixture._
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
 
       val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
@@ -83,7 +83,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       import fixture._
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
 
       val id = PostModule.nextId.toOption.get
       val post = PostModule aggregateOf id
@@ -124,7 +124,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "have changed contents after change" taggedAs(WIP) in { fixture: Fixture =>
+    "have changed contents after change" in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId.toOption.get
@@ -133,17 +133,17 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       val updated = "updated contents"
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
 
       val clientProbe = TestProbe()
       post !+ AddPost( id, content )
       bus.expectMsgPF( hint = "PostAdded" ) {
-        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        case payload: PostAdded => payload.content mustBe content
       }
 
       post !+ ChangeBody( id, updated )
       bus.expectMsgPF( hint = "BodyChanged" ) {
-        case Envelope( payload: BodyChanged, _ ) => payload.body mustBe updated
+        case payload: BodyChanged => payload.body mustBe updated
       }
 
       post.sendEnvelope( GetContent( id ) )( clientProbe.ref )
@@ -189,36 +189,36 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "follow happy path" in { fixture: Fixture =>
+    "follow happy path" taggedAs (WIP) in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId.toOption.get
       val content = PostContent( author = "Damon", title = "Test Add", body = "testing happy path" )
 
       system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-      system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+      system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
 
       PostModule.aggregateOf( id ) !+ AddPost( id, content )
       PostModule.aggregateOf( id ) !+ ChangeBody( id, "new content" )
       PostModule.aggregateOf( id ) !+ Publish( id )
 
       bus.expectMsgPF( hint = "post-added" ) {
-        case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+        case payload: PostAdded => payload.content mustBe content
       }
 
       bus.expectMsgPF( hint = "body-changed" ) {
-        case Envelope( payload: BodyChanged, _ ) => payload.body mustBe "new content"
+        case payload: BodyChanged => payload.body mustBe "new content"
       }
 
       bus.expectMsgPF( hint = "post-published local" ) {
-        case Envelope( PostPublished( pid, _, title ), _ ) => {
+        case PostPublished( pid, _, title ) => {
           pid mustBe id
           title mustBe "Test Add"
         }
       }
 
       author.expectMsgPF( hint = "post-published reliable" ) {
-        case ReliableMessage( 1, Envelope( PostPublished( pid, _, title ), _) ) => {
+        case ReliableMessage( 1, Envelope(PostPublished(pid, _, title), _) ) => {
           pid mustBe id
           title mustBe "Test Add"
         }
@@ -236,12 +236,12 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       } {
         val id = PostModule.nextId.toOption.get
         val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
-        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
+        system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
 
         val post = PostModule.aggregateOf( id )
         post !+ AddPost( id, content )
         bus.expectMsgPF( hint = "post-added" ) {
-          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+          case payload: PostAdded => payload.content mustBe content
         }
 
         val countDown = new CountDownFunction[String]
@@ -266,18 +266,18 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
         val id = PostModule.nextId.toOption.get
         val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
-        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-        system.eventStream.subscribe( p.ref, classOf[Envelope] )
+        system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
+        system.eventStream.subscribe( p.ref, classOf[PostModule.Event] )
 
         val post = PostModule.aggregateOf( id )
         post !+ AddPost( id, content )
 
         bus.expectMsgPF( hint = "post-added" ) {
-          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+          case payload: PostAdded => payload.content mustBe content
         }
 
         p.expectMsgPF( hint = "post-added stream" ) {
-          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+          case payload: PostAdded => payload.content mustBe content
         }
 
         val countDown = new CountDownFunction[String]
@@ -307,18 +307,18 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         val id = PostModule.nextId.toOption.get
 
         val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
-        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-        system.eventStream.subscribe( p.ref, classOf[Envelope] )
+        system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
+        system.eventStream.subscribe( p.ref, classOf[PostModule.Event] )
 
         val post = PostModule.aggregateOf( id )
         post !+ AddPost( id, content )
 
         bus.expectMsgPF( hint = "post-added" ) {
-          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+          case payload: PostAdded => payload.content mustBe content
         }
 
         p.expectMsgPF( hint = "post-added stream" ) {
-          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+          case payload: PostAdded => payload.content mustBe content
         }
 
         val countDownAdd = new CountDownFunction[String]
@@ -332,11 +332,11 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         post !+ Delete( id )
 
         bus.expectMsgPF( hint = "post-deleted" ) {
-          case Envelope( payload: Deleted, _ ) => payload.sourceId mustBe id
+          case payload: Deleted => payload.sourceId mustBe id
         }
 
         p.expectMsgPF( hint = "post-deleted stream" ) {
-          case Envelope( payload: Deleted, _ ) => payload.sourceId mustBe id
+          case payload: Deleted => payload.sourceId mustBe id
         }
 
         val countDownChange = new CountDownFunction[String]
@@ -370,18 +370,18 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
         val id = PostModule.nextId.toOption.get
         val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
-        system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-        system.eventStream.subscribe( p.ref, classOf[Envelope] )
+        system.eventStream.subscribe( bus.ref, classOf[PostModule.Event] )
+        system.eventStream.subscribe( p.ref, classOf[PostModule.Event] )
 
         val post = PostModule.aggregateOf( id )
         post !+ AddPost( id, content )
 
         bus.expectMsgPF( hint = "post-added" ) {
-          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+          case payload: PostAdded => payload.content mustBe content
         }
 
         p.expectMsgPF( hint = "post-added stream" ) {
-          case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
+          case payload: PostAdded => payload.content mustBe content
         }
 
         val countDownAdd = new CountDownFunction[String]
@@ -397,14 +397,14 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         post !+ ChangeTitle( id, "New Title" )
 
         bus.expectMsgPF( hint = "title-change" ) {
-          case Envelope( payload: TitleChanged, _ ) => {
+          case payload: TitleChanged => {
             payload.oldTitle mustBe "Test Add"
             payload.newTitle mustBe "New Title"
           }
         }
 
         p.expectMsgPF( hint = "post-title change stream" ) {
-          case Envelope( payload: TitleChanged, _ ) => {
+          case payload: TitleChanged => {
             payload.oldTitle mustBe "Test Add"
             payload.newTitle mustBe "New Title"
           }

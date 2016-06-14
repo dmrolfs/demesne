@@ -7,9 +7,9 @@ object DemesneBuild extends Build {
   lazy val root = Project(
     id = "root", 
     base = file( "." ) 
-  ).settings (
-    doNotPublishSettings:_*
-  ).aggregate( core, testkit, examples )
+  )
+  .settings ( defaultBuildSettings ++ doNotPublishSettings )
+  .aggregate( core, testkit, examples )
 
   lazy val core = Project(
     id = "core",

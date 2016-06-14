@@ -2,6 +2,7 @@ package demesne
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 import scalaz._
 import Scalaz._
 import akka.actor.{ActorRef, ActorSystem, Props, Terminated}
@@ -15,6 +16,7 @@ import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChi
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
 import peds.commons.{TryV, Valid}
+import peds.commons.util._
 
 
 trait DomainModel {
@@ -164,13 +166,18 @@ object DomainModel {
 
       val (registerIndexBudget, registerAgentBudget, startChildSupervisionBudget) = timeoutBudgets( to )
 
+      logger.info( "Registering root-type[{}]@[{}] + Started", rootType.name, name )
       val result = for {
         reg <- establishRegister( rootType, registerIndexBudget, registerAgentBudget )
         ag <- registerAggregate( rootType, factory, startChildSupervisionBudget )
       } yield ()
 
-      result onFailure {
-        case ex => logger error s"failed to establish register for ${rootType}: ${ex}"
+      result onComplete {
+        case Success(_) => {
+          logger.info( "Registering root-type[{}]@[{}] - Completed", rootType.name, name )
+        }
+
+        case Failure( ex ) => logger error s"failed to establish register for ${rootType}: ${ex}"
       }
 
       result
@@ -216,7 +223,10 @@ object DomainModel {
         }
       }
 
-      aggregate map { r => () }
+      aggregate map { r =>
+        logger.info( "Registering root-type[{}]@[{}] > aggregate registry established ", rootType.name, name )
+        ()
+      }
     }
 
     private def establishRegister( 
@@ -239,7 +249,18 @@ object DomainModel {
         } yield ar
       }
 
-      Future.sequence( registers ) map { r => () }
+      Future.sequence( registers ) map { r =>
+        logger.info( "Registering root-type[{}]@[{}] > registers[{}] established for root-type[{}]",
+          rootType.name,
+          name,
+          rootType.indexes
+            .map{ i => (i.name.name, i.key.safeSimpleName, i.id.safeSimpleName) }
+            .map{ case (n, k, i) => s"${n}[${k},${i}]" }
+            .mkString("[",",","]")
+        )
+
+        ()
+      }
     }
 
     override def shutdown(): Future[Terminated] = system.terminate()
