@@ -172,28 +172,31 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E, E#ID] 
   // }
 
   abstract class EntityAggregateActor extends AggregateRoot[E] { publisher: EventPublisher =>
-    import AggregateRoot._
     import EntityProtocol._
 
     override def acceptance: Acceptance = entityAcceptance
 
     def entityAcceptance: Acceptance = {
-      case (Added(info), _) => module.infoToEntity( info )
+      case (Added(info), _) => {
+        context become LoggingReceive{ around( active ) }
+        module.infoToEntity( info )
+      }
       case (Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
       case (Reslugged(_, _, newSlug), s ) => module.slugLens map { _.set( s )( newSlug ) } getOrElse s
-      case (_: Disabled, s) => module.isActiveLens map { _.set( s )( false ) } getOrElse s
-      case (_: Enabled, s) => module.isActiveLens map { _.set( s )( true ) } getOrElse s
+      case (_: Disabled, s) => {
+        context become LoggingReceive { around( disabled ) }
+        module.isActiveLens map { _.set( s )( false ) } getOrElse s
+      }
+      case (_: Enabled, s) => {
+        context become LoggingReceive { around( active ) }
+        module.isActiveLens map { _.set( s )( true ) } getOrElse s
+      }
     }
 
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
     def quiescent: Receive = {
-      case Add( info ) => {
-        persist( Added(info) ) { e =>
-          acceptAndPublish( e )
-          context become LoggingReceive{ around( active ) }
-        }
-      }
+      case Add( info ) => persist( Added(info) ) { e => acceptAndPublish( e ) }
     }
 
     def active: Receive = {
@@ -204,19 +207,13 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E, E#ID] 
         persist( Reslugged(id, module.slugLens.get.get(state), slug) ) { e => acceptAndPublish( e ) }
       }
       case Disable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persist( Disabled(id, module.getEntityKey(state)) ) { e =>
-          acceptAndPublish( e )
-          context become LoggingReceive { around( disabled ) }
-        }
+        persist( Disabled(id, module.getEntityKey(state)) ) { e => acceptAndPublish( e ) }
       }
     }
 
     def disabled: Receive = LoggingReceive {
       case Enable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persist( Enabled(id, module.getEntityKey(state)) ) { e =>
-          acceptAndPublish( e )
-          context become LoggingReceive { around( active ) }
-        }
+        persist( Enabled(id, module.getEntityKey(state)) ) { e => acceptAndPublish( e ) }
       }
     }
   }
