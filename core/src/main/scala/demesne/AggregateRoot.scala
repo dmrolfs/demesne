@@ -1,9 +1,9 @@
 package demesne
 
 import scala.reflect.ClassTag
-import akka.actor.{ActorLogging, ReceiveTimeout}
+import akka.actor.{ActorLogging, PoisonPill, ReceiveTimeout}
 import akka.event.LoggingReceive
-import akka.persistence.{PersistentActor, SnapshotOffer}
+import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.archetype.domain.model.core.Identifiable
@@ -46,7 +46,7 @@ with ActorLogging {
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
-  override def persistenceId: String = self.path.toStringWithoutAddress + "-" + stateId
+  override val persistenceId: String = self.path.toStringWithoutAddress
 
   // var state: S
   def state: S
@@ -124,7 +124,14 @@ with ActorLogging {
 
   override def receiveRecover: Receive = {
     case offer: SnapshotOffer => { state = acceptSnapshot( offer ) }
-    case event => { state = accept( event ) }
+    case _: RecoveryCompleted => {
+      log.info( "RecoveryCompleted from journal for aggregate root actor:[{}] state:[{}]", self.path, state )
+    }
+    case event => {
+      val before = state
+      state = accept( event )
+      log.info( "[{}] recovered event:[{}] state-before:[{}], state-after", self.path, event, before, state )
+    }
   }
 
   override def preStart(): Unit = {
@@ -135,7 +142,11 @@ with ActorLogging {
 
   override def unhandled( message: Any ): Unit = {
     message match {
-      case m: ReceiveTimeout => context.parent ! rootType.passivation.passivationMessage( m )
+      case m: ReceiveTimeout => {
+        log.warning( "[{}] Passivating per receive-timeout", self.path )
+        context.parent ! rootType.passivation.passivationMessage( PoisonPill )
+      }
+
       case m => {
         log debug s"aggregate root unhandled $m"
         super.unhandled( m )

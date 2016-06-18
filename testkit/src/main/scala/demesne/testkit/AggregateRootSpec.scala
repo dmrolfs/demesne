@@ -2,8 +2,11 @@ package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import scalaz._, Scalaz._
-import scala.concurrent.{ Await, Future }
+import com.typesafe.config.Config
+
+import scalaz._
+import Scalaz._
+import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import demesne.AggregateRootModule
 import org.scalatest._
@@ -27,7 +30,10 @@ abstract class AggregateRootSpec[A: ClassTag]
   
   private val trace = Trace[AggregateRootSpec[A]]
 
-  abstract class AggregateFixture( id: Int = AggregateRootSpec.sysId.incrementAndGet() ) extends AkkaFixture {
+  abstract class AggregateFixture(
+    id: Int = AggregateRootSpec.sysId.incrementAndGet(),
+    config: Config = demesne.testkit.config
+  ) extends AkkaFixture( id, config ) {
     private val trace = Trace[AggregateFixture]
 
     import scala.concurrent.duration._
