@@ -72,9 +72,7 @@ object RegisterAggregate {
  * makes sure the index is recorded in a local Register Akka Agent for easier access.
  * Created by damonrolfs on 10/26/14.
  */
-class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String )
-extends PersistentActor
-with ActorLogging {
+class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends PersistentActor with ActorLogging {
   import akka.cluster.pubsub.DistributedPubSubMediator.Publish
   import demesne.register.RegisterAggregate._
 

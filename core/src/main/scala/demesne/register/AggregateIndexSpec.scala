@@ -1,27 +1,25 @@
 package demesne.register
 
+import scala.reflect.ClassTag
 import akka.actor.{ActorPath, Props}
 import demesne.AggregateRootType
-import peds.commons.util._
-
-import scala.language.existentials
-import scala.reflect.ClassTag
 
 
 sealed trait RelaySubscription
+
+import scala.language.existentials
 case class ContextChannelSubscription( channel: Class[_] ) extends RelaySubscription
+
 case object RegisterBusSubscription extends RelaySubscription
 
 
-abstract class AggregateIndexSpec[K: ClassTag, I: ClassTag] extends Equals {
+abstract class AggregateIndexSpec[K, I]( implicit val keyTag: ClassTag[K], val idTag: ClassTag[I] ) extends Equals {
   def name: Symbol
   def keyIdExtractor: KeyIdExtractor
   def agentProps( rootType: AggregateRootType ): Props
   def relaySubscription: RelaySubscription = RegisterBusSubscription
 
-  def key: Class[_] = implicitly[ClassTag[K]].runtimeClass
-  def id: Class[_] = implicitly[ClassTag[I]].runtimeClass
-  def topic( rootType: AggregateRootType ): String = makeTopic( name.name, rootType, key, id )
+  def topic( rootType: AggregateRootType ): String = makeTopic( name.name, rootType )( keyTag, idTag )
 
   def aggregateProps( rootType: AggregateRootType ): Props = RegisterAggregate.props[K, I]( topic( rootType ) )
   def relayProps( aggregatePath: ActorPath ): Props = RegisterRelay.props( aggregatePath, keyIdExtractor )
@@ -31,8 +29,8 @@ abstract class AggregateIndexSpec[K: ClassTag, I: ClassTag] extends Equals {
     41 * (
       41 * (
         41 + name.##
-      ) + key.##
-    ) + id.##
+      ) + keyTag.##
+    ) + idTag.##
   }
 
   override def equals( rhs: Any ): Boolean = rhs match {
@@ -42,8 +40,8 @@ abstract class AggregateIndexSpec[K: ClassTag, I: ClassTag] extends Equals {
         ( that.## == this.## ) &&
         ( that canEqual this ) &&
         ( that.name == this.name ) &&
-        ( that.key == this.key ) &&
-        ( that.id == this.id )
+        ( that.keyTag == this.keyTag ) &&
+        ( that.idTag == this.idTag )
       }
     }
 
@@ -52,9 +50,5 @@ abstract class AggregateIndexSpec[K: ClassTag, I: ClassTag] extends Equals {
 
   override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[AggregateIndexSpec[K, I]]
 
-  override def toString: String = {
-    val kname = implicitly[ClassTag[K]].runtimeClass.safeSimpleName
-    val iname = implicitly[ClassTag[I]].runtimeClass.safeSimpleName
-    s"AggregateIndexSpec[$kname, $iname](${name.name})"
-  }
+  override def toString: String = s"AggregateIndexSpec[${keyTag.toString}, ${idTag.toString}](${name.name})"
 }

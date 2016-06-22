@@ -19,11 +19,13 @@ object RegisterLocalAgent {
     specRelaySubscription: RelaySubscription = RegisterBusSubscription
   )(
     extractor: KeyIdExtractor
-  ): AggregateIndexSpec[K, I] = new AggregateIndexSpec[K, I] {
-    override val name: Symbol = specName
-    override def keyIdExtractor: KeyIdExtractor = extractor
-    override def agentProps( rootType: AggregateRootType ): Props = props[K, I]( topic(rootType) )
-    override def relaySubscription: RelaySubscription = specRelaySubscription
+  ): AggregateIndexSpec[K, I] = {
+    new AggregateIndexSpec[K, I] {
+      override val name: Symbol = specName
+      override def keyIdExtractor: KeyIdExtractor = extractor
+      override def agentProps( rootType: AggregateRootType ): Props = props[K, I]( topic(rootType) )( keyTag, idTag )
+      override def relaySubscription: RelaySubscription = specRelaySubscription
+    }
   }
 
   def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterLocalAgent[K, I]( topic ) )

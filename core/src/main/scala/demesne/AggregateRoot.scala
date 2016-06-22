@@ -1,18 +1,19 @@
 package demesne
 
-import scala.reflect.ClassTag
+import scala.reflect._
 import akka.actor.{ActorLogging, PoisonPill, ReceiveTimeout}
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
-import peds.akka.envelope._
-import peds.akka.publish.EventPublisher
-import peds.archetype.domain.model.core.Identifiable
-import peds.commons.{KOp, TryV}
-import peds.commons.log.Trace
-import peds.commons.util._
 
 import scalaz._
 import scalaz.Kleisli._
+import peds.akka.envelope._
+import peds.akka.publish.EventPublisher
+import peds.commons.identifier.TaggedID
+//import peds.archetype.domain.model.core.Identifying
+import peds.commons.{KOp, TryV}
+import peds.commons.log.Trace
+import peds.commons.util._
 
 
 //////////////////////////////////////
@@ -31,7 +32,7 @@ object AggregateRoot {
   type Acceptance[S] = PartialFunction[(Any, S), S]
 }
 
-abstract class AggregateRoot[S: ClassTag]
+abstract class AggregateRoot[S, I]
 extends PersistentActor
 with EnvelopingActor
 with DomainModel.Provider
@@ -41,28 +42,45 @@ with ActorLogging {
 
   type StateOperation = KOp[S, S]
 
-  val trace = Trace( s"AggregateRoot[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]", log )
+  val trace = Trace( s"AggregateRoot", log )
 
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
   override val persistenceId: String = self.path.toStringWithoutAddress
 
+  type ID = I
+//  implicit val evID: ClassTag[ID] = implicitly[ClassTag[I]]
+  def parseId( idstr: String ): ID
+  type TID = TaggedID[ID]
+//  val evTID: ClassTag[TID]
+
+  val aggregateId: ID = parseId( idFromPath() )
+
+  def idFromPath(): String = {
+    val PathComponents = """^.*\/(([^-]+)-)?(.+)$""".r
+    log.error( "PathComponents = [{}]", PathComponents )
+    log.error( "self.path = [{}]", self.path )
+    log.error( "self.path.toStringWithoutAddress = [{}]", self.path.toStringWithoutAddress )
+    val PathComponents(_, tag, id) = self.path.toStringWithoutAddress
+    id
+  }
+
   // var state: S
   def state: S
   def state_=( newState: S ): Unit
 
   //todo figure out how to achieve via TypeClass?
-  def stateId: String = {
-    Option( state )
-    .map { s =>
-      s match {
-        case i: Identifiable => i.id.id.toString
-        case s => s.##.toString
-      }
-    }
-    .getOrElse { "null" }
-  }
+//  def stateId: String = {
+//    Option( state )
+//    .map { s =>
+//      s match {
+//        case i: Identifiable => i.id.id.toString
+//        case s => s.##.toString
+//      }
+//    }
+//    .getOrElse { "null" }
+//  }
 
   override def around( r: Receive ): Receive = LoggingReceive {
     case SaveSnapshot => {

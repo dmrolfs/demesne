@@ -1,27 +1,32 @@
-package demesne.module
+package demesne.module.entity
 
 import scala.reflect.ClassTag
 import akka.actor.Props
 import akka.event.LoggingReceive
+
+import scalaz.{-\/, \/, \/-}
 import shapeless._
-import peds.archetype.domain.model.core.{Entity, Identifying}
-import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
+import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
+import peds.akka.publish.EventPublisher
 import peds.commons.builder.HasBuilder
 import peds.commons.log.Trace
 import peds.commons.util._
 import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel}
-import demesne.register.{AggregateIndexSpec, Directive, StackableRegisterBusPublisher}
+import demesne.module.{AggregateRootProps, SimpleAggregateModule}
+import demesne.module.entity.messages._
+import demesne.register.{AggregateIndexSpec, Directive}
 import demesne.register.local.RegisterLocalAgent
 import peds.commons.TryV
+import peds.commons.identifier.ShortUUID
 
 
 object EntityAggregateModule {
   type MakeIndexSpec = Function0[Seq[AggregateIndexSpec[_,_]]]
   val makeEmptyIndexSpec = () => Seq.empty[AggregateIndexSpec[_,_]]
 
-  def builderFor[E <: Entity : ClassTag]( implicit identifying: Identifying[E#ID] ): BuilderFactory[E] = new BuilderFactory[E]
+  def builderFor[E <: Entity : ClassTag : EntityIdentifying]: BuilderFactory[E] = new BuilderFactory[E]
 
-  class BuilderFactory[E <: Entity : ClassTag]( implicit identifying: Identifying[E#ID] ) {
+  class BuilderFactory[E <: Entity : ClassTag : EntityIdentifying] {
     type CC = EntityAggregateModuleImpl
 
     def make: ModuleBuilder = new ModuleBuilder
@@ -63,13 +68,11 @@ object EntityAggregateModule {
       override val nameLens: Lens[E, String],
       override val slugLens: Option[Lens[E, String]],
       override val isActiveLens: Option[Lens[E, Boolean]]
-    )(
-      implicit identifying: Identifying[E#ID]
     ) extends EntityAggregateModule[E] with Equals {
       override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
       override val evState: ClassTag[E] = implicitly[ClassTag[E]]
 
-      override def nextId: TryV[TID] = implicitly[Identifying[E#ID]].nextId map { tagId }
+//      override def nextId: TryV[TID] = implicitly[Identifying[E#ID]].nextId map { tagId }
 
       override lazy val indexes: Seq[AggregateIndexSpec[_,_]] = _indexes()
 
@@ -88,16 +91,17 @@ object EntityAggregateModule {
         case _ => false
       }
 
-      override def hashCode: Int = {
-        41 * (
-          41 + aggregateIdTag.##
-        ) 
-      }
+      override def hashCode: Int = 41 * ( 41 + aggregateIdTag.## )
     }
   }
 }
 
-trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E, E#ID] { module =>
+abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying] extends SimpleAggregateModule[E] { module =>
+
+  override type ID = E#ID
+//  implicit override val evID: ClassTag[ID] = implicitly[EntityIdentifying[E]].evID
+  override def nextId: TryV[TID] = implicitly[EntityIdentifying[E]].nextId
+
   def idLens: Lens[E, E#TID]
   def nameLens: Lens[E, String]
   def slugLens: Option[Lens[E, String]] = None
@@ -107,79 +111,71 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E, E#ID] 
 
   type Info = E
 
-  def infoToEntity( from: Info ): E = from
-
-  trait Protocol {
-    type Command = module.Command
-    type Event = module.Event
-    val Entity = EntityProtocol
+  def toEntity: PartialFunction[Any, E] = {
+    case module.evState(s) => s
   }
 
-  object EntityProtocol {
-    sealed trait EntityMessage
+  final def certainInfoToEntity( from: Any ): E = {
+    \/ fromTryCatchNonFatal { toEntity( from ) } match {
+      case \/-(to) => to
+      case -\/(ex) => {
+        logger.error(
+          s"failed to convert Added.info type[${from.getClass.getCanonicalName}] " +
+            s"to entity type[${evState.runtimeClass.getCanonicalName}]",
+          ex
+        )
 
-    case class Add( info: Info ) extends Command with EntityMessage {
-      override def targetId: Add#TID = idLens.get( infoToEntity(info) ).asInstanceOf[Add#TID]
+        throw ex
+      }
     }
-
-    case class Rename( override val targetId: Rename#TID, name: String ) extends Command with EntityMessage
-    case class Reslug( override val targetId: Reslug#TID, slug: String ) extends Command with EntityMessage
-    case class Disable( override val targetId: Disable#TID ) extends Command with EntityMessage
-    case class Enable( override val targetId: Enable#TID ) extends Command with EntityMessage
-
-
-    case class Added( info: Info ) extends Event with EntityMessage {
-      override def sourceId: Added#TID = idLens.get( infoToEntity(info) ).asInstanceOf[Added#TID]
-    }
-
-    case class Renamed( override val sourceId: Renamed#TID, oldName: String, newName: String ) extends Event with EntityMessage
-    case class Reslugged( override val sourceId: Reslugged#TID, oldSlug: String, newSlug: String ) extends Event with EntityMessage
-    case class Disabled( override val sourceId: Disabled#TID, slug: String ) extends Event with EntityMessage
-    case class Enabled( override val sourceId: Enabled#TID, slug: String ) extends Event with EntityMessage
   }
-
 
   trait EntityAggregateRootType extends SimpleAggregateRootType {
     override def toString: String = name + "EntityAggregateRootType"
   }
   
-  override val rootType: AggregateRootType = {
+  override def rootType: AggregateRootType = {
+    val identifying = implicitly[EntityIdentifying[E]]
+
     new EntityAggregateRootType {
       override def name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = {
-        module.indexes ++ Seq(
-          RegisterLocalAgent.spec[String, module.TID]( 'slug ) { // or 'activeSlug
-            case EntityProtocol.Added( info ) => {
-              val e = module.infoToEntity( info )
-              Directive.Record( getEntityKey(e), module.idLens.get(e) )
-            }
+      override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes ++ Seq( makeSlugSpec )
 
-            case EntityProtocol.Reslugged( _, oldSlug, newSlug ) => Directive.Revise( oldSlug, newSlug )
-            case EntityProtocol.Disabled( id, _ ) => Directive.Withdraw( id )
-            case EntityProtocol.Enabled( id, slug ) => Directive.Record( slug, id )
+      def makeSlugSpec: AggregateIndexSpec[_,_] = {
+        RegisterLocalAgent.spec[String, module.ID]( 'slug ) { // or 'activeSlug
+          case Added( _, info ) => {
+            val e = module.certainInfoToEntity( info )
+            Directive.Record( module.getEntityKey(e), module.idLens.get(e) )
           }
-        )
+
+          case Reslugged( _, oldSlug, newSlug ) => Directive.Revise( oldSlug, newSlug )
+          case Disabled( id, _ ) => Directive.Withdraw( id )
+          case Enabled( id, slug ) => Directive.Record( slug, id )
+        } (
+          ClassTag( classOf[String] ),
+          identifying.evID
+         )
       }
     }
   }
 
 
-  // object EntityAggregateActor {
-  //   def props( model: DomainModel, meta: AggregateRootType ): Props = {
-  //     Props( new EntityAggregateActor( model, meta) with StackableStreamPublisher with StackableRegisterBusPublisher )
-  //   }
-  // }
-
-  abstract class EntityAggregateActor extends AggregateRoot[E] { publisher: EventPublisher =>
-    import EntityProtocol._
+  abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] {
+    publisher: EventPublisher =>
 
     override def acceptance: Acceptance = entityAcceptance
 
+//    override type ID = module.identifying.ID
+
+//    override def evID: ClassTag[ID] = stateCompanion.
+//
+//    val stateCompanion: EntityCompanion[E]
+
     def entityAcceptance: Acceptance = {
-      case (Added(info), _) => {
+      case (Added(_, info), _) => {
         context become LoggingReceive{ around( active ) }
-        module.infoToEntity( info )
+        module.certainInfoToEntity( info )
       }
       case (Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
       case (Reslugged(_, _, newSlug), s ) => module.slugLens map { _.set( s )( newSlug ) } getOrElse s
@@ -196,7 +192,7 @@ trait EntityAggregateModule[E <: Entity] extends SimpleAggregateModule[E, E#ID] 
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
     def quiescent: Receive = {
-      case Add( info ) => persist( Added(info) ) { e => acceptAndPublish( e ) }
+      case Add( id, info ) if id == aggregateId => persist( Added(id, info) ) { e => acceptAndPublish( e ) }
     }
 
     def active: Receive = {

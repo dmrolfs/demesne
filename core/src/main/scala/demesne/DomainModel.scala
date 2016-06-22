@@ -253,10 +253,10 @@ object DomainModel {
         logger.info( "Registering root-type[{}]@[{}] > registers[{}] established for root-type[{}]",
           rootType.name,
           name,
-          rootType.indexes
-            .map{ i => (i.name.name, i.key.safeSimpleName, i.id.safeSimpleName) }
-            .map{ case (n, k, i) => s"${n}[${k},${i}]" }
-            .mkString("[",",","]")
+          rootType.indexes.map{ _.toString }.mkString( "[", ",", "]" )
+//            .map { i => (i.name.name, i.key.describe, i.id.describe) }
+//            .map { case (n, k, i) => s"${n}[${k},${i}]" }
+//            .mkString( "[", ",", "]" )
         )
 
         ()

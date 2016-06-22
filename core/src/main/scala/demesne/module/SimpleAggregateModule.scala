@@ -15,8 +15,26 @@ import demesne._
 import demesne.register.AggregateIndexSpec
 
 
-trait SimpleAggregateModule[S, I] extends AggregateRootModule[I] with InitializeAggregateRootClusterSharding { module =>
+abstract class SimpleAggregateModule[S: ClassTag : Identifying]
+extends AggregateRootModule
+with InitializeAggregateRootClusterSharding { module =>
+
+//  val identifying: Identifying[S] = implicitly[Identifying[S]]
+//  override type ID = identifying.ID
+
+  override def nextId: TryV[TID] = {
+    import scala.reflect._
+    val tidTag = classTag[TID]
+    implicitly[Identifying[S]].nextId flatMap { nid =>
+      nid match {
+        case tidTag( t ) => t.right
+        case t => new ClassCastException( s"${t} id-type is not of type ${nid.id.getClass.getCanonicalName}" ).left
+      }
+    }
+  }
+
   def indexes: Seq[AggregateIndexSpec[_, _]] = Seq.empty[AggregateIndexSpec[_, _]]
+
   def aggregateRootPropsOp: AggregateRootProps
   def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
 
@@ -27,7 +45,7 @@ trait SimpleAggregateModule[S, I] extends AggregateRootModule[I] with Initialize
     override def toString: String = name + "SimpleAggregateRootType"
   }
 
-  override val rootType: AggregateRootType = {
+  override def rootType: AggregateRootType = {
     new SimpleAggregateRootType {
       override def name: String = module.shardName
       override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes
@@ -37,10 +55,10 @@ trait SimpleAggregateModule[S, I] extends AggregateRootModule[I] with Initialize
 }
 
 object SimpleAggregateModule {
-  def builderFor[S: ClassTag, I: ClassTag : Identifying]: BuilderFactory[S, I] = new BuilderFactory[S, I]
+  def builderFor[S: ClassTag : Identifying]: BuilderFactory[S] = new BuilderFactory[S]
 
-  class BuilderFactory[S: ClassTag, I: ClassTag : Identifying] {
-    type CC = SimpleAggregateModuleImpl[S, I]
+  class BuilderFactory[S: ClassTag : Identifying] {
+    type CC = SimpleAggregateModuleImpl[S]
 
     def make: ModuleBuilder = new ModuleBuilder
 
@@ -62,15 +80,30 @@ object SimpleAggregateModule {
   }
 
 
-  final case class SimpleAggregateModuleImpl[S: ClassTag, I: ClassTag : Identifying](
+  final case class SimpleAggregateModuleImpl[S: ClassTag : Identifying](
     override val aggregateIdTag: Symbol,
     override val aggregateRootPropsOp: AggregateRootProps,
     override val indexes: Seq[AggregateIndexSpec[_,_]]
-  ) extends SimpleAggregateModule[S, I] with Equals {
+  ) extends SimpleAggregateModule[S] with Equals {
     override val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
-    override val evState: ClassTag[S] = implicitly[ClassTag[S]]
+    override lazy val evState: ClassTag[S] = implicitly[ClassTag[S]]
 
-    override def nextId: TryV[TID] = implicitly[Identifying[ID]].nextId map { tagId }
+
+    val identifying: Identifying[S] = implicitly[Identifying[S]]
+    def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {
+      val lhs = implicitly[ClassTag[I]]
+      val identifying = implicitly[Identifying[S]]
+      val rhs = identifying.evID
+      if ( lhs == rhs ) lhs
+      else throw new ClassCastException(
+        s"ID[${lhs.runtimeClass.getCanonicalName}] is equivalent to Identifying[T]#ID[${rhs.runtimeClass.getCanonicalName}]"
+      )
+    }
+
+    override type ID = identifying.ID
+//    override lazy val evID: ClassTag[ID] = identifying.evID
+
+    override def nextId: TryV[TID] = identifying.nextId
 
     var _props: Map[Symbol, Any] = Map()
     override def moduleProperties: Map[Symbol, Any] = _props
@@ -84,10 +117,10 @@ object SimpleAggregateModule {
     ) : Valid[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ _props = props }.successNel }
 
 
-    override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S, I]]
+    override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]
 
     override def equals( rhs: Any ): Boolean = rhs match {
-      case that: SimpleAggregateModuleImpl[S, I] => {
+      case that: SimpleAggregateModuleImpl[S] => {
         if ( this eq that ) true
         else {
           ( that.## == this.## ) &&

@@ -53,8 +53,8 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       specName: Symbol,
       specRelaySubscription: RelaySubscription = RegisterBusSubscription
     )(
-      specAgentProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterLocalAgent.props( makeTopic( specName.name, rt, classOf[String], classOf[Int]) ),
-      specAggregateProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterAggregate.props( makeTopic(specName.name, rt, classOf[String], classOf[Int]) ),
+      specAgentProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterLocalAgent.props( makeTopic[String, Int]( specName.name, rt) ),
+      specAggregateProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterAggregate.props( makeTopic[String, Int](specName.name, rt) ),
       specRelayProps: ActorPath => Props = (ap: ActorPath) => RegisterRelay.props(ap, fooIdExtractor )
     ): AggregateIndexSpec[String, Int] = new AggregateIndexSpec[String, Int] {
       override val name: Symbol = specName

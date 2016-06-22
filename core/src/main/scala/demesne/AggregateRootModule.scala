@@ -1,35 +1,35 @@
 package demesne
 
+import scala.reflect._
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
-import peds.archetype.domain.model.core.Identifying
 import peds.commons.TryV
 import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
 import peds.commons.util._
 
 
-abstract class AggregateRootModule[I: Identifying]
+abstract class AggregateRootModule
 extends AggregateRootType.Provider
 with CommonInitializeAggregateActorType
 with LazyLogging { module =>
   def trace: Trace[_]
 
-  type ID = I
+  type ID
+//  implicit val evID: ClassTag[ID]
+
   type TID = TaggedID[ID]
-  def nextId: TryV[TID] = implicitly[Identifying[ID]].nextId map { tagId }
+//  implicit lazy val evTID: ClassTag[TID] = classTag[TID]
+  def nextId: TryV[TID]
+
   def aggregateIdTag: Symbol = _aggregateIdTag
   def shardName: String = _shardName
 
   def aggregateOf( id: TID )( implicit model: DomainModel ): ActorRef = model.aggregateOf( rootType = module.rootType, id )
 
-  override def toString: String = s"${getClass.safeSimpleName}(${aggregateIdTag})"
-
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
 
-
-  type Command = AggregateRootModule.Command[ID]
-  type Event = AggregateRootModule.Event[ID]
+  override def toString: String = s"${getClass.safeSimpleName}(${aggregateIdTag})"
 
 
   private[this] lazy val _shardName: String = org.atteo.evo.inflector.English.plural( aggregateIdTag.name ).capitalize

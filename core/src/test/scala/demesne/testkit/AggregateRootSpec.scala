@@ -44,7 +44,7 @@ abstract class AggregateRootSpec[A: ClassTag]
 
     def after(): Unit = trace.block( "after" ) { }
 
-    def moduleCompanions: List[AggregateRootModule[_]]
+    def moduleCompanions: List[AggregateRootModule]
 
     def context: Map[Symbol, Any] = trace.block( "context()" ) {
       Map(

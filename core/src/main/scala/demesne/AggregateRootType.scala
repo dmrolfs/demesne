@@ -23,7 +23,7 @@ trait AggregateRootType { outer =>
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {
-    case cmd: CommandLike => ( cmd.targetId.toString, cmd )
+    case cmd: CommandLike => ( cmd.targetId.id.toString, cmd )
     case e @ Envelope( payload, _ ) if aggregateIdFor.isDefinedAt( payload ) => ( aggregateIdFor( payload )._1, e ) // want MatchError on payload if not found
     case r @ ReliableMessage( _, msg ) if aggregateIdFor.isDefinedAt( msg ) => ( aggregateIdFor( msg )._1, r )  // want MatchError on msg if not found
   }

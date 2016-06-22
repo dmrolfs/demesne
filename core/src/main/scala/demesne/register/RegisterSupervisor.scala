@@ -115,9 +115,15 @@ object RegisterSupervisor extends StrictLogging {
       spec: AggregateIndexSpec[_,_]
     )(
       constituent: RegisterConstituent
-    ): ActorPath = ActorPath.fromString(
-      self.path + "/" + constituent.category.name + "-" + spec.topic( registrantType )
-    )
+    ): ActorPath = {
+      logger.error( "pathFor: self.path = [{}]", self.path )
+      logger.error( "pathFor: constituent.category.name = [{}]", constituent.category.name )
+      logger.error( "pathFor: spec = [{}]", spec )
+      logger.error( "pathFor: registrantType = [{}]", registrantType )
+      logger.error( "pathFor: spec.topic( registrantType ) = [{}]", spec.topic( registrantType ) )
+
+      ActorPath.fromString( self.path + "/" + constituent.category.name + "-" + spec.topic(registrantType) )
+    }
 
     def constituencyFor( registrantType: AggregateRootType, spec: AggregateIndexSpec[_, _] ): List[RegisterConstituentRef] = {
       val p = pathFor( registrantType, spec ) _

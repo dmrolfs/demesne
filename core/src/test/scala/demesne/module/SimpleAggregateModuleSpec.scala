@@ -1,24 +1,32 @@
 package demesne.module
 
-import scala.reflect.ClassTag
+import scala.reflect._
 import akka.actor.Props
 import akka.testkit._
+import scalaz.Scalaz._
 import shapeless.Lens
 import demesne._
 import demesne.register.AggregateIndexSpec
 import demesne.testkit.AggregateRootSpec
 import org.scalatest.Tag
-import peds.archetype.domain.model.core.{Entity, EntityCompanion, Identifying}
+import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
 import peds.commons.log.Trace
 import peds.commons.identifier._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
+import peds.commons._
 
 
 object SimpleAggregateModuleSpec {
+  object Protocol extends AggregateProtocol[Foo#ID] {
+    case class Bar( targetId: Bar#TID, b: Int ) extends Command
+    case class Barred( sourceId: Barred#TID, b: Int ) extends Event
+  }
+
   trait Foo extends Entity {
     override type ID = ShortUUID
-    override def evId: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
+    override val evID: ClassTag[ID] = classTag[ShortUUID]
+    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
 
     def isActive: Boolean
     def f: Int
@@ -26,10 +34,15 @@ object SimpleAggregateModuleSpec {
     def z: String
   }
 
-  object Foo extends EntityCompanion[Foo] {
-    override def nextId: Foo#TID = ShortUUID()
-    override val idTag: Symbol = 'foo
-    override implicit def tag( id: Foo#ID ): Foo#TID = TaggedID( idTag, id )
+  object Foo extends EntityLensProvider[Foo] {
+    implicit val fooIdentifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
+      override type ID = ShortUUID
+      override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
+      override lazy val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+      override def nextId: TryV[TID] = tag( ShortUUID() ).right
+      override def fromString( idstr: String ): ID = ShortUUID( idstr )
+    }
+
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo,  Foo#TID] {
       override def get( f: Foo ): Foo#TID = f.id
@@ -73,8 +86,8 @@ object SimpleAggregateModuleSpec {
 
   object FooAggregateRoot {
     val trace = Trace[FooAggregateRoot.type]
-    val module: SimpleAggregateModule[Foo, Foo#ID] = trace.block( "foo-module" ) {
-      val b = SimpleAggregateModule.builderFor[Foo, Foo#ID].make
+    val module: SimpleAggregateModule[Foo] = trace.block( "foo-module" ) {
+      val b = SimpleAggregateModule.builderFor[Foo].make
       import b.P.{ Tag => BTag, Props => BProps, _ }
 
       b.builder
@@ -102,7 +115,7 @@ class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleS
     // val rootType = SimpleAggregateModuleSpec.FooAggregateRoot.module.aggregateRootType
     // def slugIndex = model.aggregateRegisterFor[String]( rootType, 'slug ).toOption.get
 
-    def moduleCompanions: List[AggregateRootModule[_]] = List() // List( SimpleAggregateModuleSpec.FooAggregateRoot.module )
+    def moduleCompanions: List[AggregateRootModule] = List() // List( SimpleAggregateModuleSpec.FooAggregateRoot.module )
   }
 
   override def createAkkaFixture(): Fixture = new TestFixture
@@ -118,13 +131,13 @@ class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleS
 
     "simple" in { fixture: Fixture =>
       import fixture._
-      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo, Foo#ID](
+      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
         aggregateIdTag = 'fooTAG, 
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
         indexes = Seq.empty[AggregateIndexSpec[_,_]]
       )
 
-      val b = SimpleAggregateModule.builderFor[Foo, Foo#ID].make
+      val b = SimpleAggregateModule.builderFor[Foo].make
       import b.P.{ Tag => BTag, Props => BProps, _ }
       val actual = b.builder
                     .set( BTag, 'fooTAG )
@@ -137,7 +150,7 @@ class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleS
     "build module" in { fixture: Fixture =>
       import fixture._
 
-      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl(
+      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
         aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
         indexes = Seq.empty[AggregateIndexSpec[_,_]]

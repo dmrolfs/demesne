@@ -1,8 +1,5 @@
 package demesne
 
-import akka.actor.{ActorContext, ActorPath, Props}
-import peds.commons.util._
-
 import scala.reflect.ClassTag
 
 
@@ -39,8 +36,9 @@ package object register {
   /**
    * Utility function to make a standard event bus topic for events pertaining to a specific aggregate instance.
    */
-  def makeTopic( name: String, rootType: AggregateRootType, key: Class[_], id: Class[_] ): String = {
-    s"${rootType.name}+${name}+${key.safeSimpleName}:${id.safeSimpleName}"
+//  def makeTopic( name: String, rootType: AggregateRootType, key: Class[_], id: Class[_] ): String = {
+  def makeTopic[K: ClassTag, I: ClassTag]( name: String, rootType: AggregateRootType ): String = {
+    s"${rootType.name}+${name}+${implicitly[ClassTag[K]].toString}:${implicitly[ClassTag[I]].toString}"
   }
 
 
