@@ -85,13 +85,13 @@ object RegisterSupervisor extends StrictLogging {
       subscription.fold(
         classifier => {
           val (ctx, clazz) = classifier
-          trace( s"Relay[$constituent] register with Akka EventStream for class=$clazz")
+          logger.debug( "Relay[{}] register with Akka EventStream for class={}", constituent, clazz )
           ctx.system.eventStream.subscribe( constituent, clazz )
           ctx.system.eventStream.subscribe( constituent, classOf[Envelope] )
         },
         classifier => {
           val (bus, name) = classifier
-          trace( s"Relay[$constituent] register with bus[$bus] for name=$name")
+          logger.debug( "Relay[{}] register with bus[{}] for name={}", constituent, bus, name )
           bus.subscribe( constituent, name )
         }
       )
@@ -116,12 +116,6 @@ object RegisterSupervisor extends StrictLogging {
     )(
       constituent: RegisterConstituent
     ): ActorPath = {
-      logger.error( "pathFor: self.path = [{}]", self.path )
-      logger.error( "pathFor: constituent.category.name = [{}]", constituent.category.name )
-      logger.error( "pathFor: spec = [{}]", spec )
-      logger.error( "pathFor: registrantType = [{}]", registrantType )
-      logger.error( "pathFor: spec.topic( registrantType ) = [{}]", spec.topic( registrantType ) )
-
       ActorPath.fromString( self.path + "/" + constituent.category.name + "-" + spec.topic(registrantType) )
     }
 
@@ -183,7 +177,7 @@ object RegisterSupervisor extends StrictLogging {
 
     val survey: Receive = LoggingReceive {
       case Survey(Nil, toStart) => {
-        log debug s"""starting for spec[${spec}]: ${toStart.map(_.name).mkString("[",",","]")}"""
+        log.debug( """starting for spec[{}]: {}""", spec, toStart.map(_.name).mkString("[",",","]") )
         self ! Startup(toStart)
         context become startup
       }
@@ -192,12 +186,12 @@ object RegisterSupervisor extends StrictLogging {
         val piece = toFind.head
         context.actorSelection(piece.path) ? Identify(piece.name) map {
           case ActorIdentity(_, None) => {
-            log debug s"${piece.name} not found for ${spec}"
+            log.debug( "{} not found for {}", piece.name, spec )
             Survey( toFind.tail, piece :: toStart )
           }
 
           case ActorIdentity(_, Some(ref) ) => {
-            log debug s"${piece.name} found for ${spec}"
+            log.debug( "{} found for {}", piece.name, spec )
             constituentRefs += (piece.constituent -> ref)
             Survey( toFind.tail, toStart )
           }
@@ -210,7 +204,7 @@ object RegisterSupervisor extends StrictLogging {
 //ref akka concurrency for controlled startup pattern
       case Startup( Nil ) => {
         constituentRefs.values foreach { cref =>
-          log debug s"sending WaitingForStart to $cref"
+          log.debug( "sending WaitingForStart to {}" , cref )
           cref ! register.WaitingForStart
         }
         context become verify( constituentRefs )
@@ -218,7 +212,7 @@ object RegisterSupervisor extends StrictLogging {
 
       case Startup( pieces ) => {
         val p = pieces.head
-        log info s"starting for spec[${spec}]: ${p.name}"
+        log.info( "starting for spec[{}]: {}", spec, p.name )
         val createPiece = StartChild( props = p.props, name = p.name )
         supervisor ? createPiece map {
           case ChildStarted( child ) => {
@@ -227,7 +221,7 @@ object RegisterSupervisor extends StrictLogging {
             Startup( pieces.tail )
           }
 
-          case m => log error s"failed to create register piece: ${p}"  //todo consider retry state via ctx.become
+          case m => log.error( "failed to create register piece: [{}]", p )  //todo consider retry state via ctx.become
         } pipeTo self
       }
     }
@@ -241,7 +235,7 @@ object RegisterSupervisor extends StrictLogging {
           throw new IllegalStateException(s"failed to recognize register constituent[$c] in toCheck[${toCheck}}]")
         }
 
-        log info s"verified constituent: ${verified}"
+        log.info( "verified constituent: {}", verified )
         val next = toCheck - verified._1
         handleNext(toCheck - verified._1)
       }
@@ -251,41 +245,10 @@ object RegisterSupervisor extends StrictLogging {
       if ( !next.isEmpty ) context become verify( next )
       else {
         val msg = IndexRegistered( constituentRefs( Agent ), registrantType, spec )
-        log debug s"sending: $registrant ! $msg"
+        log.debug( "sending: () ! {}", registrant, msg )
         registrant ! msg
         context stop self
       }
     }
   }
 }
-
-
-////val system = ActorSystem( name="system", config )
-//val summary = system.actorOf( RegisterLocalSummary.props[String, Int]( "register" ), "summary" )
-////val subPath = summary.path.toStringWithoutAddress
-//
-//val register = system.actorOf( RegisterAggregate.props[String, Int]( "register" ), "register" )
-//
-//case class Foo( value: String )
-//case class Bar( value: Int )
-//
-//val extractor: PartialFunction[Any, (String, Int)] = {
-//case Foo( value ) => (value+"-fooKey", value.hashCode)
-//case Bar( value ) => (value.toString+"-barKey", value.hashCode)
-//}
-//
-//val bus = new RegisterBus
-//val relay = system.actorOf( Relay.props( registerPath = register.path, extractor = extractor ), "relay" )
-//bus.subscribe( relay, "/record" )
-//
-//val reg = summary ? GetRegister
-//val agent = Await.result( reg.mapTo[RegisterProxy], 3.seconds ).mapTo[String, Int]
-//
-//
-//class Zed( bus: RegisterBus ) extends Actor {
-//  override def receive = { case m => bus.publish( RegisterBus.RecordingEvent( topic = "/record", recording = m ) ) }
-//}
-//
-//val z = system.actorOf( Props( new Zed( bus ) ), "zed" )
-//z ! Foo( "dmr" )
-//IS Foo getting into Agent????

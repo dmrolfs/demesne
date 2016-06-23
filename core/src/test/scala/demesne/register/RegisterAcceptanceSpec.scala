@@ -31,18 +31,8 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     implicit lazy val fooIdentifying: Identifying[Foo] = new Identifying[Foo] {
       override type ID = Foo#ID
       override def idOf( o: Foo ): TID = o.id
-      override lazy val evID: ClassTag[ID] = {
-        val t: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
-        logger.error( "fooIdentifying classTag[ShortUUID] = [{}]", t)
-        t
-      }
-
-      override lazy val evTID: ClassTag[TID] = {
-        val t: ClassTag[TID] = ClassTag( classOf[TID] )
-        logger.error( "fooIdentifying classTag[TaggedID[ShortUUID]] = [{}]", t )
-        t
-      }
-
+      override lazy val evID: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
+      override lazy val evTID: ClassTag[TID] = ClassTag( classOf[TID] )
       override def nextId: TryV[TID] = tag( ShortUUID() ).right
       override def fromString( idstr: String ): ID = ShortUUID( idstr )
     }
@@ -61,12 +51,10 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
   object TestModule extends SimpleTestModule[Foo] { module =>
     override type ID = Foo#ID
     override lazy val evID: ClassTag[ID] = {
-//      logger.error( "ClassTag( classOf[ShortUUID] ) = [{}]", ClassTag(classOf[ShortUUID]) )
-//      logger.error( "Foo.evID = [{}]", ClassTag(classOf[ShortUUID]) )
 
       implicitly[Identifying[Foo]].bridgeIdClassTag[ShortUUID] match {
         case \/-( ctag ) => {
-          logger.error( "TestModule.evId = ctag = [{}]", ctag )
+          logger.info( "TestModule.evId = ctag = [{}]", ctag )
           ctag
         }
         case -\/( ex ) => {
@@ -94,7 +82,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     override def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any] = {
       case Protocol.Add( id, foo, bar ) => Protocol.Added( id, foo, bar )
       case Protocol.ChangeBar( id, newBar ) => {
-        logger error s"state = $state"
+        logger info s"state = $state"
         Protocol.BarChanged( id, state('bar).asInstanceOf[Int], newBar )
       }
       case Protocol.Delete( id ) => Protocol.Deleted( id )
@@ -355,7 +343,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       } {
         val tid = TestModule.nextId.toOption.get
         val id = tid.id
-        logger.error( "DMR: test tid =[{}]", tid )
+        logger.info( "DMR: test tid =[{}]", tid )
         val foo = "Test Foo"
         val bar = 17
         system.eventStream.subscribe( bus.ref, classOf[Protocol.Added] )
@@ -444,12 +432,12 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         countDownChange await 200.millis.dilated
 
         whenReady( busRegister.futureGet( "Test Foo" ) ) { result => 
-          logger error s"HERE ****: result(Test Foo) = $result"
+          logger info s"HERE ****: result(Test Foo) = $result"
           result mustBe None
         }
 
         whenReady( streamRegister.futureGet( 13 ) ) { result => 
-          logger error s"HERE ****: result(Damon) = $result"
+          logger info s"HERE ****: result(Damon) = $result"
           result mustBe None
         }
       }
@@ -524,17 +512,17 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         countDownChange await 200.millis.dilated
 
         whenReady( busRegister.futureGet( "Test Foo" ) ) { result => 
-          logger error s"HERE ****: result(Test Foo) = $result"
+          logger info s"HERE ****: result(Test Foo) = $result"
           result mustBe Some(id) 
         }
 
         whenReady( streamRegister.futureGet( 7 ) ) { result => 
-          logger error s"HERE ****: result(7) = $result"
+          logger info s"HERE ****: result(7) = $result"
           result mustBe None 
         }
 
         whenReady( streamRegister.futureGet( 13 ) ) { result => 
-          logger error s"HERE ****: result(13) = $result"
+          logger info s"HERE ****: result(13) = $result"
           result mustBe Some(id)
         }
       }

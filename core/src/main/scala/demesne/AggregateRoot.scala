@@ -1,6 +1,5 @@
 package demesne
 
-import scala.reflect._
 import akka.actor.{ActorLogging, PoisonPill, ReceiveTimeout}
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
@@ -10,7 +9,6 @@ import scalaz.Kleisli._
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier.TaggedID
-//import peds.archetype.domain.model.core.Identifying
 import peds.commons.{KOp, TryV}
 import peds.commons.log.Trace
 import peds.commons.util._
@@ -27,6 +25,7 @@ import peds.commons.util._
 // support via subtrait of AggregateRoot?
 // support registration with "state" handler (context become state)
 //////////////////////////////////////
+
 
 object AggregateRoot {
   type Acceptance[S] = PartialFunction[(Any, S), S]
@@ -50,41 +49,24 @@ with ActorLogging {
   override val persistenceId: String = self.path.toStringWithoutAddress
 
   type ID = I
-//  implicit val evID: ClassTag[ID] = implicitly[ClassTag[I]]
   def parseId( idstr: String ): ID
   type TID = TaggedID[ID]
-//  val evTID: ClassTag[TID]
 
   val aggregateId: ID = parseId( idFromPath() )
 
+  lazy val PathComponents = """^.*\/(([^-]+)-)?(.+)$""".r
   def idFromPath(): String = {
-    val PathComponents = """^.*\/(([^-]+)-)?(.+)$""".r
-    log.error( "PathComponents = [{}]", PathComponents )
-    log.error( "self.path = [{}]", self.path )
-    log.error( "self.path.toStringWithoutAddress = [{}]", self.path.toStringWithoutAddress )
     val PathComponents(_, tag, id) = self.path.toStringWithoutAddress
     id
   }
 
-  // var state: S
   def state: S
   def state_=( newState: S ): Unit
 
-  //todo figure out how to achieve via TypeClass?
-//  def stateId: String = {
-//    Option( state )
-//    .map { s =>
-//      s match {
-//        case i: Identifiable => i.id.id.toString
-//        case s => s.##.toString
-//      }
-//    }
-//    .getOrElse { "null" }
-//  }
 
   override def around( r: Receive ): Receive = LoggingReceive {
     case SaveSnapshot => {
-      log debug "received SaveSnapshot command"
+      log.debug( "received SaveSnapshot command" )
       saveSnapshot( state )
       super.around( r )( SaveSnapshot )
     }
@@ -106,13 +88,13 @@ with ActorLogging {
         val eventState = (event, s)
         if ( acceptance.isDefinedAt( eventState ) ) {
           val newState = acceptance( eventState )
-          log debug s"newState = $newState"
-          log debug s"BEFORE state = $state"
+          log.debug( "newState = {}", newState )
+          log.debug( "BEFORE state = {}", state )
           state = newState
-          log debug s"AFTER state = $state"
+          log.debug( "AFTER state = {}", state )
           newState
         } else {
-          log debug s"""${Option(s).map{_.getClass.safeSimpleName}} does not accept event ${event.getClass.safeSimpleName}"""
+          log.debug( "{} does not accept event {}", Option(s).map{_.getClass.safeSimpleName}, event.getClass.safeSimpleName )
           s
         }
       }
@@ -166,7 +148,7 @@ with ActorLogging {
       }
 
       case m => {
-        log debug s"aggregate root unhandled $m"
+        log.debug( "aggregate root unhandled {}", m )
         super.unhandled( m )
       }
     }

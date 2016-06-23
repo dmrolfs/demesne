@@ -105,7 +105,7 @@ class RegisterLocalAgent[K: ClassTag, I: ClassTag]( topic: String ) extends Acto
 
   val ready: Receive = LoggingReceive {
     case e @ RegisterAggregate.Recorded( key: K, _, _, _ ) => trace.briefBlock( s"receive:RECORDED($key)" ) {
-      val id = e.mapIdTo[I] // cast here to handled boxed primitive cases
+      val id = RegisterAggregate.mapTo[I]( e.id ) // cast here to handled boxed primitive cases
       register send { r => r + ( key -> id ) }
     }
 

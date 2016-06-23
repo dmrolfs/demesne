@@ -1,5 +1,6 @@
 package demesne.register
 
+import scala.concurrent.duration._
 import akka.actor.FSM.{CurrentState, Transition}
 import akka.actor._
 import akka.contrib.pattern.ReliableProxy
@@ -8,8 +9,6 @@ import akka.event.LoggingReceive
 import peds.akka.envelope.Envelope
 import peds.commons.log.Trace
 import peds.commons.util._
-
-import scala.concurrent.duration._
 
 
 object RegisterRelay extends com.typesafe.scalalogging.LazyLogging {
@@ -42,34 +41,32 @@ with ActorLogging {
 
   def connecting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case CurrentState( _, state ) if state != Connecting => {
-      //      log debug s"proxy.transition( $p, $from -> $to )"
-      log debug s"Relay connected to register aggregate at ${registerAggregatePath}"
+      log.info( "Relay connected to register aggregate at {}", registerAggregatePath )
       proxy ! WaitingForStart
       context become starting( waiting )
     }
 
     case Transition( _, Connecting, _) => {
-      //      log debug s"proxy.transition( $p, $from -> $to )"
-      log debug s"Relay connected to register aggregate at ${registerAggregatePath}"
+      log.info( "Relay connected to register aggregate at {}", registerAggregatePath )
       proxy ! WaitingForStart
       context become starting( waiting )
     }
 
     case WaitingForStart => {
-      log debug s"adding to relay's wait queue: ${sender()}"
+      log.info( "adding to relay's wait queue: {}", sender() )
       context become connecting( List( sender() ) )
     }
   }
 
   def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case Started if sender().path == registerAggregatePath => {
-      log debug "relay recd start confirmation from aggregate => activating"
+      log.info( "relay recd start confirmation from aggregate => activating" )
       waiting foreach { _ ! Started }
       context become active
     }
 
     case WaitingForStart => {
-      log debug s"adding to relay's wait queue: ${sender()}"
+      log.info( "adding to relay's wait queue: {}", sender() )
       context become starting( List( sender() ) )
     }
   }
@@ -78,11 +75,11 @@ with ActorLogging {
     case event if fullExtractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
       val directive = fullExtractor( event )
       proxy ! directive
-      log info s"relayed to aggregate register: ${directive}"
+      log.info( "relayed to aggregate register: {}", directive )
     }
 
     case WaitingForStart => {
-      log debug s"recd WaitingForStart: sending Started to ${sender()}"
+      log.info( "received WaitingForStart: sending Started to {}", sender() )
       sender() ! Started
     }
   }
@@ -92,8 +89,7 @@ with ActorLogging {
       case _: akka.actor.FSM.CurrentState[_] => ()
       case _: akka.actor.FSM.Transition[_] => ()
       case _: akka.contrib.pattern.ReliableProxy.TargetChanged => ()
-      case m => log warning  s"RELAY_UNHANDLED ${message}; extractor-defined-at=${fullExtractor.isDefinedAt(message)}"
+      case m => log.warning( "RELAY_UNHANDLED [{}]; extractor-defined-at={}", message, fullExtractor.isDefinedAt(message) )
     }
-    
   }
 }

@@ -135,7 +135,6 @@ object EntityAggregateModuleSpec {
     extends module.EntityAggregateActor { publisher: EventPublisher =>
       override var state: Foo = _
 
-      //  implicit val evID: ClassTag[ID] = implicitly[ClassTag[I]]
       override def parseId( idstr: String ): ID = {
         val identifying = implicitly[Identifying[Foo]]
         identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
@@ -200,18 +199,6 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       FooAggregateRoot.module.aggregateIdTag must equal( expected.aggregateIdTag )
       FooAggregateRoot.module.indexes must equal( expected.indexes )
       FooAggregateRoot.module must equal( expected )
-
-      // val b = EntityAggregateModule.builderFor[Foo].make
-      // import b.P.{ Tag => BTag, Props => BProps, _ }
-
-      // val actual = b.builder
-      //               .set( BTag, 'fooTAG )
-      //               .set( BProps, FooAggregateRoot.FooActor.props(_,_) )
-      //               .build()
-
-      // actual.aggregateIdTag must equal(expected.aggregateIdTag)
-      // actual.indexes must equal(expected.indexes)
-      // actual mustBe expected
     }
 
     "not respond before added" in { fixture: Fixture =>
@@ -225,7 +212,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       bus.expectNoMsg( 200.millis.dilated )
     }
 
-    "add foo" taggedAs WIP in { fixture: Fixture =>
+    "add foo" in { fixture: Fixture =>
       import fixture._
 
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
@@ -333,13 +320,14 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     "recorded in slug index" in { fixture: Fixture =>
       import fixture._
 
-      val id = Module.nextId.toOption.get
-      val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
+      val tid = Module.nextId.toOption.get
+      val id = tid.id
+      val f1 = FooImpl(tid, "foo1", "f1", true, 17, 3.14159, "zedster")
 
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
-      val f = Module aggregateOf id
-      f !+ EntityProtocol.Add( id, f1 )
+      val f = Module aggregateOf tid
+      f !+ EntityProtocol.Add( tid, f1 )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
@@ -352,17 +340,18 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       slugIndex.get( "f1" ) mustBe Some(id)
     }
 
-    "bar command to force concrete protocol implementation" in { fixture: Fixture =>
+    "bar command to force concrete protocol implementation" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
-      val id = Module.nextId.toOption.get
-      val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster" )
+      val tid = Module.nextId.toOption.get
+      val id = tid.id
+      val f1 = FooImpl(tid, "foo1", "f1", true, 17, 3.14159, "zedster" )
 
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
-      val f = Module aggregateOf id
-      f !+ EntityProtocol.Add( id, f1 )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      val f = Module aggregateOf tid
+      f !+ EntityProtocol.Add( tid, f1 )
+      bus.expectMsgPF( max = 1000.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
 
@@ -373,20 +362,21 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       import akka.pattern.ask
       implicit val timeout = akka.util.Timeout( 1.second )
-      val bevt = ( f ? Protocol.Bar( id, 17 ) ).mapTo[Protocol.Barred]
+      val bevt = ( f ? Protocol.Bar( tid, 17 ) ).mapTo[Protocol.Barred]
       whenReady( bevt ) { e => e.b mustBe 17 }
     }
 
     "enablement actions translate in slug index" in { fixture: Fixture =>
       import fixture._
 
-      val id = Module.nextId.toOption.get
-      val f1 = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
+      val tid = Module.nextId.toOption.get
+      val id = tid.id
+      val f1 = FooImpl(tid, "foo1", "f1", true, 17, 3.14159, "zedster")
 
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
-      val f = Module aggregateOf id
-      f !+ EntityProtocol.Add( id, f1 )
+      val f = Module aggregateOf tid
+      f !+ EntityProtocol.Add( tid, f1 )
       bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
@@ -396,19 +386,19 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
 
-      f !+ EntityProtocol.Disable( id )
+      f !+ EntityProtocol.Disable( tid )
       new CountDownFunction[String] await 200.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe None }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe None
 
-      f !+ EntityProtocol.Enable( id )
+      f !+ EntityProtocol.Enable( tid )
       new CountDownFunction[String] await 200.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
 
-      f !+ EntityProtocol.Enable( id )
+      f !+ EntityProtocol.Enable( tid )
       new CountDownFunction[String] await 200.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )

@@ -17,7 +17,6 @@ import demesne.module.entity.messages._
 import demesne.register.{AggregateIndexSpec, Directive}
 import demesne.register.local.RegisterLocalAgent
 import peds.commons.TryV
-import peds.commons.identifier.ShortUUID
 
 
 object EntityAggregateModule {
@@ -72,8 +71,6 @@ object EntityAggregateModule {
       override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
       override val evState: ClassTag[E] = implicitly[ClassTag[E]]
 
-//      override def nextId: TryV[TID] = implicitly[Identifying[E#ID]].nextId map { tagId }
-
       override lazy val indexes: Seq[AggregateIndexSpec[_,_]] = _indexes()
 
       override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[EntityAggregateModuleImpl]
@@ -99,7 +96,6 @@ object EntityAggregateModule {
 abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying] extends SimpleAggregateModule[E] { module =>
 
   override type ID = E#ID
-//  implicit override val evID: ClassTag[ID] = implicitly[EntityIdentifying[E]].evID
   override def nextId: TryV[TID] = implicitly[EntityIdentifying[E]].nextId
 
   def idLens: Lens[E, E#TID]
@@ -146,12 +142,12 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
         RegisterLocalAgent.spec[String, module.ID]( 'slug ) { // or 'activeSlug
           case Added( _, info ) => {
             val e = module.certainInfoToEntity( info )
-            Directive.Record( module.getEntityKey(e), module.idLens.get(e) )
+            Directive.Record( module.getEntityKey(e), module.idLens.get(e).id )
           }
 
           case Reslugged( _, oldSlug, newSlug ) => Directive.Revise( oldSlug, newSlug )
-          case Disabled( id, _ ) => Directive.Withdraw( id )
-          case Enabled( id, slug ) => Directive.Record( slug, id )
+          case Disabled( tid, _ ) => Directive.Withdraw( tid.id )
+          case Enabled( tid, slug ) => Directive.Record( slug, tid.id )
         } (
           ClassTag( classOf[String] ),
           identifying.evID
@@ -161,16 +157,9 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
   }
 
 
-  abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] {
-    publisher: EventPublisher =>
+  abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] { publisher: EventPublisher =>
 
     override def acceptance: Acceptance = entityAcceptance
-
-//    override type ID = module.identifying.ID
-
-//    override def evID: ClassTag[ID] = stateCompanion.
-//
-//    val stateCompanion: EntityCompanion[E]
 
     def entityAcceptance: Acceptance = {
       case (Added(_, info), _) => {
@@ -192,7 +181,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
     def quiescent: Receive = {
-      case Add( id, info ) if id == aggregateId => persist( Added(id, info) ) { e => acceptAndPublish( e ) }
+      case Add( targetId, info ) if targetId.id == aggregateId => persist( Added(targetId, info) ) { e => acceptAndPublish( e ) }
     }
 
     def active: Receive = {
