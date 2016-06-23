@@ -209,7 +209,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val t = Module aggregateOf id
       t !+ EntityProtocol.Rename( id, "foobar" )
-      bus.expectNoMsg( 200.millis.dilated )
+      bus.expectNoMsg( 1500.millis.dilated )
     }
 
     "add foo" in { fixture: Fixture =>
@@ -221,7 +221,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val foo = FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, foo )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added =>  Module.toEntity( payload.info ).name mustBe "foo1"
       }
     }
@@ -233,12 +233,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo added" ) {
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
 
       f !+ EntityProtocol.Rename( id, "good-foo" )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo renamed" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo renamed" ) {
         case payload: EntityProtocol.Renamed => {
           payload.sourceId mustBe id
           payload.oldName mustBe "foo1"
@@ -254,13 +254,13 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo added" ) {
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
 
       val newSlug = "gt"
       f !+ EntityProtocol.Reslug( id, newSlug )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo slug changed" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo slug changed" ) {
         case payload: EntityProtocol.Reslugged => {
           payload.sourceId mustBe id
           payload.oldSlug mustBe "f1"
@@ -276,12 +276,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo added" ) {
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
 
       f !+ EntityProtocol.Disable( id )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo disabled" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo disabled" ) {
         case payload: EntityProtocol.Disabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
@@ -296,12 +296,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster") )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo added" ) {
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
 
       f !+ EntityProtocol.Disable( id )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo disabled" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo disabled" ) {
         case payload: EntityProtocol.Disabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
@@ -309,7 +309,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
 
       f !+ EntityProtocol.Enable( id )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo enabled" ) {
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo enabled" ) {
         case payload: EntityProtocol.Enabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
@@ -328,12 +328,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val f = Module aggregateOf tid
       f !+ EntityProtocol.Add( tid, f1 )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
 
       val countDown = new CountDownFunction[String]
-      countDown await 200.millis.dilated
+      countDown await 250.millis.dilated
 
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
@@ -351,11 +351,11 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val f = Module aggregateOf tid
       f !+ EntityProtocol.Add( tid, f1 )
-      bus.expectMsgPF( max = 1000.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
 
-      new CountDownFunction[String] await 200.millis.dilated
+      new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
@@ -377,29 +377,29 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val f = Module aggregateOf tid
       f !+ EntityProtocol.Add( tid, f1 )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 1500.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).name mustBe "foo1"
       }
 
-      new CountDownFunction[String] await 200.millis.dilated
+      new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
 
       f !+ EntityProtocol.Disable( tid )
-      new CountDownFunction[String] await 200.millis.dilated
+      new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe None }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe None
 
       f !+ EntityProtocol.Enable( tid )
-      new CountDownFunction[String] await 200.millis.dilated
+      new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
 
       f !+ EntityProtocol.Enable( tid )
-      new CountDownFunction[String] await 200.millis.dilated
+      new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result => result mustBe Some(id) }
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
