@@ -4,13 +4,13 @@ import sbt._
 import spray.revolver.RevolverPlugin._
 
 object BuildSettings {
-  val VERSION = "1.0.6-SNAPSHOT"
+  val VERSION = "1.1.0-SNAPSHOT"
 
   val defaultBuildSettings = Defaults.coreDefaultSettings ++ Format.settings ++ Revolver.settings ++
     Seq(
       version := VERSION,
       organization := "com.github.dmrolfs",
-      crossScalaVersions := Seq( "2.11.7" ),
+      crossScalaVersions := Seq( "2.11.8" ),
       scalaVersion <<= crossScalaVersions { (vs: Seq[String]) => vs.head },
       // updateOptions := updateOptions.value.withCachedResolution(true),
       scalacOptions ++= Seq(
@@ -71,7 +71,9 @@ object BuildSettings {
           .loadClass( "org.slf4j.LoggerFactory" )
           .getMethod( "getLogger", classLoader.loadClass("java.lang.String") )
           .invoke( null, "ROOT" )
-      )
+      ),
+      triggeredMessage in ThisBuild := Watched.clearWhenTriggered,
+      cancelable in Global := true
     )
 
 

@@ -2,7 +2,7 @@ package contoso.conference
 
 import scala.concurrent._
 import scala.concurrent.duration._
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{ Actor, ActorLogging, Props }
 import akka.pattern.{ pipe }
 import akka.event.LoggingReceive
 import com.typesafe.config.ConfigFactory
@@ -10,17 +10,7 @@ import com.typesafe.config.ConfigFactory
 
 //DMR: implement as ClusterSingleton
 
-// implement to front a cache that subscribes to events
-// use a bloomfilter behand
-// initially use in-memory cache, but later use shard system
-
-//todo replace with aggregate register: slug -> conferenceId
-// Conference/Conference/ConferenceContext.cs
-object ConferenceContext {
-  def props: Props = Props( new ConferenceContext )
-
-  // val shardName: String = "PricingRetrievers"
-
+object ConferenceContextProtocol {
   sealed trait ConferenceContextMessage
   // case class HoldSlug( slug: String, conferenceId: ConferenceModule.TID ) extends ConferenceContext
   // case class SlugHeld( slug: String ) extends ConferenceContext
@@ -36,11 +26,23 @@ object ConferenceContext {
   }
   case class SlugNotAvailable( override val slug: String, conferenceId: ConferenceModule.TID ) extends SlugStatus
   case class SlugAvailable( override val slug: String ) extends SlugStatus
-//conferences
-//orders
-//seattypes
-//orderseats
+  //conferences
+  //orders
+  //seattypes
+  //orderseats
+}
 
+
+// implement to front a cache that subscribes to events
+// use a bloomfilter behand
+// initially use in-memory cache, but later use shard system
+
+//todo replace with aggregate register: slug -> conferenceId
+// Conference/Conference/ConferenceContext.cs
+object ConferenceContext {
+  def props: Props = Props( new ConferenceContext )
+
+  // val shardName: String = "PricingRetrievers"
 
   val fallback = "context-timeout = 250ms"
   val config = ConfigFactory.load
@@ -63,23 +65,26 @@ class ConferenceContext extends Actor with ActorLogging {
   // use ScalaCache to front shared cache?
   var slugCache: Map[String, ConferenceModule.TID] = Map()  // temp in-memory rep; future should be shared cache server
 
+  import contoso.conference.{ ConferenceProtocol => CP }
+  import contoso.conference.{ ConferenceContextProtocol => CCP }
+
   override def receive: Receive = LoggingReceive {
     // DMR: LISTEN TO AKKA EVENT BUS for this
-    case ConferenceModule.ConferenceCreated( sourceId, conference ) => {
+    case CP.ConferenceCreated( sourceId, conference ) => {
       val result = addSlug( conference.slug, sourceId )
       result pipeTo sender()
     }
 
-    case ReserveSlug( slug, conferenceId ) => {
+    case CCP.ReserveSlug( slug, conferenceId ) => {
       val result = addSlug( slug, conferenceId )
       result pipeTo sender()
     }
 
-    case GetSlugStatus( slug ) => {
+    case CCP.GetSlugStatus( slug ) => {
       val result = if ( filter.has_?( slug ) ) {
-        findSlug( slug ) map { fs => fs getOrElse SlugAvailable( slug ) }
+        findSlug( slug ) map { fs => fs getOrElse CCP.SlugAvailable( slug ) }
       } else {
-        Future successful { SlugAvailable( slug ) }
+        Future successful { CCP.SlugAvailable( slug ) }
       }
 
       result pipeTo sender()
@@ -89,14 +94,14 @@ class ConferenceContext extends Actor with ActorLogging {
   }
 
   //DMR: With refactor to external service consider using CircuitBreaker
-  def addSlug( slug: String, conferenceId: ConferenceModule.TID ): Future[SlugStatus] = {
+  def addSlug( slug: String, conferenceId: ConferenceModule.TID ): Future[CCP.SlugStatus] = {
     for {
-      status: Option[SlugReserved] <- findSlug( slug )
+      status: Option[CCP.SlugReserved] <- findSlug( slug )
     } yield {
-      status.fold[SlugStatus] {
+      status.fold[CCP.SlugStatus] {
         slugCache += ( slug -> conferenceId )
         filter += slug
-        SlugReserved( slug, conferenceId )
+        CCP.SlugReserved( slug, conferenceId )
       } {
         _.toNotAvailable
       }
@@ -106,8 +111,8 @@ class ConferenceContext extends Actor with ActorLogging {
   //DMR: With refactor to external service consider using CircuitBreaker
   //DMR: and use separate execetioncontext:
   //DMR: implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(new ForkJoinPool())
-  def findSlug( slug: String ): Future[Option[SlugReserved]] = Future successful {
-    slugCache get slug map { SlugReserved( slug, _ ) }
+  def findSlug( slug: String ): Future[Option[CCP.SlugReserved]] = Future successful {
+    slugCache get slug map { CCP.SlugReserved( slug, _ ) }
   }
 
   // def sendResponseAndShutdown( response: Future[Any] ): Unit = {

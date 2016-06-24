@@ -1,28 +1,73 @@
 package contoso.conference
 
-import scala.concurrent.Future
-import scalaz._
-import Scalaz._
-import akka.actor.{ActorRef, Props}
-import akka.event.LoggingReceive
-import com.github.nscala_time.time.{Imports => joda}
-import demesne._
-import demesne.register.RegisterBus
-import peds.commons.Valid
-import peds.akka.AskRetry._
-import peds.akka.publish._
-import peds.commons.identifier.ShortUUID
-import peds.commons.log.Trace
-import shapeless._
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.reflect._
 import scala.util.{Failure, Success}
+import scala.concurrent.Future
+import akka.actor.{ActorRef, Props}
+import akka.event.LoggingReceive
+
+import scalaz._
+import Scalaz._
+import shapeless._
+import com.github.nscala_time.time.{Imports => joda}
+import peds.commons.{TryV, Valid}
+import peds.akka.AskRetry._
+import peds.akka.publish._
+import peds.commons.identifier.{ShortUUID, TaggedID}
+import peds.commons.log.Trace
+import demesne._
+import peds.archetype.domain.model.core.Identifying
 
 
-object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
+object ConferenceProtocol extends AggregateProtocol[ShortUUID] {
+  sealed trait ConferenceMessage
+  sealed trait ConferenceCommand extends Command with ConferenceMessage
+  sealed trait ConferenceEvent extends Event with ConferenceMessage
+
+  case object GetPublishedSeatTypes extends ConferenceMessage
+  case class SeatTypes( values: Seq[SeatType] ) extends ConferenceMessage
+
+  final case class VerifiedCreateConference private[conference]( conference: ConferenceInfo ) extends ConferenceMessage
+
+  final case class SlugTaken private[conference]( targetId: ConferenceModule.TID, slug: String ) extends ConferenceMessage
+
+
+  case class CreateConference( override val targetId: CreateConference#TID, conference: ConferenceInfo ) extends ConferenceCommand
+  case class UpdateConference( override val targetId: UpdateConference#TID, conference: ConferenceInfo ) extends ConferenceCommand
+
+  case class CreateSeat( override val targetId: CreateSeat#TID, seat: SeatType ) extends ConferenceCommand
+  case class UpdateSeat( override val targetId: UpdateSeat#TID, seat: SeatType ) extends ConferenceCommand
+  case class DeleteSeat( override val targetId: DeleteSeat#TID, seatId: SeatType.TID ) extends ConferenceCommand
+
+
+  case class Publish( override val targetId: Publish#TID ) extends ConferenceCommand
+  case class Unpublish( override val targetId: Unpublish#TID ) extends ConferenceCommand
+
+
+  //Conference/Conference.Contracts/ConferenceCreated.cs
+  case class ConferenceCreated( override val sourceId: ConferenceCreated#TID, conference: ConferenceInfo ) extends ConferenceEvent
+  //Conference/Conference.Contracts/ConferenceUpdated.cs
+  case class ConferenceUpdated( override val sourceId: ConferenceUpdated#TID, conference: ConferenceInfo ) extends ConferenceEvent
+  //Conference/Conference.Contracts/ConferencePublished.cs
+  case class ConferencePublished( override val sourceId: ConferencePublished#TID ) extends ConferenceEvent
+  //Conference/Conference.Contracts/ConferenceUnpublished.cs
+  case class ConferenceUnpublished( override val sourceId: ConferenceUnpublished#TID ) extends ConferenceEvent
+  //Conference/Conference.Contracts/SeatCreated.cs
+  case class SeatCreated( override val sourceId: SeatCreated#TID, seatType: SeatType ) extends ConferenceEvent
+  //Conference/Conference.Contracts/SeatUpdated.cs
+  case class SeatUpdated( override val sourceId: SeatUpdated#TID, seatType: SeatType ) extends ConferenceEvent
+  case class SeatDeleted( override val sourceId: SeatDeleted#TID, seatTypeId: SeatType.TID ) extends ConferenceEvent
+}
+
+//object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
+object ConferenceModule extends AggregateRootModule { module =>
   //DMR move these into common AggregateModuleCompanion trait
   val trace = Trace[ConferenceModule.type]
+
+  override type ID = ShortUUID
+  override def nextId: TryV[TID] = implicitly[Identifying[ConferenceState]].nextIdAs[TID]
 
   var conferenceContext: ActorRef = _
 
@@ -65,43 +110,6 @@ object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
   }
 
 
-  sealed trait ConferenceProtocol
-
-  case object GetPublishedSeatTypes extends ConferenceProtocol
-  case class SeatTypes( values: Seq[SeatType] ) extends ConferenceProtocol
-
-  final case class VerifiedCreateConference private[conference]( conference: ConferenceInfo ) extends ConferenceProtocol
-
-  final case class SlugTaken private[conference]( targetId: ConferenceModule.TID, slug: String ) extends ConferenceProtocol
-
-
-  case class CreateConference( override val targetId: CreateConference#TID, conference: ConferenceInfo ) extends Command
-  case class UpdateConference( override val targetId: UpdateConference#TID, conference: ConferenceInfo ) extends Command
-
-  case class CreateSeat( override val targetId: CreateSeat#TID, seat: SeatType ) extends Command
-  case class UpdateSeat( override val targetId: UpdateSeat#TID, seat: SeatType ) extends Command
-  case class DeleteSeat( override val targetId: DeleteSeat#TID, seatId: SeatType.TID ) extends Command
-
-
-  case class Publish( override val targetId: Publish#TID ) extends Command
-  case class Unpublish( override val targetId: Unpublish#TID ) extends Command
-
-
-  //Conference/Conference.Contracts/ConferenceCreated.cs
-  case class ConferenceCreated( override val sourceId: ConferenceCreated#TID, conference: ConferenceInfo ) extends Event
-  //Conference/Conference.Contracts/ConferenceUpdated.cs
-  case class ConferenceUpdated( override val sourceId: ConferenceUpdated#TID, conference: ConferenceInfo ) extends Event
-  //Conference/Conference.Contracts/ConferencePublished.cs
-  case class ConferencePublished( override val sourceId: ConferencePublished#TID ) extends Event
-  //Conference/Conference.Contracts/ConferenceUnpublished.cs
-  case class ConferenceUnpublished( override val sourceId: ConferenceUnpublished#TID ) extends Event
-  //Conference/Conference.Contracts/SeatCreated.cs
-  case class SeatCreated( override val sourceId: SeatCreated#TID, seatType: SeatType ) extends Event
-  //Conference/Conference.Contracts/SeatUpdated.cs
-  case class SeatUpdated( override val sourceId: SeatUpdated#TID, seatType: SeatType ) extends Event
-  case class SeatDeleted( override val sourceId: SeatDeleted#TID, seatTypeId: SeatType.TID ) extends Event
-
-
   case class ConferenceState(
     id: TID,
     name: String,
@@ -139,6 +147,14 @@ object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
     val seatsLens = lens[ConferenceState] >> 'seats
   }
 
+  implicit val conferenceIdentifying: Identifying[ConferenceState] = new Identifying[ConferenceState] {
+    override type ID = ShortUUID
+    override val evID: ClassTag[ID] = classTag[ShortUUID]
+    override def idOf( o: ConferenceState ): TID = o.id
+    override def fromString( idstr: String ): ID = ShortUUID( idstr )
+    override def nextId: TryV[TID] = tag( ShortUUID() ).right
+    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+  }
 
   object Conference {
     def props( model: DomainModel, rt: AggregateRootType, conferenceContext: ActorRef ): Props = {
@@ -153,10 +169,22 @@ object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
     override val model: DomainModel,
     override val rootType: AggregateRootType,
     conferenceContext: ActorRef
-  ) extends AggregateRoot[ConferenceState] { outer: EventPublisher =>
+  ) extends AggregateRoot[ConferenceState, ShortUUID] { outer: EventPublisher =>
+    import ConferenceProtocol._
     import contoso.conference.ConferenceModule.Conference._
 
     override val trace = Trace( "Conference", log )
+
+    override def parseId( idstr: String ): ID = {
+      val identifying = implicitly[Identifying[ConferenceState]]
+      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
+        case scalaz.\/-( id ) => id
+        case scalaz.-\/( ex ) => {
+          log.error( ex, "failed to parse id string:[{}]", idstr )
+          throw ex
+        }
+      }
+    }
 
     override var state: ConferenceState = _
 
@@ -184,15 +212,17 @@ object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
 
     override def receiveCommand: Receive = around( quiescent )
 
+    import contoso.conference.{ ConferenceContextProtocol => CCP }
+
     val quiescent: Receive = LoggingReceive {
       case CreateConference( id, conference ) if !conference.slug.isEmpty => {
         implicit val ec: ExecutionContext = context.system.dispatchers.lookup( "conference-context-dispatcher" )
 
         val askForSlugStatus = conferenceContext.askretry(
-          msg = ConferenceContext.ReserveSlug( conference.slug, conference.id ),
+          msg = CCP.ReserveSlug( conference.slug, conference.id ),
           maxAttempts = 5,
           rate = 250.millis
-        ).mapTo[ConferenceContext.SlugStatus]
+        ).mapTo[CCP.SlugStatus]
 
         askForSlugStatus onComplete {
           case Success( status ) => persist( ConferenceCreated( id, conference ) ) { event => 

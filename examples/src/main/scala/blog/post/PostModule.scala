@@ -1,24 +1,31 @@
 package sample.blog.post
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.{ExecutionContext, Future}
+import scala.reflect._
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
+import scalaz._
+import Scalaz._
+import shapeless._
+import peds.akka.envelope.Envelope
+import peds.akka.publish.EventPublisher
+import peds.archetype.domain.model.core.Identifying
+import peds.commons.{TryV, Valid}
+import peds.commons.identifier._
+import peds.commons.log.Trace
 import demesne._
 import demesne.register.local.RegisterLocalAgent
 import demesne.register._
-import peds.akka.envelope.Envelope
-import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
-import peds.commons.Valid
-import peds.commons.identifier._
-import peds.commons.log.Trace
-import scalaz._, Scalaz._
-import shapeless._
-import shapeless.syntax.typeable._
+import sample.blog.post.{ PostPrototol => P }
 
 
-object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregateRootClusterSharding { module =>
+object PostModule extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
   override val trace = Trace[PostModule.type]
+
+
+  override type ID = ShortUUID
+  override def nextId: TryV[TID] = implicitly[Identifying[PostActor.State]].nextIdAs[TID]
 
   var makeAuthorListing: () => ActorRef = _
 
@@ -64,13 +71,13 @@ object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregat
       override def indexes: Seq[AggregateIndexSpec[_, _]] = {
         Seq(
           RegisterLocalAgent.spec[String, PostModule.TID]( 'author, RegisterBusSubscription /* not reqd - default */ ) {
-            case PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId)
-            case Deleted( sourceId ) => Directive.Withdraw( sourceId )
+            case P.PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId)
+            case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
           },
-          RegisterLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[Event] ) ) {
-            case PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record(title, sourceId)
-            case TitleChanged( sourceId, oldTitle, newTitle ) => Directive.Revise( oldTitle, newTitle )
-            case Deleted( sourceId ) => Directive.Withdraw( sourceId )
+          RegisterLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[P.Event] ) ) {
+            case P.PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record(title, sourceId)
+            case P.TitleChanged( sourceId, oldTitle, newTitle ) => Directive.Revise( oldTitle, newTitle )
+            case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
           }
         )
       }
@@ -98,8 +105,8 @@ object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregat
           }
 
           val filter: Publisher = {
-            case e @ Envelope( _: PostPublished, _ ) => logger.info("PASSED TO RELIABLE_PUBLISH:[{}]", e); Left( e )
-            case e: PostPublished => logger.info("PASSED TO RELIABLE_PUBLISH:[{}]", e); Left( e )
+            case e @ Envelope( _: P.PostPublished, _ ) => logger.info("PASSED TO RELIABLE_PUBLISH:[{}]", e); Left( e )
+            case e: P.PostPublished => logger.info("PASSED TO RELIABLE_PUBLISH:[{}]", e); Left( e )
             case x => logger.info("blocked from reliable_publish:[{}]", x.toString); Right( () )
           }
         }
@@ -116,27 +123,46 @@ object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregat
       val bodyLens = lens[State] >> 'content >> 'body
       val titleLens = lens[State] >> 'content >> 'title
     }
+
+    implicit val postIdentifying: Identifying[State] = new Identifying[State] {
+      override type ID = ShortUUID
+      override val evID: ClassTag[ID] = classTag[ShortUUID]
+      override def idOf( o: State ): TID = o.id
+      override def fromString( idstr: String ): ID = ShortUUID( idstr )
+      override def nextId: TryV[TID] = tag( ShortUUID() ).right
+      override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+    }
   }
 
 
   class PostActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[PostActor.State] {
-    outer: EventPublisher =>
+  ) extends AggregateRoot[PostActor.State, ShortUUID] { outer: EventPublisher =>
 
     import PostActor._
 
     override val trace = Trace( "Post", log )
 
+    override def parseId( idstr: String ): ID = {
+      val identifying = implicitly[Identifying[State]]
+      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
+        case scalaz.\/-( id ) => id
+        case scalaz.-\/( ex ) => {
+          log.error( ex, "failed to parse id string:[{}]", idstr )
+          throw ex
+        }
+      }
+    }
+
     override var state: State = State()
 
     override val acceptance: Acceptance = {
-      case ( PostAdded(id, c), _ )=> State( id = id, content = c, published = false )
-      case ( BodyChanged(_, body: String), state ) => State.bodyLens.set( state )( body )
-      case ( TitleChanged(_, _, newTitle), state ) => State.titleLens.set( state )( newTitle )
-      case ( _: PostPublished, state ) => state.copy( published = true )
-      case ( _: Deleted, _ ) => State()
+      case ( P.PostAdded(id, c), _ )=> State( id = id, content = c, published = false )
+      case ( P.BodyChanged(_, body: String), state ) => State.bodyLens.set( state )( body )
+      case ( P.TitleChanged(_, _, newTitle), state ) => State.titleLens.set( state )( newTitle )
+      case ( _: P.PostPublished, state ) => state.copy( published = true )
+      case ( _: P.Deleted, _ ) => State()
     }
 
     override def receiveCommand: Receive = around( quiescent )
@@ -144,9 +170,9 @@ object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregat
     import peds.akka.envelope._
 
     val quiescent: Receive = LoggingReceive {
-      case GetContent(_)  => sender() !+ state.content
-      case AddPost( id, content ) if !content.isIncomplete  => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
-        persist( PostAdded( id, content ) ) { event =>
+      case P.GetContent(_)  => sender() !+ state.content
+      case P.AddPost( id, content ) if !content.isIncomplete  => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
+        persist( P.PostAdded( id, content ) ) { event =>
           trace.block( s"persist(${event})" ) {
             trace( s"before accept state = ${state}" )
             accept( event )
@@ -161,20 +187,20 @@ object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregat
     }
 
     val created: Receive = LoggingReceive {
-      case GetContent( id ) => sender() !+ state.content
+      case P.GetContent( id ) => sender() !+ state.content
 
-      case ChangeBody( id, body ) => persist( BodyChanged( id, body ) ) { event =>
+      case P.ChangeBody( id, body ) => persist( P.BodyChanged( id, body ) ) { event =>
         accept( event )
         log info s"Post changed: ${state.content.title}"
         publish( event )
       }
 
-      case ChangeTitle( id, newTitle ) => persist( TitleChanged(id, state.content.title, newTitle) ) { event => 
+      case P.ChangeTitle( id, newTitle ) => persist( P.TitleChanged(id, state.content.title, newTitle) ) { event =>
         acceptAndPublish( event ) 
       }
 
-      case Publish( postId ) => {
-        persist( PostPublished( postId, state.content.author, state.content.title ) ) { event =>
+      case P.Publish( postId ) => {
+        persist( P.PostPublished( postId, state.content.author, state.content.title ) ) { event =>
           accept( event )
           log info s"Post published: ${state.content.title}"
           publish( event )
@@ -182,14 +208,14 @@ object PostModule extends AggregateRootModule[ShortUUID] with InitializeAggregat
         }
       }
 
-      case Delete( id ) => persist( Deleted(id) ) { event => 
+      case P.Delete( id ) => persist( P.Deleted(id) ) { event =>
         acceptAndPublish( event ) 
         context become around( quiescent )
       }
     }
 
     val published: Receive = LoggingReceive {
-      case GetContent(_) => sender() !+ state.content
+      case P.GetContent(_) => sender() !+ state.content
     }
   }
 

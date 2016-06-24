@@ -1,23 +1,28 @@
 package contoso.conference.registration
 
+import scala.concurrent.duration._
+import scala.reflect._
 import akka.actor._
+
+import scalaz.Scalaz._
 import com.github.nscala_time.time.Imports._
 import com.github.nscala_time.time.{Imports => joda}
 import contoso.conference.ConferenceModule
 import contoso.conference.payments.PaymentSourceModule
-import contoso.conference.payments.PaymentSourceModule.PaymentCompleted
-import contoso.conference.registration.OrderModule._
-import contoso.conference.registration.SeatsAvailabilityModule.{CancelSeatReservation, CommitSeatReservation, MakeSeatReservation, SeatsReserved}
 import contoso.registration.SeatQuantity
 import demesne._
-import demesne.register.RegisterBus
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
-import peds.commons.identifier.ShortUUID
+import peds.archetype.domain.model.core.Identifying
+import peds.commons.TryV
+import peds.commons.identifier.{ShortUUID, TaggedID}
 import peds.commons.log.Trace
 
-import scala.concurrent.duration._
 
+object RegistrationSagaProtocol extends AggregateProtocol[ShortUUID] {
+  case class ExpireRegistrationProcess( override val targetId: ExpireRegistrationProcess#TID ) extends CommandMessage
+  case class RegistrationProcessExpired( override val sourceId: RegistrationProcessExpired#TID ) extends EventMessage
+}
 
 /**
 * Represents a Saga that is in charge of communicating between the different distributed components when registering
@@ -25,9 +30,12 @@ import scala.concurrent.duration._
 *
 * Created by damonrolfs on 9/11/14.
 */
-object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
+object RegistrationSagaModule extends SagaModule { module =>
   val trace = Trace[RegistrationSagaModule.type]
-  // override val aggregateIdTag: Symbol = 'registration
+
+  override type ID = ShortUUID
+
+  override def nextId: TryV[TID] = implicitly[Identifying[RegistrationSagaState]].nextIdAs[TID]
 
   override val rootType: AggregateRootType = {
     new AggregateRootType {
@@ -45,11 +53,6 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
       // override val toString: String = shardName + "AggregateRootType"
     }
   }
-
-
-  case class ExpireRegistrationProcess( override val targetId: ExpireRegistrationProcess#TID ) extends Command
-
-  case class RegistrationProcessExpired( override val sourceId: RegistrationProcessExpired#TID ) extends Event
 
 
   sealed trait ProcessState
@@ -75,6 +78,14 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
     def isCompleted: Boolean = state == FullyConfirmed || state == OrderExpired
   }
 
+  implicit val registrationSagaIdentifying: Identifying[RegistrationSagaState] = new Identifying[RegistrationSagaState] {
+    override def nextId: TryV[TID] = tag( ShortUUID() ).right
+    override def idOf( o: RegistrationSagaState ): TID = o.id
+    override def fromString( idstr: String ): ID = ShortUUID( idstr )
+    override type ID = ShortUUID
+    override val evID: ClassTag[ID] = classTag[ShortUUID]
+    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+  }
 
   object RegistrationSaga {
     def props(
@@ -95,10 +106,24 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
     override val model: DomainModel,
     orderType: AggregateRootType,
     seatsAvailabilityType: AggregateRootType
-  ) extends Saga[RegistrationSagaState] {
-    outer: EventPublisher =>
+  ) extends Saga[RegistrationSagaState, ShortUUID] { outer: EventPublisher =>
+    import contoso.conference.registration.{ RegistrationSagaProtocol => RS }
+    import contoso.conference.registration.{ OrderProtocol => O }
+    import contoso.conference.registration.{ SeatsAvailabilityProtocol => SA }
+    import contoso.conference.payments.{ PaymentSourceProtocol => P }
 
     override val trace = Trace( "RegistrationSaga", log )
+
+    override def parseId( idstr: String ): ID = {
+      val identifying = implicitly[Identifying[RegistrationSagaState]]
+      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
+        case scalaz.\/-( id ) => id
+        case scalaz.-\/( ex ) => {
+          log.error( ex, "failed to parse id string:[{}]", idstr )
+          throw ex
+        }
+      }
+    }
 
     override var state: RegistrationSagaState = _
 
@@ -106,7 +131,7 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
     var expirationMessager: Cancellable = _
 
     override def acceptance: Acceptance = {
-      case ( OrderPlaced(id, cid, seats, expiration, accessCode), state ) => {
+      case ( O.OrderPlaced(id, cid, seats, expiration, accessCode), state ) => {
         state.copy(
           conferenceId = cid,
           orderId = id,
@@ -117,13 +142,13 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
         )
       }
 
-      case ( (_: OrderUpdated, workId: WorkId), state ) => {
+      case ( (_: O.OrderUpdated, workId: WorkId), state ) => {
         state.copy( state = AwaitingReservationConfirmation, seatReservationWorkId = workId )
       }
 
-      case ( _: SeatsReserved, state ) => state.copy( state = ReservationConfirmationReceived )
-      case ( _: PaymentCompleted, state ) => state.copy( state = PaymentConfirmationReceived )
-      case ( _: OrderConfirmed, state ) => state.copy( state = FullyConfirmed )
+      case ( _: SA.SeatsReserved, state ) => state.copy( state = ReservationConfirmationReceived )
+      case ( _: P.PaymentCompleted, state ) => state.copy( state = PaymentConfirmationReceived )
+      case ( _: O.OrderConfirmed, state ) => state.copy( state = FullyConfirmed )
     }
 
     def order( id: Option[OrderModule.TID] ): ActorRef = {
@@ -138,26 +163,26 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
     override def receiveCommand: Receive = around( notStarted orElse common )
 
     val notStarted: Receive = {
-      case e @ OrderPlaced(oid, cid, seats, Some(expiration), accessCode) if expiration > joda.DateTime.now => {
+      case e @ O.OrderPlaced(oid, cid, seats, Some(expiration), accessCode) if expiration > joda.DateTime.now => {
         reserveSeats( conferenceId = cid, orderId = oid, seats = seats, expiration = Some(expiration) )
         accept( e )
         context.become( around( awaitingReservationConfirmation orElse common ) )
       }
 
-      case e @ OrderPlaced(oid, cid, seats, None, accessCode) => {
+      case e @ O.OrderPlaced(oid, cid, seats, None, accessCode) => {
         reserveSeats( conferenceId = cid, orderId = oid, seats = seats, expiration = None )
         accept( e )
         context.become( around( awaitingReservationConfirmation orElse common ) )
       }
 
-      case OrderPlaced( orderId, _, _, _, _ ) => order( Some(orderId) ) ! RejectOrder( targetId = orderId )
+      case O.OrderPlaced( orderId, _, _, _, _ ) => order( Some(orderId) ) ! O.RejectOrder( targetId = orderId )
     }
 
     val awaitingReservationConfirmation: Receive = {
-      case c: OrderUpdated => orderUpdated( c )
+      case c: O.OrderUpdated => orderUpdated( c )
 
-      case c @ SeatsReserved(id, rid, details, availableSeatsChanged) if workId == state.seatReservationWorkId => {
-        val markAsReserved = MarkSeatsAsReserved(
+      case c @ SA.SeatsReserved(id, rid, details, availableSeatsChanged) if workId == state.seatReservationWorkId => {
+        val markAsReserved = O.MarkSeatsAsReserved(
           targetId = state.orderId,
           seats = details.toSeq,
           expiration = state.reservationAutoExpiration
@@ -168,35 +193,35 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
     }
 
     val reservationConfirmationReceived: Receive = {
-      case c: OrderUpdated => orderUpdated( c )
-      case c: OrderConfirmed => orderConfirmed( c )
-      case c @ PaymentCompleted( sourceId: PaymentCompleted#TID, paymentSourceId: PaymentSourceModule.TID ) => {
-        order( Some(state.orderId) ) ! ConfirmOrder( state.orderId )
+      case c: O.OrderUpdated => orderUpdated( c )
+      case c: O.OrderConfirmed => orderConfirmed( c )
+      case c @ P.PaymentCompleted( sourceId: P.PaymentCompleted#TID, paymentSourceId: PaymentSourceModule.TID ) => {
+        order( Some(state.orderId) ) ! O.ConfirmOrder( state.orderId )
         context.become( around( paymentConfirmationReceived orElse common orElse confirmedUnhandled ) )
       }
     }
 
     val paymentConfirmationReceived: Receive = {
-      case c: OrderConfirmed => orderConfirmed( c )
+      case c: O.OrderConfirmed => orderConfirmed( c )
     }
 
     val confirmed: Receive = Actor.emptyBehavior
 
     val common: Receive = {
-      case _: ExpireRegistrationProcess if state.state != FullyConfirmed => {
+      case _: RS.ExpireRegistrationProcess if state.state != FullyConfirmed => {
         state = state.copy( state = OrderExpired )
-        order( Some(state.orderId) ) ! RejectOrder( state.orderId )
-        val cancel = CancelSeatReservation( targetId = state.conferenceId, reservationId = state.reservationId )
+        order( Some(state.orderId) ) ! O.RejectOrder( state.orderId )
+        val cancel = SA.CancelSeatReservation( targetId = state.conferenceId, reservationId = state.reservationId )
         seatsAvailability( Some(state.conferenceId) ) ! cancel
       }
 
-      case c @ SeatsReserved(id, rid, details, availableSeatsChanged) if workId != state.seatReservationWorkId => {
+      case c @ SA.SeatsReserved(id, rid, details, availableSeatsChanged) if workId != state.seatReservationWorkId => {
         log warning s"Seat reservation response for reservation id ${rid} does not match the expected work id."
       }
     }
 
     val confirmedUnhandled: Receive = {
-      case c: SeatsReserved => {
+      case c: SA.SeatsReserved => {
         log.info(
           s"Seat reservation response for request [${workId}] for reservation id [${c.reservationId}] was already handled. " + 
           "Skipping event."
@@ -212,18 +237,18 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
       seats: Seq[SeatQuantity],
       expiration: Option[joda.DateTime]
     ): Unit = {
-      val reservation = MakeSeatReservation( targetId = conferenceId, reservationId = orderId, seats = seats )
+      val reservation = SA.MakeSeatReservation( targetId = conferenceId, reservationId = orderId, seats = seats )
       expiration foreach { exp =>
         val timeout = FiniteDuration( exp.getMillis - joda.DateTime.now.getMillis, MILLISECONDS )
         expirationMessager = context.system.scheduler.scheduleOnce( timeout ) {
-          self !+ ExpireRegistrationProcess( state.id )
+          self !+ RS.ExpireRegistrationProcess( state.id )
         }
       }
       seatsAvailability( Some(conferenceId) ) ! reservation
     }
 
-    def orderUpdated( e: OrderUpdated ): Unit = {
-      val reservation = MakeSeatReservation(
+    def orderUpdated( e: O.OrderUpdated ): Unit = {
+      val reservation = SA.MakeSeatReservation(
         targetId = state.conferenceId,
         reservationId = state.orderId,
         seats = e.seats
@@ -234,8 +259,8 @@ object RegistrationSagaModule extends SagaModule[ShortUUID] { module =>
       context.become( around( awaitingReservationConfirmation orElse common ) )
     }
 
-    def orderConfirmed( e: OrderConfirmed ): Unit = {
-      val commit = CommitSeatReservation( targetId = state.conferenceId, reservationId = state.reservationId )
+    def orderConfirmed( e: O.OrderConfirmed ): Unit = {
+      val commit = SA.CommitSeatReservation( targetId = state.conferenceId, reservationId = state.reservationId )
       seatsAvailability( Some(state.conferenceId) ) ! commit
       context.become( around( confirmed orElse confirmedUnhandled ))
     }

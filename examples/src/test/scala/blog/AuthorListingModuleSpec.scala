@@ -1,22 +1,22 @@
 package sample.blog.author
 
 import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.immutable
+import scala.concurrent.duration._
+import scala.util.Success
 
 import akka.testkit.{TestActorRef, TestProbe}
 import akka.util.Timeout
 import demesne._
 import demesne.testkit._
 import org.scalatest.{Outcome, Tag}
-import peds.akka.envelope._
+import peds.akka.envelope.{ ComponentPath => EnvComponentPath, ComponentType => EnvComponentType, _ }
 import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.identifier.{ShortUUID, TaggedID}
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule.{GetPosts, Posts}
-import sample.blog.post._
+import sample.blog.post.PostPrototol.PostPublished
 
-import scala.collection.immutable
-import scala.concurrent.duration._
-import scala.util.Success
 
 
 object AuthorListingModuleSpec {
@@ -81,9 +81,9 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
   object WIP extends Tag( "wip" )
 
   val header = EnvelopeHeader(
-    fromComponentType = ComponentType( "component-type" ),
-    fromComponentPath = ComponentPath( "akka://Test/user/post" ),
-    toComponentPath =  ComponentPath( "akka://Test/user/author" ),
+    fromComponentType = EnvComponentType( "component-type" ),
+    fromComponentPath = EnvComponentPath( "akka://Test/user/post" ),
+    toComponentPath =  EnvComponentPath( "akka://Test/user/author" ),
     messageType = MessageType( "posting" ),
     workId = WorkId( ShortUUID() ),
     messageNumber = MessageNumber( 13 ),

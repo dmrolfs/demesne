@@ -1,6 +1,5 @@
 package demesne
 
-import scala.reflect._
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
 import peds.commons.TryV
@@ -16,10 +15,8 @@ with LazyLogging { module =>
   def trace: Trace[_]
 
   type ID
-//  implicit val evID: ClassTag[ID]
 
   type TID = TaggedID[ID]
-//  implicit lazy val evTID: ClassTag[TID] = classTag[TID]
   def nextId: TryV[TID]
 
   def aggregateIdTag: Symbol = _aggregateIdTag

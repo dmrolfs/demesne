@@ -1,35 +1,23 @@
 package contoso.conference.registration
 
+import scala.annotation.tailrec
+import scala.reflect._
 import akka.actor.Props
 import akka.event.LoggingReceive
+
+import scalaz.Scalaz._
 import contoso.conference.SeatType
 import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
-import demesne.register.RegisterBus
 import peds.akka.publish.EventPublisher
-import peds.commons.identifier.ShortUUID
+import peds.archetype.domain.model.core.Identifying
+import peds.commons.TryV
+import peds.commons.identifier.{ShortUUID, TaggedID}
 import peds.commons.log.Trace
 
-import scala.annotation.tailrec
 
-
-object SeatAssignmentsModule extends AggregateRootModule[ShortUUID] { module =>
-  import com.wix.accord._
-
-  val trace = Trace[SeatAssignmentsModule.type]
-
-  // override val aggregateIdTag: Symbol = 'seatsAssignment
-
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatAssignments.props( model, this )
-      // override val toString: String = shardName + "AggregateRootType"
-    }
-  }
-
-
-  case class SeatAssignmentRef( id: module.TID, position: Int )
+object SeatAssignmentsProtocol extends AggregateProtocol[ShortUUID] {
+  case class SeatAssignmentRef( id: SeatAssignmentsModule.TID, position: Int )
   case class SeatAssignment(
     seatTypeId: SeatType.TID,
     reference: Option[SeatAssignmentRef] = None,
@@ -41,7 +29,7 @@ object SeatAssignmentsModule extends AggregateRootModule[ShortUUID] { module =>
     override val targetId: CreateSeatsAssignment#TID,
     orderId: OrderModule.TID,
     seats: Set[SeatQuantity]
-  ) extends Command
+  ) extends CommandMessage
 
   // Conference/Registration/Commands/AssignSeat.cs
   case class AssignSeat(
@@ -49,14 +37,14 @@ object SeatAssignmentsModule extends AggregateRootModule[ShortUUID] { module =>
     seatTypeId: SeatType.TID,
     position: Int,
     attendee: PersonalInfo
-  ) extends Command
+  ) extends CommandMessage
 
   // Conference/Registration/Commands/UnassignSeat.cs
   case class UnassignSeat(
     override val targetId: UnassignSeat#TID,
     seatTypeId: SeatType.TID,
     position: Int
-  ) extends Command
+  ) extends CommandMessage
 
 
   // Registration.Contracts/Events/SeatAssigned.cs
@@ -65,24 +53,42 @@ object SeatAssignmentsModule extends AggregateRootModule[ShortUUID] { module =>
     position: Int,
     seatTypeId: SeatType.TID,
     attendee: PersonalInfo
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/SeatAssignmentsCreated.cs
   case class SeatAssignmentsCreated(
     override val sourceId: SeatAssigned#TID,
     orderId: OrderModule.TID,
     seats: Seq[SeatAssignment]
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/SeatAssignmentsUpdated.cs
   case class SeatAssignmentsUpdated(
     override val sourceId: SeatAssignmentsUpdated#TID,
     position: Int,
     attendee: PersonalInfo
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/SeatUnassigned.cs
-  case class SeatUnassigned( override val sourceId: SeatUnassigned#TID, position: Int ) extends Event
+  case class SeatUnassigned( override val sourceId: SeatUnassigned#TID, position: Int ) extends EventMessage
+}
+
+object SeatAssignmentsModule extends AggregateRootModule { module =>
+  import SeatAssignmentsProtocol._
+  import com.wix.accord._
+
+  val trace = Trace[SeatAssignmentsModule.type]
+
+  override type ID = ShortUUID
+  override def nextId: TryV[TID] = implicitly[Identifying[SeatAssignmentsState]].nextIdAs[TID]
+
+
+  override val rootType: AggregateRootType = {
+    new AggregateRootType {
+      override val name: String = module.shardName
+      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatAssignments.props( model, this )
+    }
+  }
 
 
   case class SeatAssignmentsState( id: TID, orderId: OrderModule.TID, seats: Seq[SeatAssignment] )
@@ -111,6 +117,15 @@ object SeatAssignmentsModule extends AggregateRootModule[ShortUUID] { module =>
     }
   }
 
+  implicit val seatsAssignmentsIdentifying: Identifying[SeatAssignmentsState] = new Identifying[SeatAssignmentsState] {
+    override def nextId: TryV[TID] = tag( ShortUUID() ).right
+    override def idOf( o: SeatAssignmentsState ): TID = o.id
+    override def fromString( idstr: String ): ID = ShortUUID( idstr )
+    override type ID = ShortUUID
+    override val evID: ClassTag[ID] = classTag[ShortUUID]
+    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+  }
+
 
   object SeatAssignments {
     def props( model: DomainModel, rootType: AggregateRootType ): Props = {
@@ -121,8 +136,21 @@ object SeatAssignmentsModule extends AggregateRootModule[ShortUUID] { module =>
   class SeatAssignments(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SeatAssignmentsState] {  outer: EventPublisher =>
+  ) extends AggregateRoot[SeatAssignmentsState, ShortUUID] {  outer: EventPublisher =>
+    import SeatsAvailabilityProtocol._
+
     override val trace = Trace( "SeatsAssignment", log )
+
+    override def parseId( idstr: String ): ID = {
+      val identifying = implicitly[Identifying[SeatAssignmentsState]]
+      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
+        case scalaz.\/-( id ) => id
+        case scalaz.-\/( ex ) => {
+          log.error( ex, "failed to parse id string:[{}]", idstr )
+          throw ex
+        }
+      }
+    }
 
     override var state: SeatAssignmentsState = _
 

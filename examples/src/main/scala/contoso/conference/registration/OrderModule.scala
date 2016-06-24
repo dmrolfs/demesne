@@ -1,62 +1,35 @@
 package contoso.conference.registration
 
+import scala.reflect._
 import scala.util.Random
 import akka.actor._
 import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
+
+import scalaz.Scalaz._
 import com.github.nscala_time.time.Imports._
 import com.github.nscala_time.time.{Imports => joda}
 import com.typesafe.config.ConfigFactory
 import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
-import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
-import peds.commons.identifier.ShortUUID
+import peds.archetype.domain.model.core.Identifying
+import peds.commons.TryV
+import peds.commons.identifier.{ShortUUID, TaggedID}
 import squants._
 
 
-object OrderModule extends AggregateRootModule[ShortUUID] { module =>
-  import com.wix.accord._
+
+object OrderProtocol extends AggregateProtocol[ShortUUID] {
   import com.wix.accord.dsl._
-  import peds.commons.log.Trace
-
-  val fallback = "reservation-auto-expiration = 15 minutes"
-  val config = ConfigFactory.load
-    .getConfig( "contoso.conference.registration" )
-    .withFallback( ConfigFactory.parseString( fallback ) )
-
-  import java.util.concurrent.{TimeUnit => TU}
-  val reservationAutoExpiration: joda.Period = joda.Period.millis(
-    config.getDuration( "reservation-auto-expiration", TU.MILLISECONDS ).toInt
-  )
-
-  override val trace = Trace[OrderModule.type]
-
-  // override val aggregateIdTag: Symbol = 'order
-
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = {
-        Order.props(
-          model,
-          this,
-          ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
-        )
-      }
-
-      // override val toString: String = name + "AggregateRootType"
-    }
-  }
-
 
   // Conference/Registration/Commands/RegsiterToConference.cs
   case class RegisterToConference(
     override val targetId: RegisterToConference#TID,
     conferenceId: ConferenceModule.TID,
     seats: Seq[SeatQuantity]
-  ) extends Command
+  ) extends CommandMessage
 
   object RegisterToConference {
     implicit val SeatQuantityValidator = validator[SeatQuantity] { sq =>
@@ -79,10 +52,10 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
     override val targetId: MarkSeatsAsReserved#TID,
     seats: Seq[SeatQuantity],
     expiration: Option[joda.DateTime]
-  ) extends Command
+  ) extends CommandMessage
 
   // Conference/Registration/Commands/RejectOrder.cs
-  case class RejectOrder( override val targetId: RejectOrder#TID ) extends Command
+  case class RejectOrder( override val targetId: RejectOrder#TID ) extends CommandMessage
 
   // Conference/Registration/Commands/AssignRegistrantDetails.cs
   case class AssignRegistrantDetails(
@@ -90,7 +63,7 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
     firstName: String,    //DMR: better to model as PersonName archetype
     lastName: String,
     email: String
-  ) extends Command
+  ) extends CommandMessage
 
   object AssignRegistrantDetails {
     implicit val assignRegistrantDetailsValidator = validator[AssignRegistrantDetails] { ard =>
@@ -102,7 +75,7 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
   }
 
   // Conference/Registration/Commands/ConfirmOrder.cs
-  case class ConfirmOrder( override val targetId: ConfirmOrder#TID ) extends Command
+  case class ConfirmOrder( override val targetId: ConfirmOrder#TID ) extends CommandMessage
 
 
   // Registration.Contracts/Events/OrderPlaced.cs
@@ -112,13 +85,13 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
     seats: Seq[SeatQuantity],
     reservationAutoExpiration: Option[joda.DateTime],
     accessCode: String
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/OrderUpdated.cs
   case class OrderUpdated(
     override val sourceId: OrderUpdated#TID,
     seats: Seq[SeatQuantity]
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/OrderTotalsCalculated.cs
   case class OrderTotalsCalculated(
@@ -126,24 +99,24 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
     total: Money,  //DMR: Money?
     lines: Seq[OrderLine],
     isFreeOfCharge: Boolean
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/OrderPartiallyReserved.cs
   case class OrderPartiallyReserved(
     override val sourceId: OrderPartiallyReserved#TID,
     reservationExpiration: Option[joda.DateTime],
     seats: Seq[SeatQuantity]
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/OrderReservationCompleted.cs
   case class OrderReservationCompleted(
     override val sourceId: OrderReservationCompleted#TID,
     reservationExpiration: Option[joda.DateTime],
     seats: Seq[SeatQuantity]
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/OrderExpired.cs
-  case class OrderExpired( override val sourceId: OrderExpired#TID ) extends Event
+  case class OrderExpired( override val sourceId: OrderExpired#TID ) extends EventMessage
 
   // Registration.Contracts/Events/OrderRegistrantAssigned.cs
   case class OrderRegistrantAssigned(
@@ -151,17 +124,53 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
     firstName: String,    //DMR: better to model as PersonName archetype
     lastName: String,
     email: String
-  ) extends Event
+  ) extends EventMessage
 
   // Registration.Contracts/Events/OrderConfirmed.cs
-  case class OrderConfirmed( override val sourceId: OrderConfirmed#TID ) extends Event
+  case class OrderConfirmed( override val sourceId: OrderConfirmed#TID ) extends EventMessage
 
   //DMR: Need to determine how to handle migrate of deprecated events into new; e.g., Mapper / Migrations
-  case class OrderPaymentConfirmed( override val sourceId: OrderPaymentConfirmed#TID ) extends Event
+  case class OrderPaymentConfirmed( override val sourceId: OrderPaymentConfirmed#TID ) extends EventMessage
 
   object OrderPaymentConfirmed {
     implicit def migrate( e: OrderPaymentConfirmed ): OrderConfirmed = OrderConfirmed( e.sourceId )
   }
+}
+
+
+object OrderModule extends AggregateRootModule { module =>
+  import peds.commons.log.Trace
+
+  val fallback = "reservation-auto-expiration = 15 minutes"
+  val config = ConfigFactory.load
+    .getConfig( "contoso.conference.registration" )
+    .withFallback( ConfigFactory.parseString( fallback ) )
+
+  import java.util.concurrent.{TimeUnit => TU}
+  val reservationAutoExpiration: joda.Period = joda.Period.millis(
+    config.getDuration( "reservation-auto-expiration", TU.MILLISECONDS ).toInt
+  )
+
+  override val trace = Trace[OrderModule.type]
+
+
+  override type ID = ShortUUID
+  override def nextId: TryV[TID] = implicitly[Identifying[OrderState]].nextIdAs[TID]
+
+  override val rootType: AggregateRootType = {
+    new AggregateRootType {
+      override val name: String = module.shardName
+      override def aggregateRootProps( implicit model: DomainModel ): Props = {
+        Order.props(
+          model,
+          this,
+          ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
+        )
+      }
+    }
+  }
+
+
 
 
   // Conference/Registration/Order.cs
@@ -179,6 +188,15 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
     }
   }
 
+  implicit val orderIdentifying: Identifying[OrderState] = new Identifying[OrderState] {
+    override def nextId: TryV[TID] = tag( ShortUUID() ).right
+    override def idOf( o: OrderState ): TID = o.id
+    override def fromString( idstr: String ): ID = ShortUUID( idstr )
+    override type ID = ShortUUID
+    override val evID: ClassTag[ID] = classTag[ShortUUID]
+    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+
+  }
 
   object Order {
     def props( model: DomainModel, rt: AggregateRootType, pricingRetriever: ActorRef ): Props = {
@@ -190,8 +208,21 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
     override val model: DomainModel,
     override val rootType: AggregateRootType,
     pricingRetriever: ActorRef
-  ) extends AggregateRoot[OrderState] { outer: EventPublisher =>
+  ) extends AggregateRoot[OrderState, ShortUUID] { outer: EventPublisher =>
+    import OrderProtocol._
+
     override val trace = Trace( "Order", log )
+
+    override def parseId( idstr: String ): ID = {
+      val identifying = implicitly[Identifying[OrderState]]
+      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
+        case scalaz.\/-( id ) => id
+        case scalaz.-\/( ex ) => {
+          log.error( ex, "failed to parse id string:[{}]", idstr )
+          throw ex
+        }
+      }
+    }
 
     override var state: OrderState = _
     var expirationMessager: Cancellable = _
@@ -207,9 +238,11 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
 
     override def receiveCommand: Receive = around( quiescent )
 
+    import com.wix.accord
+
     val quiescent: Receive = common orElse LoggingReceive {
       // Conference/Registration/Order.cs[88 - 102]
-      case c @ RegisterToConference( orderId, conferenceId, seats ) if validate( c ) == Success => {
+      case c @ RegisterToConference( orderId, conferenceId, seats ) if accord.validate( c ) == accord.Success => {
         val expiration = reservationAutoExpiration.later
         persist( OrderPlaced( orderId, conferenceId, seats, Some(expiration), generateHandle ) ) { event =>
           accept( event )
@@ -224,7 +257,7 @@ object OrderModule extends AggregateRootModule[ShortUUID] { module =>
       // Conference/Registration/Handlers/OrderCommandHandler.cs[39]
       // Conference/Registration/Order.cs[115-122]
       // no need to convertItems
-      case c @ RegisterToConference( orderId, conferenceId, seats ) if validate( c ) == Success => {
+      case c @ RegisterToConference( orderId, conferenceId, seats ) if accord.validate( c ) == accord.Success => {
         persist( OrderUpdated( orderId, seats ) ) { event =>
           accept( event )
           pricingRetriever ! PricingRetriever.CalculateTotal( conferenceId, seats )

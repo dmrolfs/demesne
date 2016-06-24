@@ -52,17 +52,17 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
 
   def receive = create
 
-  import sample.blog.post.PostModule._
+  import sample.blog.post.{ PostPrototol => P }
 
   val create: Receive = LoggingReceive {
     case Tick => {
       val addPost = for {
-        postId <- implicitly[Identifying[PostModule.ID]].nextId
+        postId <- PostModule.PostActor.postIdentifying.nextIdAs[PostModule.TID]
       } yield {
         n += 1
         log.info( s"bot CREATING post $n" )
         val title = s"Post $n from $from"
-        postRegion( postId ) ! AddPost( postId, PostContent( currentAuthor, title, "..." ) )
+        postRegion( postId ) ! P.AddPost( postId, PostContent( currentAuthor, title, "..." ) )
         context become edit( postId )
       }
 
@@ -73,18 +73,18 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
     }
   }
 
-  def edit( postId: PostModule.ID ): Receive = LoggingReceive {
+  def edit( postId: PostModule.TID ): Receive = LoggingReceive {
     case Tick => {
       log.info( s"bot EDITING post $postId" )
-      postRegion( postId ) ! ChangeBody( postId, "Something very interesting ..." )
+      postRegion( postId ) ! P.ChangeBody( postId, "Something very interesting ..." )
       context become publish( postId )
     }
   }
 
-  def publish( postId: PostModule.ID ): Receive = LoggingReceive {
+  def publish( postId: PostModule.TID ): Receive = LoggingReceive {
     case Tick => {
       log.info( s"bot PUBLISHING post $postId" )
-      postRegion( postId ) ! Publish( postId )
+      postRegion( postId ) ! P.Publish( postId )
       context become list
     }
   }

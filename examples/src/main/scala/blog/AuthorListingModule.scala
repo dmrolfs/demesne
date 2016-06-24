@@ -11,7 +11,7 @@ import com.typesafe.scalalogging.LazyLogging
 import peds.akka.envelope.EnvelopingActor
 import peds.akka.publish.ReliableReceiver
 import peds.commons.log.Trace
-import sample.blog.post.PostPublished
+import sample.blog.post.PostPrototol.PostPublished
 import demesne.InitializeAggregateActorType
 import scala.collection.immutable
 import scala.concurrent.duration._

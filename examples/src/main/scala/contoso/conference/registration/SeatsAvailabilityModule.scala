@@ -1,16 +1,86 @@
 package contoso.conference.registration
 
+import scala.reflect._
 import akka.actor.Props
 import akka.event.LoggingReceive
+
+import scalaz._
+import Scalaz._
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
-import peds.commons.identifier.ShortUUID
-//import demesne.register.RegisterBus
+import peds.commons.TryV
+import peds.commons.identifier.{ShortUUID, TaggedID}
 import peds.akka.publish.EventPublisher
+import peds.archetype.domain.model.core.Identifying
 import peds.commons.log.Trace
 import squants.{Dimensionless, Each}
 
+
+object SeatsAvailabilityProtocol extends AggregateProtocol[ShortUUID] {
+  // targetId is conference ID
+
+  // Conference/Registration/Commands/MakeSeatReservation.cs
+  case class MakeSeatReservation(
+    override val targetId: MakeSeatReservation#TID,
+    reservationId: OrderModule.TID,
+    seats: Seq[SeatQuantity]
+  ) extends CommandMessage
+
+  // Conference/Registration/Commands/CancelSeatReservation.cs
+  case class CancelSeatReservation(
+    override val targetId: CancelSeatReservation#TID,
+    reservationId: OrderModule.TID
+  ) extends CommandMessage
+
+  // Conference/Registration/Commands/CommitSeatReservation.cs
+  case class CommitSeatReservation(
+    override val targetId: CommitSeatReservation#TID,
+    reservationId: OrderModule.TID
+  ) extends CommandMessage
+
+  // Conference/Registration/Commands/AddSeats.cs
+  case class AddSeats(
+    override val targetId: AddSeats#TID,
+    seatTypeId: SeatType.TID,
+    quantity: Dimensionless
+  ) extends CommandMessage
+
+  // Conference/Registration/Commands/RemoveSeats.cs
+  case class RemoveSeats(
+    override val targetId: RemoveSeats#TID,
+    seatTypeId: SeatType.TID,
+    quantity: Dimensionless
+  ) extends CommandMessage
+
+
+  // Conference/Registration/Events/AvailableSeatsChanged.cs
+  case class AvailableSeatsChanged(
+    override val sourceId: AvailableSeatsChanged#TID,
+    seats: Set[SeatQuantity] // DMR: orig is Enumerable / Iterable; Set okay or keep Seq?
+  ) extends EventMessage
+
+  // Conference/Registration/Events/SeatsReservationCancelled.cs
+  case class SeatsReservationCancelled(
+    override val sourceId: SeatsReservationCancelled#TID,
+    reservationId: OrderModule.TID,
+    availableSeatsChanged: Set[SeatQuantity]
+  ) extends EventMessage
+
+  // Conference/Registration/Events/SeatsReservationCommitted.cs
+  case class SeatsReservationCommitted(
+    override val sourceId: SeatsReservationCommitted#TID,
+    reservationId: OrderModule.TID
+  ) extends EventMessage
+
+  // Conference/Registration/Events/SeatsReserved.cs
+  case class SeatsReserved(
+    override val sourceId: SeatsReserved#TID,
+    reservationId: OrderModule.TID,
+    reservationDetails: Set[SeatQuantity],
+    availableSeatsChanged: Set[SeatQuantity]
+  ) extends EventMessage
+}
 
 /**
  * Manages the availability of conference seats. Currently there is one SeatsAvailability instance per conference.
@@ -18,10 +88,13 @@ import squants.{Dimensionless, Each}
  * Some of the instances of SeatsAvailability are highly contentious, as there could be several users trying to register
  * for the same conference at the same time.
  */
-object SeatsAvailabilityModule extends AggregateRootModule[ShortUUID] { module =>
+object SeatsAvailabilityModule extends AggregateRootModule { module =>
   val trace = Trace[SeatsAvailabilityModule.type]
 
   override type ID = ConferenceModule.ID // SeatsAvailability supports corresponding Conference
+  override def nextId: TryV[TID] = {
+    new IllegalStateException( "SeatsAvailability supports corresponding Conference so does not have independent ID" ).left
+  }
 
   override val rootType: AggregateRootType = {
     new AggregateRootType {// def actorFactory: ActorFactory
@@ -30,69 +103,14 @@ object SeatsAvailabilityModule extends AggregateRootModule[ShortUUID] { module =
     }
   }
 
-
-  // targetId is conference ID
-
-  // Conference/Registration/Commands/MakeSeatReservation.cs
-  case class MakeSeatReservation(
-    override val targetId: MakeSeatReservation#TID,
-    reservationId: OrderModule.TID,
-    seats: Seq[SeatQuantity]
-  ) extends Command
-
-  // Conference/Registration/Commands/CancelSeatReservation.cs
-  case class CancelSeatReservation(
-    override val targetId: CancelSeatReservation#TID,
-    reservationId: OrderModule.TID
-  ) extends Command
-
-  // Conference/Registration/Commands/CommitSeatReservation.cs
-  case class CommitSeatReservation(
-    override val targetId: CommitSeatReservation#TID,
-    reservationId: OrderModule.TID
-  ) extends Command
-
-  // Conference/Registration/Commands/AddSeats.cs
-  case class AddSeats(
-    override val targetId: AddSeats#TID,
-    seatTypeId: SeatType.TID,
-    quantity: Dimensionless
-  ) extends Command
-
-  // Conference/Registration/Commands/RemoveSeats.cs
-  case class RemoveSeats(
-    override val targetId: RemoveSeats#TID,
-    seatTypeId: SeatType.TID,
-    quantity: Dimensionless
-  ) extends Command
-
-
-  // Conference/Registration/Events/AvailableSeatsChanged.cs
-  case class AvailableSeatsChanged(
-    override val sourceId: AvailableSeatsChanged#TID,
-    seats: Set[SeatQuantity] // DMR: orig is Enumerable / Iterable; Set okay or keep Seq?
-  ) extends Event
-
-  // Conference/Registration/Events/SeatsReservationCancelled.cs
-  case class SeatsReservationCancelled(
-    override val sourceId: SeatsReservationCancelled#TID,
-    reservationId: OrderModule.TID,
-    availableSeatsChanged: Set[SeatQuantity]
-  ) extends Event
-
-  // Conference/Registration/Events/SeatsReservationCommitted.cs
-  case class SeatsReservationCommitted(
-    override val sourceId: SeatsReservationCommitted#TID,
-    reservationId: OrderModule.TID
-  ) extends Event
-
-  // Conference/Registration/Events/SeatsReserved.cs
-  case class SeatsReserved(
-    override val sourceId: SeatsReserved#TID,
-    reservationId: OrderModule.TID,
-    reservationDetails: Set[SeatQuantity],
-    availableSeatsChanged: Set[SeatQuantity]
-  ) extends Event
+  implicit val seatsAvailabilityIdentifying: Identifying[SeatsAvailabilityState] = new Identifying[SeatsAvailabilityState] {
+    override def nextId: TryV[TID] = tag( ShortUUID() ).right
+    override def idOf( o: SeatsAvailabilityState ): TID = o.id
+    override def fromString( idstr: String ): ID = ShortUUID( idstr )
+    override type ID = ShortUUID
+    override val evID: ClassTag[ID] = classTag[ShortUUID]
+    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+  }
 
 
   // Conference/Registration/SeatsAvailability.cs
@@ -129,10 +147,24 @@ object SeatsAvailabilityModule extends AggregateRootModule[ShortUUID] { module =
   class SeatsAvailability(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SeatsAvailabilityState] { outer: EventPublisher =>
+  ) extends AggregateRoot[SeatsAvailabilityState, ShortUUID] { outer: EventPublisher =>
+
+    import SeatsAvailabilityProtocol._
+
     override val trace = Trace( "SeatsAvailability", log )
 
     // override val registerBus: RegisterBus = model.registerBus
+
+    override def parseId( idstr: String ): ID = {
+      val identifying = implicitly[Identifying[SeatsAvailabilityState]]
+      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
+        case scalaz.\/-( id ) => id
+        case scalaz.-\/( ex ) => {
+          log.error( ex, "failed to parse id string:[{}]", idstr )
+          throw ex
+        }
+      }
+    }
 
     override var state: SeatsAvailabilityState = _
 
