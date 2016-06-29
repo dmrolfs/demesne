@@ -1,21 +1,41 @@
 package demesne.module.entity.messages
 
-import demesne.AggregateRootModule
+import demesne.{AggregateProtocol, AggregateRootModule}
+import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
+import peds.commons.identifier.Identifying
 
 
 sealed trait EntityMessage
 abstract class EntityCommand extends AggregateRootModule.Command[Any] with EntityMessage
 abstract class EntityEvent extends AggregateRootModule.Event[Any] with EntityMessage
 
+abstract class EntityProtocol[E <: Entity : Identifying] extends AggregateProtocol[E#ID] {
+  type EntityMessage = demesne.module.entity.messages.EntityMessage
 
-case class Add( override val targetId: Add#TID, info: Any ) extends EntityCommand
+  object EntityMessage {
+    type Add = demesne.module.entity.messages.Add
+    type Rename = demesne.module.entity.messages.Rename
+    type Reslug = demesne.module.entity.messages.Reslug
+    type Disable = demesne.module.entity.messages.Disable
+    type Enable = demesne.module.entity.messages.Enable
+
+    type Added = demesne.module.entity.messages.Added
+    type Renamed = demesne.module.entity.messages.Renamed
+    type Reslugged = demesne.module.entity.messages.Reslugged
+    type Disabled = demesne.module.entity.messages.Disabled
+    type Enabled = demesne.module.entity.messages.Enabled
+  }
+}
+
+
+case class Add( override val targetId: Add#TID, info: Option[Any] = None ) extends EntityCommand
 case class Rename( override val targetId: Rename#TID, name: String ) extends EntityCommand
 case class Reslug( override val targetId: Reslug#TID, slug: String ) extends EntityCommand
 case class Disable( override val targetId: Disable#TID ) extends EntityCommand
 case class Enable( override val targetId: Enable#TID ) extends EntityCommand
 
 
-case class Added( override val sourceId: Added#TID, info: Any ) extends EntityEvent
+case class Added( override val sourceId: Added#TID, info: Option[Any] = None ) extends EntityEvent
 case class Renamed( override val sourceId: Renamed#TID, oldName: String, newName: String ) extends EntityEvent
 case class Reslugged( override val sourceId: Reslugged#TID, oldSlug: String, newSlug: String ) extends EntityEvent
 case class Disabled( override val sourceId: Disabled#TID, slug: String ) extends EntityEvent

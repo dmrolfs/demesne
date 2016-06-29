@@ -14,9 +14,8 @@ import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
 import peds.akka.publish.EventPublisher
-import peds.archetype.domain.model.core.Identifying
 import peds.commons.TryV
-import peds.commons.identifier.{ShortUUID, TaggedID}
+import peds.commons.identifier._
 import squants._
 
 
@@ -188,15 +187,12 @@ object OrderModule extends AggregateRootModule { module =>
     }
   }
 
-  implicit val orderIdentifying: Identifying[OrderState] = new Identifying[OrderState] {
-    override def nextId: TryV[TID] = tag( ShortUUID() ).right
-    override def idOf( o: OrderState ): TID = o.id
-    override def fromString( idstr: String ): ID = ShortUUID( idstr )
-    override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
-
+  implicit val orderIdentifying: Identifying[OrderState] = {
+    new Identifying[OrderState] with ShortUUID.ShortUuidIdentifying[OrderState] {
+      override def idOf( o: OrderState ): TID = o.id
+    }
   }
+
 
   object Order {
     def props( model: DomainModel, rt: AggregateRootType, pricingRetriever: ActorRef ): Props = {

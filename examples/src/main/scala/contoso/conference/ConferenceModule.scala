@@ -15,10 +15,9 @@ import com.github.nscala_time.time.{Imports => joda}
 import peds.commons.{TryV, Valid}
 import peds.akka.AskRetry._
 import peds.akka.publish._
-import peds.commons.identifier.{ShortUUID, TaggedID}
+import peds.commons.identifier._
 import peds.commons.log.Trace
 import demesne._
-import peds.archetype.domain.model.core.Identifying
 
 
 object ConferenceProtocol extends AggregateProtocol[ShortUUID] {
@@ -147,13 +146,10 @@ object ConferenceModule extends AggregateRootModule { module =>
     val seatsLens = lens[ConferenceState] >> 'seats
   }
 
-  implicit val conferenceIdentifying: Identifying[ConferenceState] = new Identifying[ConferenceState] {
-    override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override def idOf( o: ConferenceState ): TID = o.id
-    override def fromString( idstr: String ): ID = ShortUUID( idstr )
-    override def nextId: TryV[TID] = tag( ShortUUID() ).right
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+  implicit val conferenceIdentifying: Identifying[ConferenceState] = {
+    new Identifying[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
+      override def idOf( o: ConferenceState ): TID = o.id
+    }
   }
 
   object Conference {

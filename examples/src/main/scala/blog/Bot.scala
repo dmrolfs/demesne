@@ -5,14 +5,12 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
 import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
+import scalaz.{-\/, \/-}
 import demesne.DomainModel
-import peds.archetype.domain.model.core.Identifying
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule
 import sample.blog.post._
-
-import scalaz.{-\/, \/-}
 
 
 object Bot {

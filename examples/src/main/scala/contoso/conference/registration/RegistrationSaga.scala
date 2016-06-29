@@ -13,9 +13,8 @@ import contoso.registration.SeatQuantity
 import demesne._
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
-import peds.archetype.domain.model.core.Identifying
 import peds.commons.TryV
-import peds.commons.identifier.{ShortUUID, TaggedID}
+import peds.commons.identifier._
 import peds.commons.log.Trace
 
 
@@ -78,14 +77,13 @@ object RegistrationSagaModule extends SagaModule { module =>
     def isCompleted: Boolean = state == FullyConfirmed || state == OrderExpired
   }
 
-  implicit val registrationSagaIdentifying: Identifying[RegistrationSagaState] = new Identifying[RegistrationSagaState] {
-    override def nextId: TryV[TID] = tag( ShortUUID() ).right
-    override def idOf( o: RegistrationSagaState ): TID = o.id
-    override def fromString( idstr: String ): ID = ShortUUID( idstr )
-    override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+
+  implicit val registrationSagaIdentifying: Identifying[RegistrationSagaState] = {
+    new Identifying[RegistrationSagaState] with ShortUUID.ShortUuidIdentifying[RegistrationSagaState] {
+      override def idOf( o: RegistrationSagaState ): TID = o.id
+    }
   }
+
 
   object RegistrationSaga {
     def props(

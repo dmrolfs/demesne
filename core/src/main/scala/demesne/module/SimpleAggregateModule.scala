@@ -1,12 +1,12 @@
 package demesne.module
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.reflect.ClassTag
+import scala.reflect._
 import akka.actor.Props
 import scalaz._
 import Scalaz._
 import shapeless._
-import peds.archetype.domain.model.core.Identifying
+import peds.commons.identifier.Identifying
 import peds.commons.builder._
 import peds.commons.util._
 import peds.commons.log.Trace
@@ -19,13 +19,10 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying]
 extends AggregateRootModule
 with InitializeAggregateRootClusterSharding { module =>
 
-//  val identifying: Identifying[S] = implicitly[Identifying[S]]
-//  override type ID = identifying.ID
-
   override def nextId: TryV[TID] = {
     import scala.reflect._
     val tidTag = classTag[TID]
-    implicitly[Identifying[S]].nextId flatMap { nid =>
+    identifying.nextId flatMap { nid =>
       nid match {
         case tidTag( t ) => t.right
         case t => new ClassCastException( s"${t} id-type is not of type ${nid.id.getClass.getCanonicalName}" ).left
@@ -38,9 +35,10 @@ with InitializeAggregateRootClusterSharding { module =>
   def aggregateRootPropsOp: AggregateRootProps
   def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
 
-//  def stateClass: Class[_] = implicitly[ClassTag[S]].runtimeClass
-  implicit def evState: ClassTag[S]
-  
+  val evState: ClassTag[S] = implicitly[ClassTag[S]]
+  val identifying: Identifying[S] = implicitly[Identifying[S]]
+
+
   trait SimpleAggregateRootType extends AggregateRootType {
     override def toString: String = name + "SimpleAggregateRootType"
   }
@@ -86,13 +84,9 @@ object SimpleAggregateModule {
     override val indexes: Seq[AggregateIndexSpec[_,_]]
   ) extends SimpleAggregateModule[S] with Equals {
     override val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
-    override lazy val evState: ClassTag[S] = implicitly[ClassTag[S]]
 
-
-    val identifying: Identifying[S] = implicitly[Identifying[S]]
     def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {
       val lhs = implicitly[ClassTag[I]]
-      val identifying = implicitly[Identifying[S]]
       val rhs = identifying.evID
       if ( lhs == rhs ) lhs
       else throw new ClassCastException(
@@ -101,8 +95,6 @@ object SimpleAggregateModule {
     }
 
     override type ID = identifying.ID
-//    override lazy val evID: ClassTag[ID] = identifying.evID
-
     override def nextId: TryV[TID] = identifying.nextId
 
     var _props: Map[Symbol, Any] = Map()

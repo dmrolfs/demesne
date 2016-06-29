@@ -5,7 +5,7 @@ import akka.actor.Props
 import demesne._
 import demesne.register.{AggregateIndexSpec, StackableRegisterBusPublisher}
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
-import peds.archetype.domain.model.core.Identifying
+import peds.commons.identifier.Identifying
 import peds.commons.log.Trace
 
 

@@ -94,30 +94,32 @@ object EntityAggregateModule {
 }
 
 abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying] extends SimpleAggregateModule[E] { module =>
+  override val identifying: EntityIdentifying[E] = implicitly[EntityIdentifying[E]]
 
   override type ID = E#ID
-  override def nextId: TryV[TID] = implicitly[EntityIdentifying[E]].nextId
+  override def nextId: TryV[TID] = identifying.nextId
 
   def idLens: Lens[E, E#TID]
   def nameLens: Lens[E, String]
   def slugLens: Option[Lens[E, String]] = None
   def isActiveLens: Option[Lens[E, Boolean]] = None
 
-  def getEntityKey( e: E ): String = slugLens map { _.get(e) } getOrElse { idLens.get(e).get.toString }
+  def entityLabel( e: E ): String = slugLens map { _.get( e ) } getOrElse { idLens.get( e ).get.toString }
 
-  type Info = E
-
-  def toEntity: PartialFunction[Any, E] = {
-    case module.evState(s) => s
+  def toEntity: PartialFunction[Any, Option[E]] = {
+    case None => None
+    case Some( s ) if toEntity.isDefinedAt( s ) => toEntity( s )
+    case Some( s ) => None
+    case module.evState(s) => Option( s )
   }
 
-  final def certainInfoToEntity( from: Any ): E = {
+  final def triedToEntity( from: Any ): Option[E] = {
     \/ fromTryCatchNonFatal { toEntity( from ) } match {
       case \/-(to) => to
       case -\/(ex) => {
         logger.error(
           s"failed to convert Added.info type[${from.getClass.getCanonicalName}] " +
-            s"to entity type[${evState.runtimeClass.getCanonicalName}]",
+            s"to entity type[${module.evState.runtimeClass.getCanonicalName}]",
           ex
         )
 
@@ -129,10 +131,8 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
   trait EntityAggregateRootType extends SimpleAggregateRootType {
     override def toString: String = name + "EntityAggregateRootType"
   }
-  
-  override def rootType: AggregateRootType = {
-    val identifying = implicitly[EntityIdentifying[E]]
 
+  override def rootType: AggregateRootType = {
     new EntityAggregateRootType {
       override def name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
@@ -140,9 +140,10 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
 
       def makeSlugSpec: AggregateIndexSpec[_,_] = {
         RegisterLocalAgent.spec[String, module.ID]( 'slug ) { // or 'activeSlug
-          case Added( _, info ) => {
-            val e = module.certainInfoToEntity( info )
-            Directive.Record( module.getEntityKey(e), module.idLens.get(e).id )
+          case Added( id, info ) => {
+            module.triedToEntity( info )
+            .map { e => Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id ) }
+            .getOrElse { Directive.Record( id, id ) }
           }
 
           case Reslugged( _, oldSlug, newSlug ) => Directive.Revise( oldSlug, newSlug )
@@ -158,13 +159,14 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
 
 
   abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] { publisher: EventPublisher =>
+    override def parseId( idstr: String ): ID = identifying.safeParseId[ID]( idstr )( identifying.evID )
 
     override def acceptance: Acceptance = entityAcceptance
 
     def entityAcceptance: Acceptance = {
-      case (Added(_, info), _) => {
+      case (Added(_, info), s) => {
         context become LoggingReceive{ around( active ) }
-        module.certainInfoToEntity( info )
+        module.triedToEntity( info ) getOrElse s
       }
       case (Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
       case (Reslugged(_, _, newSlug), s ) => module.slugLens map { _.set( s )( newSlug ) } getOrElse s
@@ -192,13 +194,13 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
         persist( Reslugged(id, module.slugLens.get.get(state), slug) ) { e => acceptAndPublish( e ) }
       }
       case Disable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persist( Disabled(id, module.getEntityKey(state)) ) { e => acceptAndPublish( e ) }
+        persist( Disabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
       }
     }
 
     def disabled: Receive = LoggingReceive {
       case Enable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persist( Enabled(id, module.getEntityKey(state)) ) { e => acceptAndPublish( e ) }
+        persist( Enabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
       }
     }
   }

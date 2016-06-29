@@ -35,7 +35,7 @@ object SimpleAggregateModuleSpec {
   }
 
   object Foo extends EntityLensProvider[Foo] {
-    implicit val fooIdentifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
+    implicit val fooIdentifying: Identifying[Foo] = new EntityIdentifying[Foo] {
       override type ID = ShortUUID
       override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
       override lazy val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]

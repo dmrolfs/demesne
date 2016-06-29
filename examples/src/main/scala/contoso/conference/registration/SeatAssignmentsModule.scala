@@ -10,9 +10,8 @@ import contoso.conference.SeatType
 import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
 import peds.akka.publish.EventPublisher
-import peds.archetype.domain.model.core.Identifying
 import peds.commons.TryV
-import peds.commons.identifier.{ShortUUID, TaggedID}
+import peds.commons.identifier._
 import peds.commons.log.Trace
 
 
@@ -117,13 +116,11 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
     }
   }
 
-  implicit val seatsAssignmentsIdentifying: Identifying[SeatAssignmentsState] = new Identifying[SeatAssignmentsState] {
-    override def nextId: TryV[TID] = tag( ShortUUID() ).right
-    override def idOf( o: SeatAssignmentsState ): TID = o.id
-    override def fromString( idstr: String ): ID = ShortUUID( idstr )
-    override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
+
+  implicit val seatsAssignmentsIdentifying: Identifying[SeatAssignmentsState] = {
+    new Identifying[SeatAssignmentsState] with ShortUUID.ShortUuidIdentifying[SeatAssignmentsState] {
+      override def idOf( o: SeatAssignmentsState ): TID = o.id
+    }
   }
 
 

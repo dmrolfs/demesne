@@ -9,13 +9,13 @@ import demesne.testkit.{AggregateRootSpec, SimpleTestModule}
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import peds.akka.envelope._
-import peds.commons.identifier.{ShortUUID, TaggedID}
+import peds.commons.identifier._
 import peds.commons.log.Trace
 
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying, Identifying}
+import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
 import peds.commons.TryV
 
 

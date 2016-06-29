@@ -10,7 +10,6 @@ import Scalaz._
 import shapeless._
 import peds.akka.envelope.Envelope
 import peds.akka.publish.EventPublisher
-import peds.archetype.domain.model.core.Identifying
 import peds.commons.{TryV, Valid}
 import peds.commons.identifier._
 import peds.commons.log.Trace
