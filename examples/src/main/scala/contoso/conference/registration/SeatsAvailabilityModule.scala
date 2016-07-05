@@ -105,6 +105,7 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
 
   implicit val seatsAvailabilityIdentifying: Identifying[SeatsAvailabilityState] = {
     new Identifying[SeatsAvailabilityState] with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
+      override val idTag: Symbol = 'seatsAvailability
       override def idOf( o: SeatsAvailabilityState ): TID = o.id
     }
   }
@@ -152,15 +153,9 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
 
     // override val registerBus: RegisterBus = model.registerBus
 
-    override def parseId( idstr: String ): ID = {
+    override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[SeatsAvailabilityState]]
-      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
-        case scalaz.\/-( id ) => id
-        case scalaz.-\/( ex ) => {
-          log.error( ex, "failed to parse id string:[{}]", idstr )
-          throw ex
-        }
-      }
+      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
     }
 
     override var state: SeatsAvailabilityState = _

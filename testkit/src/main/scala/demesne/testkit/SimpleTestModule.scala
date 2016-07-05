@@ -15,7 +15,7 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
-  def parseId( idstr: String ): ID
+  def parseId( idstr: String ): TID
 
   val evID: ClassTag[ID]
 
@@ -49,7 +49,7 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
 
     override val trace = Trace( "SimpleTestActor", log )
 
-    override def parseId( idstr: String ): ID = module.parseId( idstr )
+    override def parseId( idstr: String ): TID = module.parseId( idstr )
     override var state: State = Map.empty[Symbol, Any]
     override val acceptance: Acceptance = module.acceptance
     

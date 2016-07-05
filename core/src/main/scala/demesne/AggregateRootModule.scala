@@ -34,6 +34,7 @@ with LazyLogging { module =>
 }
 
 object AggregateRootModule {
+
   trait Command[I] extends CommandLike {
     override type ID = I
   }

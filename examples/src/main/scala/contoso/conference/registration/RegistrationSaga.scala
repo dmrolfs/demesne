@@ -80,6 +80,7 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   implicit val registrationSagaIdentifying: Identifying[RegistrationSagaState] = {
     new Identifying[RegistrationSagaState] with ShortUUID.ShortUuidIdentifying[RegistrationSagaState] {
+      override val idTag: Symbol = 'registration
       override def idOf( o: RegistrationSagaState ): TID = o.id
     }
   }
@@ -112,15 +113,9 @@ object RegistrationSagaModule extends SagaModule { module =>
 
     override val trace = Trace( "RegistrationSaga", log )
 
-    override def parseId( idstr: String ): ID = {
+    override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[RegistrationSagaState]]
-      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
-        case scalaz.\/-( id ) => id
-        case scalaz.-\/( ex ) => {
-          log.error( ex, "failed to parse id string:[{}]", idstr )
-          throw ex
-        }
-      }
+      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
     }
 
     override var state: RegistrationSagaState = _

@@ -149,6 +149,7 @@ object ConferenceModule extends AggregateRootModule { module =>
   implicit val conferenceIdentifying: Identifying[ConferenceState] = {
     new Identifying[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
       override def idOf( o: ConferenceState ): TID = o.id
+      override val idTag: Symbol = ConferenceModule.aggregateIdTag
     }
   }
 
@@ -171,15 +172,9 @@ object ConferenceModule extends AggregateRootModule { module =>
 
     override val trace = Trace( "Conference", log )
 
-    override def parseId( idstr: String ): ID = {
+    override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[ConferenceState]]
-      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
-        case scalaz.\/-( id ) => id
-        case scalaz.-\/( ex ) => {
-          log.error( ex, "failed to parse id string:[{}]", idstr )
-          throw ex
-        }
-      }
+      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
     }
 
     override var state: ConferenceState = _

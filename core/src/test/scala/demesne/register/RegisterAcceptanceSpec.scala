@@ -1,26 +1,24 @@
 package demesne.register
 
+import scala.concurrent.duration._
 import scala.reflect._
 import akka.testkit._
 import scalaz._, Scalaz._
+import org.scalatest.Tag
+import org.scalatest.concurrent.ScalaFutures
+import peds.akka.envelope._
+import peds.commons.identifier._
+import peds.commons.log.Trace
+import com.typesafe.scalalogging.LazyLogging
+import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
+import peds.commons.TryV
 import demesne._
 import demesne.register.local.RegisterLocalAgent
 import demesne.testkit.{AggregateRootSpec, SimpleTestModule}
 import demesne.testkit.concurrent.CountDownFunction
-import org.scalatest.Tag
-import peds.akka.envelope._
-import peds.commons.identifier._
-import peds.commons.log.Trace
-
-import scala.concurrent.duration._
-import org.scalatest.concurrent.ScalaFutures
-import com.typesafe.scalalogging.LazyLogging
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
-import peds.commons.TryV
 
 
-
-class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] with ScalaFutures with LazyLogging {
+object RegisterAcceptanceSpec {
   case class Foo( override val id: TaggedID[ShortUUID], override val name: String, foo: String, bar: Int ) extends Entity {
     override type ID = ShortUUID
     override val evID: ClassTag[ID] = classTag[ShortUUID]
@@ -30,6 +28,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
   object Foo {
     implicit lazy val fooIdentifying: Identifying[Foo] = new Identifying[Foo] {
       override type ID = Foo#ID
+      override val idTag: Symbol = 'foo
       override def idOf( o: Foo ): TID = o.id
       override lazy val evID: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
       override lazy val evTID: ClassTag[TID] = ClassTag( classOf[TID] )
@@ -37,6 +36,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       override def fromString( idstr: String ): ID = ShortUUID( idstr )
     }
   }
+
 
   object Protocol extends AggregateProtocol[Foo#ID] {
     case class Add( override val targetId: Add#TID, foo: String, bar: Int ) extends Command
@@ -47,6 +47,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     case class BarChanged( override val sourceId: BarChanged#TID, oldBar: Int, newBar: Int ) extends Event
     case class Deleted( override val sourceId: Deleted#TID ) extends Event
   }
+
 
   object TestModule extends SimpleTestModule[Foo] { module =>
     override type ID = Foo#ID
@@ -68,15 +69,9 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     override def nextId: TryV[TID] = implicitly[Identifying[Foo]].nextIdAs[TID]
 
 
-    override def parseId( idstr: String ): ID = {
+    override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[Foo]]
-      identifying.idAs[ID]( identifying fromString idstr ) match {
-        case scalaz.\/-( id ) => id
-        case scalaz.-\/( ex ) => {
-          logger.error( s"failed to parse id from string: [${idstr}]", ex )
-          throw ex
-        }
-      }
+      identifying.safeParseId[ID]( idstr )( evID )
     }
 
     override def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any] = {
@@ -110,15 +105,33 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       case (_: Protocol.Deleted, _) => Map.empty[Symbol, Any]
     }
   }
+}
+
+class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] with ScalaFutures with LazyLogging {
+  import RegisterAcceptanceSpec._
 
   private val trace = Trace[RegisterAcceptanceSpec]
+
+  override val module: AggregateRootModule = TestModule
+  override type ID = Foo#ID
+  override type Protocol = RegisterAcceptanceSpec.Protocol.type
+  override val protocol: Protocol = RegisterAcceptanceSpec.Protocol
+
 
   override type Fixture = TestFixture
 
   class TestFixture extends AggregateFixture {
     private val trace = Trace[TestFixture]
 
-    val bus: TestProbe = TestProbe()
+    override def nextId(): TID = {
+      Foo.fooIdentifying.nextIdAs[TID] match {
+        case \/-( r ) => r
+        case -\/( ex ) => {
+          logger.error( "failed to generate nextId", ex )
+          throw ex
+        }
+      }
+    }
 
     def moduleCompanions: List[AggregateRootModule] = List( TestModule )
 
@@ -130,8 +143,6 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
   }
 
   override def createAkkaFixture(): Fixture = new TestFixture
-
-  object WIP extends Tag( "wip" )
 
   "Index Register should" should {
     // "config is okay" taggedAs(WIP) in { f: Fixture =>

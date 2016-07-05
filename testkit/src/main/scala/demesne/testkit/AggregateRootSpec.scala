@@ -2,15 +2,22 @@ package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import scalaz._, Scalaz._
-import scala.concurrent.{ Await, Future }
+import scala.concurrent.duration._
+import scala.reflect.ClassTag
+import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
-import demesne.AggregateRootModule
+import akka.actor.ActorRef
+import akka.testkit._
+
+import scalaz._
+import Scalaz._
+import com.typesafe.config.Config
+import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
+import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
-
-import scala.reflect.ClassTag
+import demesne.{AggregateProtocol, AggregateRootModule, DomainModel}
 
 
 object AggregateRootSpec {
@@ -21,20 +28,33 @@ object AggregateRootSpec {
  * Created by damonrolfs on 9/17/14.
  */
 abstract class AggregateRootSpec[A: ClassTag]
-  extends SequentialAkkaSpecWithIsolatedFixture
-  with MockitoSugar
-  with BeforeAndAfterAll {
-
+extends SequentialAkkaSpecWithIsolatedFixture
+with MockitoSugar
+with BeforeAndAfterAll
+with LazyLogging
+{
   private val trace = Trace[AggregateRootSpec[A]]
 
-  abstract class AggregateFixture( id: Int = AggregateRootSpec.sysId.incrementAndGet() ) extends AkkaFixture {
+  val module: AggregateRootModule
+  type ID
+  type TID = TaggedID[ID]
+
+  import scala.language.higherKinds
+  type Protocol <: AggregateProtocol[ID]
+  val protocol: Protocol
+
+  abstract class AggregateFixture(
+    id: Int = AggregateRootSpec.sysId.incrementAndGet(),
+    config: Config = demesne.testkit.config
+  ) extends AkkaFixture( id, config ) { fixture =>
+    logger.info( "FIXTURE ID = [{}]", id.toString )
     private val trace = Trace[AggregateFixture]
 
-    import scala.concurrent.duration._
     import akka.util.Timeout
     implicit val timeout = Timeout( 5.seconds )
 
-    def before(): Unit = trace.block( "before" ) { 
+    implicit
+    def before(): Unit = trace.block( "before" ) {
       for { 
         init <- moduleCompanions.map{ _ initialize context }.sequence
       } {
@@ -44,7 +64,21 @@ abstract class AggregateRootSpec[A: ClassTag]
 
     def after(): Unit = trace.block( "after" ) { }
 
+    val bus = TestProbe()
+    system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
+
     def moduleCompanions: List[AggregateRootModule]
+
+    def nextId(): TID
+    lazy val tid: TID = nextId()
+
+    lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
+
+    //todo need to figure out how to prevent x-test clobbering of DM across suites
+    implicit lazy val model: DomainModel = {
+      val result = DomainModel.register( s"DomainModel-Isolated-${id}" )( system ) map { Await.result( _, 1.second ) }
+      result.toOption.get
+    }
 
     def context: Map[Symbol, Any] = trace.block( "context()" ) {
       Map(
@@ -61,7 +95,7 @@ abstract class AggregateRootSpec[A: ClassTag]
     val sys = createAkkaFixture()
 
     trace( s"sys.model = ${sys.model}" )
-    trace( s"sys.context = ${sys.context}" )
+//    trace( s"sys.context = ${sys.context}" )
 
     try {
       sys.before()
@@ -71,6 +105,12 @@ abstract class AggregateRootSpec[A: ClassTag]
       sys.system.terminate()
     }
   }
+
+
+
+
+  object WIP extends Tag( "wip" )
+
 
   //todo: easy support for ReliableMessage( _, Envelope( payload: TARGET_CLASS, _ ) ) matching
   //todo: focus on the target class in usage

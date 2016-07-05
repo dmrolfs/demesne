@@ -1,6 +1,7 @@
 package demesne
 
 import akka.actor._
+import akka.cluster.sharding.ShardRegion.Passivate
 import akka.event.LoggingReceive
 import demesne.factory.ActorFactory
 import peds.akka.envelope._
@@ -20,7 +21,7 @@ class EnvelopingAggregateRootRepository(
 ) extends AggregateRootRepository( model, rootType, factory ) with EnvelopingActor {
   override val trace = Trace( "EnvelopingAggregateRootRepository", log )
 
-  override def receive: Actor.Receive = LoggingReceive {
+  override def functional: Receive = {
     case message => {
       val originalSender = sender()
       val aggregate = aggregateFor( message )
@@ -54,7 +55,33 @@ with ActorLogging {
 
   override val supervisorStrategy: SupervisorStrategy = rootType.repositorySupervisionStrategy
 
-  override def receive: Actor.Receive = LoggingReceive { case c => aggregateFor( c ) forward c }
+  override def receive: Actor.Receive = LoggingReceive { nonfunctional orElse functional }
+
+  def nonfunctional: Receive = {
+    case Passivate( stop ) => {
+      log.info(
+        "passivate received by repository so not in clustered mode. sending stop-message:[{}] back to entity:[{}]",
+        stop,
+        sender()
+      )
+      sender() ! stop
+    }
+
+    case Envelope( Passivate(stop), _ ) => {
+      log.info(
+        "passivate received by repository so not in clustered mode. sending stop-message:[{}] back to entity:[{}]",
+        stop,
+        sender()
+      )
+      sender() ! stop
+    }
+  }
+
+  def functional: Receive = {
+    case p: Passivate => log.error( "IN FUNCTIONAL RECEIVE" )
+    case c => aggregateFor( c ) forward c
+  }
+
 
   def aggregateFor( command: Any ): ActorRef = trace.block( "aggregateFor" ) {
     log.debug( "command=[{}]", command.toString )

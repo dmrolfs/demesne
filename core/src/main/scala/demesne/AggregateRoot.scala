@@ -28,16 +28,19 @@ import peds.commons.util._
 
 
 object AggregateRoot {
+  trait Provider extends DomainModel.Provider with AggregateRootType.Provider
+
   type Acceptance[S] = PartialFunction[(Any, S), S]
 }
 
 abstract class AggregateRoot[S, I]
 extends PersistentActor
+with AggregateRoot.Provider
 with EnvelopingActor
-with DomainModel.Provider
-with AggregateRootType.Provider
 with ActorLogging {
   outer: EventPublisher =>
+
+  context.setReceiveTimeout( rootType.passivation.inactivityTimeout )
 
   type StateOperation = KOp[S, S]
 
@@ -49,10 +52,11 @@ with ActorLogging {
   override val persistenceId: String = self.path.toStringWithoutAddress
 
   type ID = I
-  def parseId( idstr: String ): ID
+  def parseId( idstr: String ): TID
+
   type TID = TaggedID[ID]
 
-  val aggregateId: ID = parseId( idFromPath() )
+  lazy val aggregateId: TID = parseId( idFromPath() )
 
   lazy val PathComponents = """^.*\/(([^-]+)-)?(.+)$""".r
   def idFromPath(): String = {
@@ -124,9 +128,11 @@ with ActorLogging {
 
   override def receiveRecover: Receive = {
     case offer: SnapshotOffer => { state = acceptSnapshot( offer ) }
+
     case _: RecoveryCompleted => {
       log.info( "RecoveryCompleted from journal for aggregate root actor:[{}] state:[{}]", self.path, state )
     }
+
     case event => {
       val before = state
       state = accept( event )
@@ -134,17 +140,16 @@ with ActorLogging {
     }
   }
 
-  override def preStart(): Unit = {
-    super.preStart()
-    context setReceiveTimeout rootType.passivation.inactivityTimeout
-    rootType.snapshot.schedule( context.system, self )( context.dispatcher )
-  }
-
   override def unhandled( message: Any ): Unit = {
     message match {
       case m: ReceiveTimeout => {
-        log.warning( "[{}] Passivating per receive-timeout", self.path )
-        context.parent ! rootType.passivation.passivationMessage( PoisonPill )
+        log.info( "[{}] id:[{}] Passivating per receive-timeout", self.path, aggregateId )
+        context.parent ! rootType.passivation.passivationMessage( PassivationSpecification.StopAggregateRoot[TID](aggregateId) )
+      }
+
+      case stop @ PassivationSpecification.StopAggregateRoot(id) if id == aggregateId => {
+        log.info( "[{}] id:[{}] Stopping AggregateRoot after passivation", self.path, aggregateId )
+        context stop self
       }
 
       case m => {

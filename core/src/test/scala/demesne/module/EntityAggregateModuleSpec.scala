@@ -44,6 +44,7 @@ object EntityAggregateModuleSpec {
 
   object Foo extends EntityLensProvider[Foo] {
     implicit val fooIdentifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
+      override val evEntity: ClassTag[Foo] = classTag[Foo]
       override type ID = ShortUUID
       override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
       override lazy val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
@@ -115,7 +116,7 @@ object EntityAggregateModuleSpec {
       import b.P.{ Tag => BTag, Props => BProps, _ }
 
       b.builder
-       .set( BTag, 'fooTAG )
+       .set( BTag, Foo.fooIdentifying.idTag )
        .set( BProps, FooActor.props(_,_) )
        .set( Indexes, myIndexes )
        .set( IdLens, Foo.idLens )
@@ -162,11 +163,18 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
   private val trace = Trace[EntityAggregateModuleSpec]
 
+  override val module: AggregateRootModule = FooAggregateRoot.module
+  override type ID = ShortUUID
+
+  override type Protocol = EntityAggregateModuleSpec.Protocol.type
+  override val protocol: Protocol = EntityAggregateModuleSpec.Protocol
+
   override type Fixture = TestFixture
 
   class TestFixture extends AggregateFixture {
     private val trace = Trace[TestFixture]
-    val bus: TestProbe = TestProbe()
+    override def nextId(): TID = Foo.fooIdentifying.safeNextId
+
     val rootType = FooAggregateRoot.module.rootType
     def slugIndex = model.aggregateRegisterFor[String, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
     def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
@@ -174,7 +182,6 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
   override def createAkkaFixture(): Fixture = new TestFixture
 
-  object WIP extends Tag( "wip" )
   object ADD extends Tag( "add" )
   object UPDATE extends Tag( "update" )
   object GOOD extends Tag( "good" )
@@ -186,7 +193,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       import fixture._
 
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
-        aggregateIdTag = 'fooTAG,
+        aggregateIdTag = Foo.fooIdentifying.idTag,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
         _indexes = FooAggregateRoot.myIndexes,
         idLens = Foo.idLens,
@@ -194,6 +201,9 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
         slugLens = Some(Foo.slugLens),
         isActiveLens = Some(Foo.isActiveLens)
       )
+
+      logger.info( "ACTUAL = {}", FooAggregateRoot.module)
+      logger.info( "EXPECTED = {}", expected)
 
       expected.canEqual( FooAggregateRoot.module ) must equal( true )
       expected.## must equal( FooAggregateRoot.module.## )
@@ -210,7 +220,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val t = Module aggregateOf id
       t !+ EntityProtocol.Rename( id, "foobar" )
-      bus.expectNoMsg( 2000.millis.dilated )
+      bus.expectNoMsg( 5.seconds.dilated )
     }
 
     "add foo" in { fixture: Fixture =>
@@ -222,7 +232,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val foo = Option(FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster"))
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, foo )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added =>  Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
     }
@@ -234,12 +244,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, Option(FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")) )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo added" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) {
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
 
       f !+ EntityProtocol.Rename( id, "good-foo" )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo renamed" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo renamed" ) {
         case payload: EntityProtocol.Renamed => {
           payload.sourceId mustBe id
           payload.oldName mustBe "foo1"
@@ -255,13 +265,13 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, Option(FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")) )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo added" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) {
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
 
       val newSlug = "gt"
       f !+ EntityProtocol.Reslug( id, newSlug )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo slug changed" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo slug changed" ) {
         case payload: EntityProtocol.Reslugged => {
           payload.sourceId mustBe id
           payload.oldSlug mustBe "f1"
@@ -270,19 +280,19 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
     }
 
-    "disable aggregate" in { fixture: Fixture =>
+    "disable aggregate" taggedAs WIP in { fixture: Fixture =>
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, Option(FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")) )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo added" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) {
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
 
       f !+ EntityProtocol.Disable( id )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo disabled" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo disabled" ) {
         case payload: EntityProtocol.Disabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
@@ -297,12 +307,12 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val id = Module.nextId.toOption.get
       val f = Module aggregateOf id
       f !+ EntityProtocol.Add( id, Option(FooImpl(id, "foo1", "f1", true, 17, 3.14159, "zedster")) )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo added" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) {
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
 
       f !+ EntityProtocol.Disable( id )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo disabled" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo disabled" ) {
         case payload: EntityProtocol.Disabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
@@ -310,7 +320,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
 
       f !+ EntityProtocol.Enable( id )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo enabled" ) {
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo enabled" ) {
         case payload: EntityProtocol.Enabled => {
           payload.sourceId mustBe id
           payload.slug mustBe "f1"
@@ -329,7 +339,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val f = Module aggregateOf tid
       f !+ EntityProtocol.Add( tid, f1 )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
 
@@ -341,7 +351,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       slugIndex.get( "f1" ) mustBe Some(id)
     }
 
-    "bar command to force concrete protocol implementation" taggedAs WIP in { fixture: Fixture =>
+    "bar command to force concrete protocol implementation" in { fixture: Fixture =>
       import fixture._
 
       val tid = Module.nextId.toOption.get
@@ -352,7 +362,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val f = Module aggregateOf tid
       f !+ EntityProtocol.Add( tid, f1 )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
 
@@ -378,7 +388,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       val f = Module aggregateOf tid
       f !+ EntityProtocol.Add( tid, f1 )
-      bus.expectMsgPF( max = 2000.millis.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: EntityProtocol.Added => Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
 

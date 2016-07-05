@@ -125,6 +125,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
     implicit val postIdentifying: Identifying[State] = new Identifying[State] {
       override type ID = ShortUUID
+      override val idTag: Symbol = 'post
       override val evID: ClassTag[ID] = classTag[ShortUUID]
       override def idOf( o: State ): TID = o.id
       override def fromString( idstr: String ): ID = ShortUUID( idstr )
@@ -143,15 +144,9 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
     override val trace = Trace( "Post", log )
 
-    override def parseId( idstr: String ): ID = {
+    override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[State]]
-      identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
-        case scalaz.\/-( id ) => id
-        case scalaz.-\/( ex ) => {
-          log.error( ex, "failed to parse id string:[{}]", idstr )
-          throw ex
-        }
-      }
+      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
     }
 
     override var state: State = State()

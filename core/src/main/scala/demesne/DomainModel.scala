@@ -116,7 +116,7 @@ object DomainModel {
           override def childStarter(): Unit = { }
         }
       ),
-      "Repositories"
+      s"DomainModel-${name}-Repositories"
     )
 
     override val registerBus: RegisterBus = new RegisterBus

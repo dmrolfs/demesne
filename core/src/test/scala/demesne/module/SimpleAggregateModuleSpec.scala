@@ -3,6 +3,8 @@ package demesne.module
 import scala.reflect._
 import akka.actor.Props
 import akka.testkit._
+
+import scalaz.{-\/, \/-}
 import scalaz.Scalaz._
 import shapeless.Lens
 import demesne._
@@ -36,7 +38,8 @@ object SimpleAggregateModuleSpec {
 
   object Foo extends EntityLensProvider[Foo] {
     implicit val fooIdentifying: Identifying[Foo] = new EntityIdentifying[Foo] {
-      override type ID = ShortUUID
+      override type ID = Foo#ID
+      override val evEntity: ClassTag[Foo] = classTag[Foo]
       override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
       override lazy val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
       override def nextId: TryV[TID] = tag( ShortUUID() ).right
@@ -103,24 +106,35 @@ object SimpleAggregateModuleSpec {
 }
 
 
-class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleSpec] with ScalaFutures with LazyLogging {
+abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleSpec] with ScalaFutures with LazyLogging {
 
   private val trace = Trace[SimpleAggregateModuleSpec]
+
+  override type ID = ShortUUID
+  override type Protocol = SimpleAggregateModuleSpec.Protocol.type
+  override val protocol: Protocol = SimpleAggregateModuleSpec.Protocol
 
   override type Fixture = TestFixture
 
   class TestFixture extends AggregateFixture {
     private val trace = Trace[TestFixture]
-    val bus: TestProbe = TestProbe()
-    // val rootType = SimpleAggregateModuleSpec.FooAggregateRoot.module.aggregateRootType
-    // def slugIndex = model.aggregateRegisterFor[String]( rootType, 'slug ).toOption.get
-
     def moduleCompanions: List[AggregateRootModule] = List() // List( SimpleAggregateModuleSpec.FooAggregateRoot.module )
+
+    override def nextId(): TID = {
+      import SimpleAggregateModuleSpec.Foo.{fooIdentifying => identifying}
+
+      identifying.nextIdAs[TID] match {
+        case \/-( r ) => r
+        case -\/( ex ) => {
+          logger.error( "failed to generate nextId", ex )
+          throw ex
+        }
+      }
+    }
   }
 
   override def createAkkaFixture(): Fixture = new TestFixture
 
-  object WIP extends Tag( "wip" )
   object ADD extends Tag( "add" )
   object UPDATE extends Tag( "update" )
   object GOOD extends Tag( "good" )

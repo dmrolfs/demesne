@@ -159,7 +159,11 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
 
 
   abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] { publisher: EventPublisher =>
-    override def parseId( idstr: String ): ID = identifying.safeParseId[ID]( idstr )( identifying.evID )
+    override def parseId( idstr: String ): TID = {
+//      identifying.tag( identifying.safeParseId[ID]( idstr )( identifying.evID ) )
+      identifying.safeParseId[ID]( idstr )( identifying.evID )
+    }
+
 
     override def acceptance: Acceptance = entityAcceptance
 
@@ -183,7 +187,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
     def quiescent: Receive = {
-      case Add( targetId, info ) if targetId.id == aggregateId => persist( Added(targetId, info) ) { e => acceptAndPublish( e ) }
+      case Add( targetId, info ) if targetId == aggregateId => persist( Added(targetId, info) ) { e => acceptAndPublish( e ) }
     }
 
     def active: Receive = {

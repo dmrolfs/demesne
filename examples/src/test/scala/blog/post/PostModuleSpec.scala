@@ -12,7 +12,9 @@ import peds.commons.log.Trace
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
-import sample.blog.post.{ PostPrototol => P }
+import sample.blog.post.{PostPrototol => P}
+
+import scalaz.{-\/, \/-}
 
 
 /**
@@ -22,13 +24,28 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
   private val trace = Trace[PostModuleSpec]
 
+
+  override type ID = PostModule.ID
+  override type Protocol = PostPrototol.type
+  override val protocol: Protocol = PostPrototol
+  override val module: AggregateRootModule = PostModule
+
   override type Fixture = PostFixture
 
   class PostFixture extends AggregateFixture {
     private val trace = Trace[PostFixture]
 
-    val bus: TestProbe = TestProbe()
     val author: TestProbe = TestProbe()
+
+    override def nextId(): TID = {
+      PostModule.PostActor.postIdentifying.nextIdAs[TID] match {
+        case \/-( tid ) => tid
+        case -\/( ex ) => {
+          logger.error( "failed to create next id for Post", ex )
+          throw ex
+        }
+      }
+    }
 
     // override val module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
     def moduleCompanions: List[AggregateRootModule] = List( PostModule )
@@ -42,7 +59,6 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
   override def createAkkaFixture(): Fixture = new PostFixture
 
-  object WIP extends Tag( "wip" )
   object GOOD extends Tag( "good" )
 
   "Post Module should" should {
