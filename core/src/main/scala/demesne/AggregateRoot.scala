@@ -42,6 +42,14 @@ with ActorLogging {
 
   context.setReceiveTimeout( rootType.passivation.inactivityTimeout )
 
+  override protected def onPersistRejected( cause: Throwable, event: Any, seqNr: Long ): Unit = {
+    log.error(
+      "Rejected to persist event type [{}] with sequence number [{}] for persistenceId [{}] due to [{}].",
+      event.getClass.getName, seqNr, persistenceId, cause
+    )
+    throw cause
+  }
+
   type StateOperation = KOp[S, S]
 
   val trace = Trace( s"AggregateRoot", log )

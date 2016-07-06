@@ -35,14 +35,16 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     def before(): Unit = { }
     def after(): Unit = { }
 
-    def rootType( specs: AggregateIndexSpec[_,_]* ): AggregateRootType = new AggregateRootType {
-      override def name: String = "foo"
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = specs
-      override def aggregateRootProps(implicit model: DomainModel): Props = {
-        throw new Exception( "rootType.aggregateRootProps should not be invoked" )
-      }
+    def rootType( specs: AggregateIndexSpec[_,_]* ): AggregateRootType = {
+      new AggregateRootType {
+        override def name: String = "foo"
+        override def indexes: Seq[AggregateIndexSpec[_, _]] = specs
+        override def aggregateRootProps(implicit model: DomainModel): Props = {
+          throw new Exception( "rootType.aggregateRootProps should not be invoked" )
+        }
 
-      override def toString: String = "FooAggregateRootType"
+        override def toString: String = "FooAggregateRootType"
+      }
     }
 
     val fooIdExtractor: KeyIdExtractor = {

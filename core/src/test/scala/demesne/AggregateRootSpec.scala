@@ -2,18 +2,16 @@ package demesne
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.reflect._
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.testkit._
+import scalaz.Scalaz._
+import shapeless._
 import com.typesafe.config.{Config, ConfigFactory}
-import com.typesafe.scalalogging.StrictLogging
 import demesne.AggregateRootSpec.FooModule.FooActor.State
 import org.scalatest.OptionValues
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
-
-import scala.reflect._
-import scalaz.Scalaz._
-import shapeless._
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
 import peds.akka.envelope._
 import peds.commons.TryV
@@ -241,14 +239,7 @@ object AggregateRootSpec {
       override def name: String = FooModule.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = FooModule.FooActor.props( model, this )
       override val toString: String = "ALTERED_FooAggregateRootType"
-
-      override def passivation: PassivationSpecification = new PassivationSpecification {
-        override def inactivityTimeout: Duration = {
-          logger.info( "TEST: ASKED for INACTIVITY_TIMEOUT" )
-          3.seconds
-        }
-      }
-      //        override def snapshot: SnapshotSpecification = super.snapshot
+      override def passivateTimeout: Duration = 2.seconds
     }
 
 

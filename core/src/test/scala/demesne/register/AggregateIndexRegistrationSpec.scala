@@ -44,11 +44,13 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     val constituent = TestProbe()
     val bus = mock[RegisterBus]
 
-    def rootType( specs: AggregateIndexSpec[_,_]* ): AggregateRootType = new AggregateRootType {
-      override def name: String = "foo"
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = specs
-      override def aggregateRootProps(implicit model: DomainModel): Props = {
-        throw new Exception( "rootType.aggregateRootProps should not be invoked" )
+    def rootType( specs: AggregateIndexSpec[_,_]* ): AggregateRootType = {
+      new AggregateRootType {
+        override def name: String = "foo"
+        override def indexes: Seq[AggregateIndexSpec[_, _]] = specs
+        override def aggregateRootProps(implicit model: DomainModel): Props = {
+          throw new Exception( "rootType.aggregateRootProps should not be invoked" )
+        }
       }
     }
   }

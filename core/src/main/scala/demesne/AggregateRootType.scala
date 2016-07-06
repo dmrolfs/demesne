@@ -17,7 +17,7 @@ object AggregateRootType {
   }
 }
 
-trait AggregateRootType extends LazyLogging { outer =>
+trait AggregateRootType extends LazyLogging {
   def name: String
   def repositoryName: String = name+"Repository"
 
@@ -68,18 +68,18 @@ trait AggregateRootType extends LazyLogging { outer =>
     case Passivate( stop ) => shardIdFor( stop )
   }
 
-  //todo: make configuration driven
   /**
     * specify the period of inactivity before the entity passivates
     */
+  def passivateTimeout: Duration = 15.minutes
   def passivation: PassivationSpecification = new PassivationSpecification {
-    override val inactivityTimeout: Duration = 15.minutes
+    override val inactivityTimeout: Duration = passivateTimeout
   }
 
-  //todo: make configuration driven
+  def snapshotPeriod: FiniteDuration = 15.minutes
   def snapshot: SnapshotSpecification = new SnapshotSpecification {
-    override val snapshotInitialDelay: FiniteDuration = 15.minutes
-    override val snapshotInterval: FiniteDuration = 15.minutes
+    override val snapshotInitialDelay: FiniteDuration = snapshotPeriod
+    override val snapshotInterval: FiniteDuration = snapshotPeriod
   }
 
   def indexes: Seq[DomainModel.AggregateIndexSpecLike] = Seq.empty[DomainModel.AggregateIndexSpecLike]
