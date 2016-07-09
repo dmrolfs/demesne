@@ -1,14 +1,15 @@
 package demesne
 
-import akka.actor.{ActorLogging, PoisonPill, ReceiveTimeout}
+import akka.actor.{ActorLogging, ActorPath, ActorRef, PoisonPill, ReceiveTimeout}
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
+import com.typesafe.scalalogging.LazyLogging
 
 import scalaz._
 import scalaz.Kleisli._
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
-import peds.commons.identifier.TaggedID
+import peds.commons.identifier.{Identifying, TaggedID}
 import peds.commons.{KOp, TryV}
 import peds.commons.log.Trace
 import peds.commons.util._
@@ -27,10 +28,24 @@ import peds.commons.util._
 //////////////////////////////////////
 
 
-object AggregateRoot {
+object AggregateRoot extends LazyLogging {
   trait Provider extends DomainModel.Provider with AggregateRootType.Provider
 
   type Acceptance[S] = PartialFunction[(Any, S), S]
+
+  def aggregateIdFromPath[S, I]( path: ActorPath )( implicit identifying: Identifying[S] ): TaggedID[I] = {
+    identifying.tidAs[TaggedID[I]]( identifying.tag( identifying.fromString( path.toStringWithoutAddress ) ) ) match {
+      case \/-( tid ) => tid
+      case -\/( ex ) => {
+        logger.error( s"failed to extract tagged id form path[${path.toStringWithoutAddress}]", ex )
+        throw ex
+      }
+    }
+  }
+
+  def aggregateIdFromRef[S: Identifying, I]( aggregateRef: ActorRef ): TaggedID[I] = {
+    aggregateIdFromPath[S, I]( aggregateRef.path )
+  }
 }
 
 abstract class AggregateRoot[S, I]
@@ -161,7 +176,7 @@ with ActorLogging {
       }
 
       case m => {
-        log.debug( "aggregate root unhandled {}", m )
+        log.debug( "aggregate root unhandled class[{}]: object:[{}]", m.getClass.getCanonicalName, m )
         super.unhandled( m )
       }
     }
