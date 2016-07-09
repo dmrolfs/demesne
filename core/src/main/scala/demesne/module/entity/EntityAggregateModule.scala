@@ -202,7 +202,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
       }
     }
 
-    def disabled: Receive = LoggingReceive {
+    def disabled: Receive = {
       case Enable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
         persist( Enabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
       }

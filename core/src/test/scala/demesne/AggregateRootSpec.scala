@@ -58,7 +58,6 @@ class AggregateRootSpec extends demesne.testkit.AggregateRootSpec[AggregateRootS
       import f._
       import FooModule.FooActor.State
 
-      model.name
       def infoFrom( ar: ActorRef ): Option[State] = {
         import scala.concurrent.ExecutionContext.Implicits.global
         import akka.pattern.ask
