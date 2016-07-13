@@ -35,13 +35,13 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
   class AuthorListingFixture extends AkkaFixture {
     private val trace = Trace[AuthorListingFixture]
 
-    def before(): Unit = trace.block( "before" ) { 
+    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
       import scala.concurrent.ExecutionContext.Implicits.global
       implicit val to = Timeout( 5.seconds )
       AuthorListingModule initialize context 
     }
 
-    def after(): Unit = trace.block( "after" ) { }
+    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
     // def module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
 
@@ -62,21 +62,18 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
   }
 
   override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
-    val sys = createAkkaFixture()
-    // trace( s"sys.module = ${sys.module}" )
-    trace( s"sys.model = ${sys.model}" )
-    trace( s"sys.context = ${sys.context}" )
+    val fixture = createAkkaFixture( test )
 
     try {
-      sys.before()
-      test( sys )
+      fixture before test
+      test( fixture )
     } finally {
-      sys.after()
-      sys.system.terminate()
+      fixture after test
+      fixture.system.terminate()
     }
   }
 
-  override def createAkkaFixture(): Fixture = new AuthorListingFixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = new AuthorListingFixture
 
   object WIP extends Tag( "wip" )
 

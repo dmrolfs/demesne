@@ -31,11 +31,9 @@ abstract class AggregateRootSpec[A: ClassTag]
 extends SequentialAkkaSpecWithIsolatedFixture
 with MockitoSugar
 with BeforeAndAfterAll
-with LazyLogging
 {
   private val trace = Trace[AggregateRootSpec[A]]
 
-  val module: AggregateRootModule
   type ID
   type TID = TaggedID[ID]
 
@@ -50,19 +48,20 @@ with LazyLogging
     logger.info( "FIXTURE ID = [{}]", id.toString )
     private val trace = Trace[AggregateFixture]
 
+    val module: AggregateRootModule
+
     import akka.util.Timeout
     implicit val timeout = Timeout( 5.seconds )
 
-    implicit
-    def before(): Unit = trace.block( "before" ) {
+    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
       for { 
         init <- moduleCompanions.map{ _ initialize context }.sequence
       } {
-        Await.ready( Future sequence { init }, 2.seconds )
+        Await.ready( Future sequence { init }, 5.seconds )
       }
     }
 
-    def after(): Unit = trace.block( "after" ) { }
+    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
     val bus = TestProbe()
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
@@ -91,18 +90,15 @@ with LazyLogging
 
   override type Fixture <: AggregateFixture
 
-  override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
-    val sys = createAkkaFixture()
-
-    trace( s"sys.model = ${sys.model}" )
-//    trace( s"sys.context = ${sys.context}" )
+  override def withFixture( test: OneArgTest ): Outcome = {
+    val fixture = createAkkaFixture( test )
 
     try {
-      sys.before()
-      test( sys )
+      fixture before test
+      test( fixture )
     } finally {
-      sys.after()
-      sys.system.terminate()
+      fixture after test
+      fixture.system.terminate()
     }
   }
 

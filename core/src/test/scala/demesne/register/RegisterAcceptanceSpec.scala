@@ -107,12 +107,11 @@ object RegisterAcceptanceSpec {
   }
 }
 
-class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] with ScalaFutures with LazyLogging {
+class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] with ScalaFutures {
   import RegisterAcceptanceSpec._
 
   private val trace = Trace[RegisterAcceptanceSpec]
 
-  override val module: AggregateRootModule = TestModule
   override type ID = Foo#ID
   override type Protocol = RegisterAcceptanceSpec.Protocol.type
   override val protocol: Protocol = RegisterAcceptanceSpec.Protocol
@@ -121,8 +120,6 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
   override type Fixture = TestFixture
 
   class TestFixture extends AggregateFixture {
-    private val trace = Trace[TestFixture]
-
     override def nextId(): TID = {
       Foo.fooIdentifying.nextIdAs[TID] match {
         case \/-( r ) => r
@@ -133,6 +130,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       }
     }
 
+    override val module: AggregateRootModule = TestModule
     def moduleCompanions: List[AggregateRootModule] = List( TestModule )
 
     // override def context: Map[Symbol, Any] = trace.block( "context" ) {
@@ -142,7 +140,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
     // }
   }
 
-  override def createAkkaFixture(): Fixture = new TestFixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
 
   "Index Register should" should {
     // "config is okay" taggedAs(WIP) in { f: Fixture =>

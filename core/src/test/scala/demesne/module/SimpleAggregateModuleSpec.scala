@@ -106,7 +106,7 @@ object SimpleAggregateModuleSpec {
 }
 
 
-abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleSpec] with ScalaFutures with LazyLogging {
+abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleSpec] with ScalaFutures {
 
   private val trace = Trace[SimpleAggregateModuleSpec]
 
@@ -117,7 +117,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
   override type Fixture = TestFixture
 
   class TestFixture extends AggregateFixture {
-    private val trace = Trace[TestFixture]
+    override val module: AggregateRootModule = SimpleAggregateModuleSpec.FooAggregateRoot.module
     def moduleCompanions: List[AggregateRootModule] = List() // List( SimpleAggregateModuleSpec.FooAggregateRoot.module )
 
     override def nextId(): TID = {
@@ -133,7 +133,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
     }
   }
 
-  override def createAkkaFixture(): Fixture = new TestFixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
 
   object ADD extends Tag( "add" )
   object UPDATE extends Tag( "update" )

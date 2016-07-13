@@ -32,8 +32,8 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
   class Fixture extends AkkaFixture {
     private val trace = Trace[Fixture]
 
-    def before(): Unit = { }
-    def after(): Unit = { }
+    def before( test: OneArgTest ): Unit = { }
+    def after( test: OneArgTest ): Unit = { }
 
     def rootType( specs: AggregateIndexSpec[_,_]* ): AggregateRootType = {
       new AggregateRootType {
@@ -81,18 +81,18 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
   }
 
   override def withFixture( test: OneArgTest ): Outcome = {
-    val sys = createAkkaFixture()
+    val fixture = createAkkaFixture( test )
 
     try {
-      sys.before()
-      test( sys )
+      fixture before test
+      test( fixture )
     } finally {
-      sys.after()
-      sys.system.terminate()
+      fixture after test
+      fixture.system.terminate()
     }
   }
 
-  override def createAkkaFixture(): Fixture = new Fixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = new Fixture
 
   object WIP extends Tag( "wip" )
 

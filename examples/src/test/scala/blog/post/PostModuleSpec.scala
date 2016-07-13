@@ -20,7 +20,7 @@ import scalaz.{-\/, \/-}
 /**
  * Created by damonrolfs on 9/18/14.
  */
-class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures with LazyLogging {
+class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures {
 
   private val trace = Trace[PostModuleSpec]
 
@@ -28,12 +28,13 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
   override type ID = PostModule.ID
   override type Protocol = PostPrototol.type
   override val protocol: Protocol = PostPrototol
-  override val module: AggregateRootModule = PostModule
 
   override type Fixture = PostFixture
 
   class PostFixture extends AggregateFixture {
     private val trace = Trace[PostFixture]
+
+    override val module: AggregateRootModule = PostModule
 
     val author: TestProbe = TestProbe()
 
@@ -57,7 +58,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     }
   }
 
-  override def createAkkaFixture(): Fixture = new PostFixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = new PostFixture
 
   object GOOD extends Tag( "good" )
 

@@ -25,7 +25,6 @@ import peds.commons.log.Trace
 class AggregateRootSpec extends demesne.testkit.AggregateRootSpec[AggregateRootSpec] with OptionValues {
   import AggregateRootSpec._
 
-  override val module: AggregateRootModule = AggregateRootSpec.FooModule
   override type ID = Foo#ID
 
   override type Protocol = AggregateRootSpec.Protocol.type
@@ -33,12 +32,13 @@ class AggregateRootSpec extends demesne.testkit.AggregateRootSpec[AggregateRootS
 
 
   class Fixture extends AggregateFixture( config = AggregateRootSpec.config ) {
+    override val module: AggregateRootModule = AggregateRootSpec.FooModule
     override def moduleCompanions: List[AggregateRootModule] = List( AggregateRootSpec.FooModule )
 
     override def nextId(): TID = Foo.fooIdentifying.safeNextId
 
 
-    override implicit def before(): Unit = super.before( )  //todo: module initialize and context() happens in testkit.AggregateRootSpec.AggregateFixture.before
+    override implicit def before( test: OneArgTest ): Unit = super.before( test )  //todo: module initialize and context() happens in testkit.AggregateRootSpec.AggregateFixture.before
 
     override def context: Map[Symbol, Any] = {
       Map(
@@ -50,7 +50,7 @@ class AggregateRootSpec extends demesne.testkit.AggregateRootSpec[AggregateRootS
     }
   }
 
-  override def createAkkaFixture(): Fixture = new Fixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = new Fixture
 
 
   "AggregateRoot" should {

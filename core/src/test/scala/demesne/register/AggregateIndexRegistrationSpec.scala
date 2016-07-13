@@ -36,8 +36,8 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
   class Fixture extends AkkaFixture {
     private val trace = Trace[Fixture]
 
-    def before(): Unit = trace.block( "before" ) { }
-    def after(): Unit = trace.block( "after" ) { }
+    def before( test: OneArgTest ): Unit = trace.block( "before" ) { }
+    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
     val supervisor = TestProbe()
     val registrant = TestProbe()
@@ -56,18 +56,18 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
   }
 
   override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
-    val sys = createAkkaFixture()
+    val fixture = createAkkaFixture( test )
 
     try {
-      sys.before()
-      test( sys )
+      fixture before test
+      test( fixture )
     } finally {
-      sys.after()
-      sys.system.terminate()
+      fixture after test
+      fixture.system.terminate()
     }
   }
 
-  override def createAkkaFixture(): Fixture = new Fixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = new Fixture
 
   object WIP extends Tag( "wip" )
 

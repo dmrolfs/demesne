@@ -1,16 +1,14 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
-
+import scala.concurrent.Await
+import scala.concurrent.duration._
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.Config
 import demesne.DomainModel
 import org.scalatest.{MustMatchers, Outcome, ParallelTestExecution, fixture}
 import peds.commons.log.Trace
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 
 object ParallelAkkaSpec {
@@ -35,14 +33,14 @@ trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelT
     }
   }
 
-  def createAkkaFixture(): Fixture
+  def createAkkaFixture( test: OneArgTest ): Fixture
 
   override def withFixture( test: OneArgTest ): Outcome = {
-    val sys = createAkkaFixture()
+    val fixture = createAkkaFixture( test )
     try {
-      test( sys )
+      test( fixture )
     } finally {
-      sys.system.terminate()
+      fixture.system.terminate()
     }
   }
 }

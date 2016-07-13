@@ -1,16 +1,12 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.Config
-import demesne.DomainModel
+import com.typesafe.scalalogging.StrictLogging
 import org.scalatest.{MustMatchers, Outcome, fixture}
 import peds.commons.log.Trace
-
-import scala.concurrent.Await
-import scala.concurrent.duration._
 
 
 object SequentialAkkaSpecWithIsolatedFixture {
@@ -18,7 +14,7 @@ object SequentialAkkaSpecWithIsolatedFixture {
 }
 
 // Runs each test sequentially but provides fixture isolation
-trait SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMatchers {
+trait SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMatchers with StrictLogging{
   import demesne.testkit.SequentialAkkaSpecWithIsolatedFixture._
   private val trace = Trace[SequentialAkkaSpecWithIsolatedFixture]
 
@@ -29,10 +25,10 @@ trait SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMa
   extends TestKit( ActorSystem( name = s"Isolated-${id}", config ) )
   with ImplicitSender
 
-  def createAkkaFixture(): Fixture
+  def createAkkaFixture( tags: OneArgTest ): Fixture
 
   override def withFixture( test: OneArgTest ): Outcome = {
-    val sys = createAkkaFixture()
+    val sys = createAkkaFixture( test )
     try {
       test( sys )
     } finally {

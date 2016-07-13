@@ -169,20 +169,27 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
 
     def entityAcceptance: Acceptance = {
       case (Added(_, info), s) => {
+        preActivate()
         context become LoggingReceive{ around( active ) }
         module.triedToEntity( info ) getOrElse s
       }
       case (Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
       case (Reslugged(_, _, newSlug), s ) => module.slugLens map { _.set( s )( newSlug ) } getOrElse s
       case (_: Disabled, s) => {
+        preDisable()
         context become LoggingReceive { around( disabled ) }
         module.isActiveLens map { _.set( s )( false ) } getOrElse s
       }
       case (_: Enabled, s) => {
+        preEnable()
         context become LoggingReceive { around( active ) }
         module.isActiveLens map { _.set( s )( true ) } getOrElse s
       }
     }
+
+    def preActivate(): Unit = { }
+    def preDisable(): Unit = { }
+    def preEnable(): Unit = { }
 
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 

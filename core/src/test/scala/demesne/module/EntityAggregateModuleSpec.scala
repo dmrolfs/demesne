@@ -158,12 +158,11 @@ object EntityAggregateModuleSpec {
 }
 
 
-class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleSpec] with ScalaFutures with LazyLogging {
+class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleSpec] with ScalaFutures {
   import EntityAggregateModuleSpec._
 
   private val trace = Trace[EntityAggregateModuleSpec]
 
-  override val module: AggregateRootModule = FooAggregateRoot.module
   override type ID = ShortUUID
 
   override type Protocol = EntityAggregateModuleSpec.Protocol.type
@@ -177,10 +176,11 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
     val rootType = FooAggregateRoot.module.rootType
     def slugIndex = model.aggregateRegisterFor[String, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
+    override val module: AggregateRootModule = FooAggregateRoot.module
     def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
   }
 
-  override def createAkkaFixture(): Fixture = new TestFixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
 
   object ADD extends Tag( "add" )
   object UPDATE extends Tag( "update" )
