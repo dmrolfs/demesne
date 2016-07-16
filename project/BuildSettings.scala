@@ -29,7 +29,7 @@ object BuildSettings {
       ),
       javacOptions ++= Seq( "-source", "1.7", "-target", "1.7" ),
       homepage := Some( url("http://github.com/dmrolfs/demesne") ),
-      licenses := Seq("Apache 2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html")),
+      licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html")),
       conflictManager := ConflictManager.latestRevision,
       dependencyOverrides := Dependencies.defaultDependencyOverrides,
 
@@ -51,6 +51,7 @@ object BuildSettings {
       resolvers += Resolver.sonatypeRepo( "snapshots" ),
       // resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/stew/snapshots",
       resolvers += Classpaths.sbtPluginReleases,
+      resolvers += "OSS JFrog Artifactory" at "http://oss.jfrog.org/artifactory/oss-snapshot-local",
 
       // SLF4J initializes itself upon the first logging call.  Because sbt
       // runs tests in parallel it is likely that a second thread will
@@ -79,29 +80,33 @@ object BuildSettings {
 
   def doNotPublishSettings = Seq(publish := {})
 
-  def publishSettings = if ( (version in ThisBuild).toString.endsWith("-SNAPSHOT") ) {
-    Seq(
-         publishTo := Some("Artifactory Realm" at "http://oss.jfrog.org/artifactory/oss-snapshot-local"),
-         // Only setting the credentials file if it exists (#52)
-         credentials := List(Path.userHome / ".bintray" / ".artifactory").filter(_.exists).map(Credentials(_))
-       )
-  } else {
-    Seq(
-         pomExtra := <scm>
-           <url>https://github.com</url>
-           <connection>https://github.com/dmrolfs/demesne.git</connection>
-         </scm>
-           <developers>
-             <developer>
-               <id>dmrolfs</id>
-               <name>Damon Rolfs</name>
-               <url>http://dmrolfs.github.io/</url>
-             </developer>
-           </developers>,
-         publishMavenStyle := true,
-         resolvers += Resolver.url("omen bintray resolver", url("http://dl.bintray.com/omen/maven"))(Resolver.ivyStylePatterns),
-         licenses := ("MIT", url("http://opensource.org/licenses/MIT")) :: Nil // this is required! otherwise Bintray will reject the code
-       )
+  def publishSettings = {
+    // if ( (version in ThisBuild).toString.endsWith("-SNAPSHOT") ) {
+    if ( VERSION.toString.endsWith("-SNAPSHOT") ) {
+      Seq(
+        publishTo := Some("Artifactory Realm" at "http://oss.jfrog.org/artifactory/oss-snapshot-local"),
+        publishMavenStyle := true,
+        // Only setting the credentials file if it exists (#52)
+        credentials := List(Path.userHome / ".bintray" / ".artifactory").filter(_.exists).map(Credentials(_))
+      )
+    } else {
+      Seq(
+        pomExtra := <scm>
+          <url>https://github.com</url>
+          <connection>https://github.com/dmrolfs/demesne.git</connection>
+        </scm>
+        <developers>
+          <developer>
+            <id>dmrolfs</id>
+            <name>Damon Rolfs</name>
+            <url>http://dmrolfs.github.io/</url>
+            </developer>
+        </developers>,
+        publishMavenStyle := true,
+        resolvers += Resolver.url("omen bintray resolver", url("http://dl.bintray.com/omen/maven"))(Resolver.ivyStylePatterns),
+        licenses := ("MIT", url("http://opensource.org/licenses/MIT")) :: Nil // this is required! otherwise Bintray will reject the code
+      )
+    }
   }
 
 }
