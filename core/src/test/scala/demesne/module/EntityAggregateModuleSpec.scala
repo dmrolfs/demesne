@@ -237,7 +237,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
     }
 
-    "update name" in { fixture: Fixture =>
+    "update name" taggedAs WIP in { fixture: Fixture =>
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
@@ -280,7 +280,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
     }
 
-    "disable aggregate" taggedAs WIP in { fixture: Fixture =>
+    "disable aggregate" in { fixture: Fixture =>
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 

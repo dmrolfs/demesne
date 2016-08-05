@@ -1,5 +1,7 @@
 package demesne
 
+import akka.Done
+
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
@@ -26,7 +28,7 @@ trait DomainModel {
 
   def registerBus: RegisterBus
 
-  def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory )( implicit to: Timeout ): Future[Unit]
+  def registerAggregateType( rootType: AggregateRootType, factory: ActorFactory )( implicit to: Timeout ): Future[Done]
 
   def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = aggregateOf( rootType.name, id )
 
@@ -161,7 +163,7 @@ object DomainModel {
       factory: ActorFactory
     )(
       implicit to: Timeout
-    ): Future[Unit] = trace.block( "registerAggregateType" ) {
+    ): Future[Done] = trace.block( "registerAggregateType" ) {
       implicit val ec = system.dispatcher
 
       val (registerIndexBudget, registerAgentBudget, startChildSupervisionBudget) = timeoutBudgets( to )
@@ -170,7 +172,7 @@ object DomainModel {
       val result = for {
         reg <- establishRegister( rootType, registerIndexBudget, registerAgentBudget )
         ag <- registerAggregate( rootType, factory, startChildSupervisionBudget )
-      } yield ()
+      } yield Done
 
       result onComplete {
         case Success(_) => {
@@ -200,7 +202,7 @@ object DomainModel {
       budget: Timeout
     )(
       implicit ex: ExecutionContext
-    ): Future[Unit] = trace.block( s"registerAggregate($rootType,_)" ) {
+    ): Future[Done] = trace.block( s"registerAggregate($rootType,_)" ) {
       import akka.pattern.ask
       trace( s"register timeout budget = $budget" )
 
@@ -225,7 +227,7 @@ object DomainModel {
 
       aggregate map { r =>
         logger.info( "Registering root-type[{}]@[{}] > aggregate registry established ", rootType.name, name )
-        ()
+        Done
       }
     }
 
@@ -235,7 +237,7 @@ object DomainModel {
       agentBudget: Timeout
     )( 
       implicit ec: ExecutionContext 
-    ): Future[Unit] = trace.block( s"establishRegister($rootType)" ) {
+    ): Future[Done] = trace.block( s"establishRegister($rootType)" ) {
       import akka.pattern.ask
       trace( s"registration timeout budget = $registerIndexBudget" )
       trace( s"agent timeout budget = $agentBudget" )
@@ -250,16 +252,13 @@ object DomainModel {
       }
 
       Future.sequence( registers ) map { r =>
-        logger.info( "Registering root-type[{}]@[{}] > registers[{}] established for root-type[{}]",
+        logger.info( "Registering root-type[{}]@[{}]: registers[{}] established",
           rootType.name,
           name,
           rootType.indexes.map{ _.toString }.mkString( "[", ",", "]" )
-//            .map { i => (i.name.name, i.key.describe, i.id.describe) }
-//            .map { case (n, k, i) => s"${n}[${k},${i}]" }
-//            .mkString( "[", ",", "]" )
         )
 
-        ()
+        Done
       }
     }
 

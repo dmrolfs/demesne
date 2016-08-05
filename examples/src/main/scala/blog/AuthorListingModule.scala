@@ -1,10 +1,13 @@
 package sample.blog.author
 
-import scala.concurrent.{ ExecutionContext, Future }
-import scalaz._, Scalaz._
+import akka.Done
+
+import scala.concurrent.{ExecutionContext, Future}
+import scalaz._
+import Scalaz._
 import peds.commons.Valid
-import akka.actor.{ Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout }
-import akka.cluster.sharding.{ ClusterShardingSettings, ClusterSharding, ShardRegion }
+import akka.actor.{Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout}
+import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.event.LoggingReceive
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
@@ -13,6 +16,7 @@ import peds.akka.publish.ReliableReceiver
 import peds.commons.log.Trace
 import sample.blog.post.PostPrototol.PostPublished
 import demesne.InitializeAggregateActorType
+
 import scala.collection.immutable
 import scala.concurrent.duration._
 
@@ -20,8 +24,9 @@ import scala.concurrent.duration._
 object AuthorListingModule extends InitializeAggregateActorType with LazyLogging {
   val trace = Trace[AuthorListingModule.type]
 
-  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): Valid[Future[Unit]] = trace.block( "initialize" ) {
-    Future.successful[Unit] { 
+  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): Valid[Future[Done]] = trace.block( "initialize" ) {
+    Future
+    .successful {
       implicit lazy val system: ActorSystem = props get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
       trace( "starting shard for: AuthorListingModule" )
       ClusterSharding( system ).start(
@@ -31,7 +36,9 @@ object AuthorListingModule extends InitializeAggregateActorType with LazyLogging
         extractEntityId = AuthorListing.idExtractor,
         extractShardId = AuthorListing.shardResolver
       )
-    }.successNel
+      Done
+    }
+    .successNel
   }
 
 

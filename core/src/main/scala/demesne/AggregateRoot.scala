@@ -81,9 +81,10 @@ with ActorLogging {
 
   lazy val aggregateId: TID = parseId( idFromPath() )
 
-  lazy val PathComponents = """^.*\/(([^-]+)-)?(.+)$""".r
+  // assumes the identifier component of the aggregate path contains only the id and not a tagged id.
+  lazy val PathComponents = """^.*\/(.+)$""".r
   def idFromPath(): String = {
-    val PathComponents(_, tag, id) = self.path.toStringWithoutAddress
+    val PathComponents(id) = self.path.toStringWithoutAddress
     id
   }
 
@@ -91,7 +92,7 @@ with ActorLogging {
   def state_=( newState: S ): Unit
 
 
-  override def around( r: Receive ): Receive = LoggingReceive {
+  override def around( r: Receive ): Receive = {
     case SaveSnapshot => {
       log.debug( "received SaveSnapshot command" )
       saveSnapshot( state )

@@ -1,10 +1,13 @@
 package sample.blog.post
 
+import akka.Done
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect._
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
+
 import scalaz._
 import Scalaz._
 import shapeless._
@@ -16,7 +19,7 @@ import peds.commons.log.Trace
 import demesne._
 import demesne.register.local.RegisterLocalAgent
 import demesne.register._
-import sample.blog.post.{ PostPrototol => P }
+import sample.blog.post.{PostPrototol => P}
 
 
 object PostModule extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
@@ -34,7 +37,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
     context: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ) : Valid[Future[Unit]] = trace.block( s"initializer($rootType, $model, $context)" ) {
+  ) : Valid[Future[Done]] = trace.block( s"initializer($rootType, $model, $context)" ) {
 
 //todo: I need to better determine how to support validation+Future or Task, esp to ensure order of operation and dev model.
 // I'm not confident this impl will always work for more complex scenarios since I haven't combined the local V[Future] with

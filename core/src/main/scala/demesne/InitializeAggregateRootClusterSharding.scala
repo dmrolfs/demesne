@@ -1,8 +1,11 @@
 package demesne
 
-import scala.concurrent.{ ExecutionContext, Future }
-import scalaz._, Scalaz._
-import akka.cluster.sharding.{ ClusterShardingSettings, ClusterSharding }
+import akka.Done
+
+import scala.concurrent.{ExecutionContext, Future}
+import scalaz._
+import Scalaz._
+import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import peds.commons.Valid
 
 
@@ -13,7 +16,7 @@ trait InitializeAggregateRootClusterSharding extends CommonInitializeAggregateAc
     props: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ): Valid[Future[Unit]] = peds.commons.log.Trace("InitializeAggregateRootClusterSharding").block( "initializer" ) {
+  ): Valid[Future[Done]] = peds.commons.log.Trace("InitializeAggregateRootClusterSharding").block( "initializer" ) {
     super.initializer( rootType, model, props )
 
     ClusterSharding( model.system )
@@ -25,6 +28,6 @@ trait InitializeAggregateRootClusterSharding extends CommonInitializeAggregateAc
         extractShardId = rootType.shardIdFor
       )
 
-    Future.successful{ }.successNel
+    Future.successful{ Done }.successNel
   }
 }

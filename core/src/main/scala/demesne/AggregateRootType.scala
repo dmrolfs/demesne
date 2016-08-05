@@ -23,17 +23,17 @@ trait AggregateRootType extends LazyLogging {
 
   def aggregateRootProps( implicit model: DomainModel ): Props
 
-  val tagType = TypeCase[TaggedID[_]]
+  val TaggedIdType = TypeCase[TaggedID[_]]
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {
     case cmd: CommandLike => ( cmd.targetId.id.toString, cmd )
-    case stop @ PassivationSpecification.StopAggregateRoot( tagType(tid) ) => {
-      logger.debug( "aggregateIdFor(tagged-stop) = [{}]", (tid.id.toString, stop) )
+    case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
+      logger.debug( "tagged aggregateIdFor(stop) = [{}]", (tid.id.toString, stop) )
       ( tid.id.toString, stop )
     }
     case stop @ PassivationSpecification.StopAggregateRoot( id ) => {
-      logger.debug( "aggregateIdFor(stop) = [{}]", (id.toString, stop) )
+      logger.debug( "untagged aggregateIdFor(stop) = [{}]", (id.toString, stop) )
       ( id.toString, stop )
     }
     case e: EntityEnvelope => ( e.id.toString, e )
@@ -53,13 +53,13 @@ trait AggregateRootType extends LazyLogging {
   def numberOfShards: Int = 10 * maximumNrClusterNodes
 
   def shardIdFor: ShardRegion.ExtractShardId = {
-    case cmd: CommandLike => ( math.abs( cmd.targetId.## ) % numberOfShards ).toString
-    case stop @ PassivationSpecification.StopAggregateRoot( tagType(tid) ) => {
-      logger.debug( "shardIdFor(tagged-stop) = [{}]", ( math.abs( tid.id.## ) % numberOfShards ).toString )
+    case cmd: CommandLike => ( math.abs( cmd.targetId.id.## ) % numberOfShards ).toString
+    case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
+      logger.debug( "tagged shardIdFor(stop) = [{}]", ( math.abs( tid.id.## ) % numberOfShards ).toString )
       ( math.abs( tid.id.## ) % numberOfShards ).toString
     }
     case stop @ PassivationSpecification.StopAggregateRoot( id ) => {
-      logger.debug( "shardIdFor(stop) = [{}]", ( math.abs( id.## ) % numberOfShards ).toString )
+      logger.debug( "untagged shardIdFor(stop) = [{}]", ( math.abs( id.## ) % numberOfShards ).toString )
       ( math.abs( id.## ) % numberOfShards ).toString
     }
     case e: EntityEnvelope => ( math.abs( e.id.## ) % numberOfShards ).toString

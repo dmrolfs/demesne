@@ -21,8 +21,8 @@ trait SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMa
   type Fixture <: TestKit
   type FixtureParam = Fixture
 
-  class AkkaFixture( id: Int = sysId.incrementAndGet(), config: Config = demesne.testkit.config )
-  extends TestKit( ActorSystem( name = s"Isolated-${id}", config ) )
+  class AkkaFixture( val fixtureId: Int = sysId.incrementAndGet(), val config: Config = demesne.testkit.config )
+  extends TestKit( ActorSystem( name = s"Isolated-${fixtureId}", config ) )
   with ImplicitSender
 
   def createAkkaFixture( tags: OneArgTest ): Fixture

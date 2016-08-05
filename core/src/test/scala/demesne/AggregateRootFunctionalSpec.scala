@@ -9,7 +9,6 @@ import akka.testkit._
 import scalaz.Scalaz._
 import shapeless._
 import com.typesafe.config.{Config, ConfigFactory}
-import demesne.AggregateRootSpec.FooModule.FooActor.State
 import org.scalatest.OptionValues
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
@@ -22,18 +21,18 @@ import peds.commons.log.Trace
 /**
   * Created by rolfsd on 6/29/16.
   */
-class AggregateRootSpec extends demesne.testkit.AggregateRootSpec[AggregateRootSpec] with OptionValues {
-  import AggregateRootSpec._
+class AggregateRootFunctionalSpec extends demesne.testkit.AggregateRootSpec[AggregateRootFunctionalSpec] with OptionValues {
+  import AggregateRootFunctionalSpec._
 
   override type ID = Foo#ID
 
-  override type Protocol = AggregateRootSpec.Protocol.type
-  override val protocol: Protocol = AggregateRootSpec.Protocol
+  override type Protocol = AggregateRootFunctionalSpec.Protocol.type
+  override val protocol: Protocol = AggregateRootFunctionalSpec.Protocol
 
 
-  class Fixture extends AggregateFixture( config = AggregateRootSpec.config ) {
-    override val module: AggregateRootModule = AggregateRootSpec.FooModule
-    override def moduleCompanions: List[AggregateRootModule] = List( AggregateRootSpec.FooModule )
+  class Fixture extends AggregateFixture( config = AggregateRootFunctionalSpec.config ) {
+    override val module: AggregateRootModule = AggregateRootFunctionalSpec.FooModule
+    override def moduleCompanions: List[AggregateRootModule] = List( AggregateRootFunctionalSpec.FooModule )
 
     override def nextId(): TID = Foo.fooIdentifying.safeNextId
 
@@ -111,7 +110,7 @@ class AggregateRootSpec extends demesne.testkit.AggregateRootSpec[AggregateRootS
   }
 }
 
-object AggregateRootSpec {
+object AggregateRootFunctionalSpec {
   trait Foo extends Entity with Equals {
     override type ID = ShortUUID
     override val evID: ClassTag[ID] = classTag[ShortUUID]
@@ -242,6 +241,7 @@ object AggregateRootSpec {
     }
 
 
+
     object FooActor {
       def props( model: DomainModel, rootType: AggregateRootType ): Props = {
         Props( new FooActor( model, rootType ) with StackableStreamPublisher )
@@ -257,6 +257,8 @@ object AggregateRootSpec {
       override val model: DomainModel,
       override val rootType: AggregateRootType
     ) extends AggregateRoot[Option[FooActor.State], ShortUUID] { outer: EventPublisher =>
+      import FooActor.State
+
       override val acceptance: Acceptance = {
         case (Protocol.Barred(id, b), s) if s.isDefined => {
           log.info( "TEST: accepted BARRED b=[{}]  current-state:[{}]", b, s )

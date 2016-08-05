@@ -10,21 +10,21 @@ abstract class EntityCommand extends AggregateRootModule.Command[Any] with Entit
 abstract class EntityEvent extends AggregateRootModule.Event[Any] with EntityMessage
 
 abstract class EntityProtocol[E <: Entity : Identifying] extends AggregateProtocol[E#ID] {
-  type EntityMessage = demesne.module.entity.messages.EntityMessage
-
-  object EntityMessage {
-    type Add = demesne.module.entity.messages.Add
-    type Rename = demesne.module.entity.messages.Rename
-    type Reslug = demesne.module.entity.messages.Reslug
-    type Disable = demesne.module.entity.messages.Disable
-    type Enable = demesne.module.entity.messages.Enable
-
-    type Added = demesne.module.entity.messages.Added
-    type Renamed = demesne.module.entity.messages.Renamed
-    type Reslugged = demesne.module.entity.messages.Reslugged
-    type Disabled = demesne.module.entity.messages.Disabled
-    type Enabled = demesne.module.entity.messages.Enabled
-  }
+//  type EntityMessage = demesne.module.entity.messages.EntityMessage
+//
+//  object EntityMessage {
+//    type Add = demesne.module.entity.messages.Add
+//    type Rename = demesne.module.entity.messages.Rename
+//    type Reslug = demesne.module.entity.messages.Reslug
+//    type Disable = demesne.module.entity.messages.Disable
+//    type Enable = demesne.module.entity.messages.Enable
+//
+//    type Added = demesne.module.entity.messages.Added
+//    type Renamed = demesne.module.entity.messages.Renamed
+//    type Reslugged = demesne.module.entity.messages.Reslugged
+//    type Disabled = demesne.module.entity.messages.Disabled
+//    type Enabled = demesne.module.entity.messages.Enabled
+//  }
 }
 
 

@@ -24,11 +24,11 @@ trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelT
   type Fixture <: AkkaFixture
   type FixtureParam = Fixture
 
-  class AkkaFixture( id: Int = sysId.incrementAndGet(), config: Config = demesne.testkit.config )
-  extends TestKit( ActorSystem( s"Parallel-${id}", config ) )
+  class AkkaFixture( val fixtureId: Int = sysId.incrementAndGet(), val config: Config = demesne.testkit.config )
+  extends TestKit( ActorSystem( s"Parallel-${fixtureId}", config ) )
   with ImplicitSender {
     implicit val model: DomainModel = {
-      val result = DomainModel.register( s"DomainModel-Parallel-${id}" )( system ) map { Await.result( _, 1.second ) }
+      val result = DomainModel.register( s"Parallel-${fixtureId}" )( system ) map { Await.result( _, 1.second ) }
       result.toOption.get
     }
   }

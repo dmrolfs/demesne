@@ -1,5 +1,7 @@
 package contoso.conference
 
+import akka.Done
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.reflect._
@@ -76,7 +78,7 @@ object ConferenceModule extends AggregateRootModule { module =>
     props: Map[Symbol, Any] 
   )( 
     implicit ec: ExecutionContext
-  ) : Valid[Future[Unit]] = {
+  ) : Valid[Future[Done]] = {
     checkConferenceContext( props ) map { cc => 
       Future successful {
         conferenceContext = cc

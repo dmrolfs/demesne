@@ -42,9 +42,9 @@ with BeforeAndAfterAll
   val protocol: Protocol
 
   abstract class AggregateFixture(
-    id: Int = AggregateRootSpec.sysId.incrementAndGet(),
-    config: Config = demesne.testkit.config
-  ) extends AkkaFixture( id, config ) { fixture =>
+    override val fixtureId: Int = AggregateRootSpec.sysId.incrementAndGet(),
+    override val config: Config = demesne.testkit.config
+  ) extends AkkaFixture( fixtureId, config ) { fixture =>
     logger.info( "FIXTURE ID = [{}]", id.toString )
     private val trace = Trace[AggregateFixture]
 
@@ -75,7 +75,7 @@ with BeforeAndAfterAll
 
     //todo need to figure out how to prevent x-test clobbering of DM across suites
     implicit lazy val model: DomainModel = {
-      val result = DomainModel.register( s"DomainModel-Isolated-${id}" )( system ) map { Await.result( _, 1.second ) }
+      val result = DomainModel.register( s"Isolated-${fixtureId}" )( system ) map { Await.result( _, 1.second ) }
       result.toOption.get
     }
 
@@ -83,7 +83,8 @@ with BeforeAndAfterAll
       Map(
         demesne.ModelKey -> model,
         demesne.SystemKey -> system,
-        demesne.FactoryKey -> demesne.factory.contextFactory
+        demesne.FactoryKey -> demesne.factory.contextFactory,
+        demesne.ConfigurationKey -> config
       )
     }
   }

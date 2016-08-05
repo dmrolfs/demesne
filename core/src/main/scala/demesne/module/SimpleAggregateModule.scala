@@ -1,8 +1,11 @@
 package demesne.module
 
+import akka.Done
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect._
 import akka.actor.Props
+
 import scalaz._
 import Scalaz._
 import shapeless._
@@ -106,7 +109,14 @@ object SimpleAggregateModule {
       props: Map[Symbol, Any] 
     )( 
       implicit ec: ExecutionContext
-    ) : Valid[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ _props = props }.successNel }
+    ) : Valid[Future[Done]] = trace.block( "initializer" ) {
+      Future
+      .successful {
+        _props = props
+        Done
+      }
+      .successNel
+    }
 
 
     override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]
