@@ -1,4 +1,4 @@
-package demesne.register
+package demesne.index
 
 import scala.reflect.ClassTag
 import akka.actor.{ ActorLogging, ActorRef, Props }
@@ -10,11 +10,11 @@ import peds.commons.log.Trace
 import peds.commons.util._
 
 
-object RegisterAggregate {
+object IndexAggregate {
   /**
-   * Create an Akka Props for the [[RegisterAggregate]] actor corresponding to a specific key-to-identifier index. 
+   * Create an Akka Props for the [[IndexAggregate]] actor corresponding to a specific key-to-identifier index.
    */
-  def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new RegisterAggregate[K, I]( topic )  )
+  def props[K: ClassTag, I: ClassTag]( topic: String ): Props = Props( new IndexAggregate[K, I]( topic ) )
 
   /**
    * Create a standard pub/sub topic label for the given aggregate root type name and key type.
@@ -57,14 +57,14 @@ object RegisterAggregate {
 }
 
 /**
- * [[RegisterAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are
- * [[demesne.register.Directive.Record]]ed. Recorded events are published via a distrubuted pub/sub mechanism to a relay who
- * makes sure the index is recorded in a local Register Akka Agent for easier access.
+ * [[IndexAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are
+ * [[demesne.index.Directive.Record]]ed. Recorded events are published via a distrubuted pub/sub mechanism to a relay who
+ * makes sure the index is recorded in a local Index Akka Agent for easier access.
  * Created by damonrolfs on 10/26/14.
  */
-class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends PersistentActor with ActorLogging { outer =>
+class IndexAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends PersistentActor with ActorLogging { outer =>
   import akka.cluster.pubsub.DistributedPubSubMediator.Publish
-  import demesne.register.RegisterAggregate._
+  import demesne.index.IndexAggregate._
 
   val trace = Trace( getClass.safeSimpleName, log )
 
@@ -81,9 +81,9 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends Persi
     "/" +
     Cluster( context.system )
       .selfRoles
-      .find( _.startsWith( "register-" ) )
+      .find( _.startsWith( "index-" ) )
       .map( _ + "-master" )
-      .getOrElse( "register-master" )
+      .getOrElse( "index-master" )
   }
 
   type State = Map[K, I]
@@ -95,9 +95,9 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends Persi
   private def updateState( event: Any ): Unit = trace.block( s"updateState(${event}})" ) {
     event match {
       case e @ Recorded( key: K, _, _, _ ) => {
-        val id = RegisterAggregate.mapTo[I]( e.id )
+        val id = IndexAggregate.mapTo[I]( e.id )
         state += ( key -> id )
-        log.info( "RegisterAggregate RECORDED: {} -> {}", key, id )
+        log.info( "IndexAggregate RECORDED: {} -> {}", key, id )
       }
 
       case Withdrawn( identifier: I, _ ) => {
@@ -106,10 +106,10 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends Persi
         key match {
           case Some(k) => {
             state -= k
-            log.info( "RegisterAggregate WITHDRAWN: {}", k )
+            log.info( "IndexAggregate WITHDRAWN: {}", k )
           }
 
-          case None => log.info( "RegisterAggregate could not find identifier [{}] to withdraw", identifier )
+          case None => log.info( "IndexAggregate could not find identifier [{}] to withdraw", identifier )
         }
       }
 
@@ -117,7 +117,7 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends Persi
         val id = state( oldKey )
         state += ( newKey -> id )
         state -= oldKey
-        log.info( "RegisterAggregate REVISED: {} to {}", oldKey, newKey )
+        log.info( "IndexAggregate REVISED: {} to {}", oldKey, newKey )
       }
     }
   }
@@ -161,13 +161,13 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends Persi
       }
     }
 
-    // Register actors dependent on the aggregate issue a WaitingForStart message
+    // Index actors dependent on the aggregate issue a WaitingForStart message
     case WaitingForStart => {
       log.debug( "recd WaitingForStart: sending Started to {}", sender() )
       sender() ! Started
     }
 
-    case "print" => println( s"register state = ${state}" )
+    case "print" => println( s"index state = ${state}" )
   }
 
   override def unhandled( message: Any ): Unit = {
@@ -176,14 +176,14 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends Persi
 
       case Directive.Withdraw( i ) => {
         log.warning(
-          "REGISTER UNHANDLED: [{}] id[{}] id.class:[{}] type:[{}]",
+          "INDEX UNHANDLED: [{}] id[{}] id.class:[{}] type:[{}]",
           message, i.toString, i.getClass.toString, outer.idType.toString
         )
       }
 
       case Directive.Record(k, i) => {
         log.warning( 
-          "REGISTER UNHANDLED [{}] - verify {} AggregateRootType indexes() " +
+          "INDEX UNHANDLED [{}] - verify {} AggregateRootType indexes() " +
           "type parameterization matches key-match:[{}] id-match:[{}]",
           message, topic,
           (k.getClass.getCanonicalName, outer.keyType.getCanonicalName),
@@ -193,7 +193,7 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends Persi
 
       case Directive.Revise( oldKey, newKey ) => {
         log.warning(
-          "REGISTER UNHANDLED [{}] - verify {} AggregateRootType indexes() type parameterization (old, new):[{}] key-type:[{}]",
+          "INDEX UNHANDLED [{}] - verify {} AggregateRootType indexes() type parameterization (old, new):[{}] key-type:[{}]",
           message, topic, (oldKey, newKey), outer.keyType.getCanonicalName
         )
       }
@@ -202,7 +202,7 @@ class RegisterAggregate[K: ClassTag, I: ClassTag]( topic: String ) extends Persi
 
       }
 
-      case m => log.warning( "REGISTER UNHANDLED [{}]", message )
+      case m => log.warning( "INDEX UNHANDLED [{}]", message )
     }
   }
 }

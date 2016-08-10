@@ -11,7 +11,7 @@ import peds.commons.log.Trace
 import peds.commons.util._
 import demesne.{ AggregateRoot, AggregateRootModule }
 import demesne.module.{ AggregateRootProps, DemesneModuleError, SimpleAggregateModule }
-import demesne.register.AggregateIndexSpec
+import demesne.index.AggregateIndexSpec
 
 
 object SimpleAggregateModuleBuilderInterpreter {

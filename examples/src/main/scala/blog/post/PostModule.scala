@@ -17,8 +17,8 @@ import peds.commons.{TryV, Valid}
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import demesne._
-import demesne.register.local.RegisterLocalAgent
-import demesne.register._
+import demesne.index.local.IndexLocalAgent$
+import demesne.index._
 import sample.blog.post.{PostPrototol => P}
 
 
@@ -72,11 +72,11 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
       override def indexes: Seq[AggregateIndexSpec[_, _]] = {
         Seq(
-          RegisterLocalAgent.spec[String, PostModule.TID]( 'author, RegisterBusSubscription /* not reqd - default */ ) {
+             IndexLocalAgent.spec[String, PostModule.TID]( 'author, IndexBusSubscription /* not reqd - default */ ) {
             case P.PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId)
             case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
           },
-          RegisterLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[P.Event] ) ) {
+             IndexLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[P.Event] ) ) {
             case P.PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record(title, sourceId)
             case P.TitleChanged( sourceId, oldTitle, newTitle ) => Directive.Revise( oldTitle, newTitle )
             case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
@@ -93,10 +93,10 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
       Props(
         new PostActor( model, rt )
-        with ReliablePublisher  
-        with StackableRegisterBusPublisher 
-        with StackableStreamPublisher 
-        with AtLeastOnceDelivery {
+            with ReliablePublisher
+            with StackableIndexBusPublisher
+            with StackableStreamPublisher
+            with AtLeastOnceDelivery {
           trace( s"POST CTOR makeAuthorListing = $makeAuthorListing" )
           val authorListing: ActorRef = makeAuthorListing()
 

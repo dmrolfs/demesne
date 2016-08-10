@@ -15,7 +15,7 @@ import peds.commons.util._
 import peds.commons.log.Trace
 import peds.commons.{TryV, Valid}
 import demesne._
-import demesne.register.AggregateIndexSpec
+import demesne.index.AggregateIndexSpec
 
 
 abstract class SimpleAggregateModule[S: ClassTag : Identifying]

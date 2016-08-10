@@ -1,4 +1,4 @@
-package demesne.register
+package demesne.index
 
 import scala.reflect.ClassTag
 import akka.actor.{ActorPath, Props}
@@ -10,19 +10,19 @@ sealed trait RelaySubscription
 import scala.language.existentials
 case class ContextChannelSubscription( channel: Class[_] ) extends RelaySubscription
 
-case object RegisterBusSubscription extends RelaySubscription
+case object IndexBusSubscription extends RelaySubscription
 
 
 abstract class AggregateIndexSpec[K, I]( implicit val keyTag: ClassTag[K], val idTag: ClassTag[I] ) extends Equals {
   def name: Symbol
   def keyIdExtractor: KeyIdExtractor
   def agentProps( rootType: AggregateRootType ): Props
-  def relaySubscription: RelaySubscription = RegisterBusSubscription
+  def relaySubscription: RelaySubscription = IndexBusSubscription
 
   def topic( rootType: AggregateRootType ): String = makeTopic( name.name, rootType )( keyTag, idTag )
 
-  def aggregateProps( rootType: AggregateRootType ): Props = RegisterAggregate.props[K, I]( topic( rootType ) )
-  def relayProps( aggregatePath: ActorPath ): Props = RegisterRelay.props( aggregatePath, keyIdExtractor )
+  def aggregateProps( rootType: AggregateRootType ): Props = IndexAggregate.props[K, I]( topic( rootType ) )
+  def relayProps( aggregatePath: ActorPath ): Props = IndexRelay.props( aggregatePath, keyIdExtractor )
   def relayClassifier( rootType: AggregateRootType ): String = rootType.name
 
   override def hashCode: Int = {

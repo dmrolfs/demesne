@@ -3,7 +3,7 @@ package demesne.testkit
 import scala.reflect.ClassTag
 import akka.actor.Props
 import demesne._
-import demesne.register.{AggregateIndexSpec, StackableRegisterBusPublisher}
+import demesne.index.{AggregateIndexSpec, StackableIndexBusPublisher}
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.identifier.Identifying
 import peds.commons.log.Trace
@@ -35,7 +35,7 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
 
     def props( model: DomainModel, rt: AggregateRootType ): Props = {
       Props( 
-        new SimpleTestActor( model, rt ) with StackableStreamPublisher with StackableRegisterBusPublisher
+        new SimpleTestActor( model, rt ) with StackableStreamPublisher with StackableIndexBusPublisher
       )
     }
   }

@@ -84,7 +84,7 @@ object SeatsAvailabilityProtocol extends AggregateProtocol[ShortUUID] {
 /**
  * Manages the availability of conference seats. Currently there is one SeatsAvailability instance per conference.
  *
- * Some of the instances of SeatsAvailability are highly contentious, as there could be several users trying to register
+ * Some of the instances of SeatsAvailability are highly contentious, as there could be several users trying to index
  * for the same conference at the same time.
  */
 object SeatsAvailabilityModule extends AggregateRootModule { module =>
@@ -151,7 +151,7 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
 
     override val trace = Trace( "SeatsAvailability", log )
 
-    // override val registerBus: RegisterBus = model.registerBus
+    // override val indexBus: IndexBus = model.indexBus
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[SeatsAvailabilityState]]

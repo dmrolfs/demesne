@@ -14,8 +14,8 @@ import peds.commons.util._
 import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel}
 import demesne.module.{AggregateRootProps, SimpleAggregateModule}
 import demesne.module.entity.messages._
-import demesne.register.{AggregateIndexSpec, Directive}
-import demesne.register.local.RegisterLocalAgent
+import demesne.index.{AggregateIndexSpec, Directive}
+import demesne.index.local.IndexLocalAgent
 import peds.commons.TryV
 
 
@@ -139,7 +139,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
       override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes ++ Seq( makeSlugSpec )
 
       def makeSlugSpec: AggregateIndexSpec[_,_] = {
-        RegisterLocalAgent.spec[String, module.ID]( 'slug ) { // or 'activeSlug
+        IndexLocalAgent.spec[String, module.ID]( 'slug ) { // or 'activeSlug
           case Added( id, info ) => {
             module.triedToEntity( info )
             .map { e => Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id ) }

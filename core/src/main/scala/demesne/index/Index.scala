@@ -1,11 +1,11 @@
-package demesne.register
+package demesne.index
 
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
  * Created by damonrolfs on 11/5/14.
  */
-trait Register[K, I] {
+trait Index[K, I] {
   //todo: path dependent types for local and shared (via Future[]) work? PredicateResult seems to be the difficult part
   type Result
   type OptionalResult = Option[Result]
@@ -24,7 +24,7 @@ trait Register[K, I] {
   def futureGet( key: K ): Future[Option[I]]
 
   /** Retrieves the value which is associated with the given key. This
-    *  method invokes the `default` method of the register if there is no mapping
+    *  method invokes the `default` method of the index if there is no mapping
     *  from the given key to an id. Unless overridden, the `default` method throws a
     *  `NoSuchElementException`.
     *
@@ -36,10 +36,10 @@ trait Register[K, I] {
 
   def future( key: K ): Future[I] = futureGet( key ) map { _ getOrElse default( key ) }
 
-  /**  Returns the aggregate id associated with a key, or a default value if the key is not contained in the register.
+  /**  Returns the aggregate id associated with a key, or a default value if the key is not contained in the index.
     *   @param   key      the key.
     *   @param   default  a computation that yields a default aggregate id in case no binding for `key` is
-    *                     found in the register.
+    *                     found in the index.
     *   @tparam  I1       the result type of the default computation.
     *   @return  the aggregate id associated with `key` if it exists, otherwise the result of the `default` computation.
     *
@@ -47,14 +47,14 @@ trait Register[K, I] {
     */
   def getOrElse[I1 >: I]( key: K, default: => I1 ): I1 = get( key ) getOrElse default
 
-  /** Tests whether this register contains a binding for a key.
+  /** Tests whether this index contains a binding for a key.
     *
     *  @param key the key
-    *  @return    `true` if there is a binding for `key` in this register, `false` otherwise.
+    *  @return    `true` if there is a binding for `key` in this index, `false` otherwise.
     */
   def contains( key: K ): Boolean = get( key ).isDefined
 
-  /** Tests whether this register contains a binding for a key. This method,
+  /** Tests whether this index contains a binding for a key. This method,
     *  which implements an abstract method of trait `PartialFunction`,
     *  is equivalent to `contains`.
     *
@@ -63,9 +63,9 @@ trait Register[K, I] {
     */
   def isDefinedAt( key: K ): Boolean = contains( key )
 
-//  def map[BK, BI]( f: Entry => (BK, BI) ): Register[BK, BI]
+//  def map[BK, BI]( f: Entry => (BK, BI) ): Index[BK, BI]
 //
-//  def flatMap[BK, BI]( f: Entry => Register[BK, BI]): Register[BK, BI]
+//  def flatMap[BK, BI]( f: Entry => Index[BK, BI]): Index[BK, BI]
 //
 //  def foreach[U]( f: Entry => U ): Unit
 

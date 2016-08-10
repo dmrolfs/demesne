@@ -1,4 +1,4 @@
-package demesne.register
+package demesne.index
 
 import scala.concurrent.duration._
 import scala.reflect._
@@ -13,12 +13,12 @@ import com.typesafe.scalalogging.LazyLogging
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
 import peds.commons.TryV
 import demesne._
-import demesne.register.local.RegisterLocalAgent
+import demesne.index.local.IndexLocalAgent
 import demesne.testkit.{AggregateRootSpec, SimpleTestModule}
 import demesne.testkit.concurrent.CountDownFunction
 
 
-object RegisterAcceptanceSpec {
+object IndexAcceptanceSpec {
   case class Foo( override val id: TaggedID[ShortUUID], override val name: String, foo: String, bar: Int ) extends Entity {
     override type ID = ShortUUID
     override val evID: ClassTag[ID] = classTag[ShortUUID]
@@ -87,11 +87,11 @@ object RegisterAcceptanceSpec {
 
     override def indexes: Seq[AggregateIndexSpec[_, _]] = {
       Seq(
-        RegisterLocalAgent.spec[String, TestModule.TID]( 'bus, RegisterBusSubscription ) {
+           IndexLocalAgent.spec[String, TestModule.TID]( 'bus, IndexBusSubscription ) {
           case Protocol.Added( sid, foo, _ ) => Directive.Record( foo, sid )
           case Protocol.Deleted( sid ) => Directive.Withdraw( sid )
         },
-        RegisterLocalAgent.spec[Int, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Protocol.Event] ) ) {
+           IndexLocalAgent.spec[Int, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Protocol.Event] ) ) {
           case Protocol.Added( sid, _, bar ) => Directive.Record( bar, sid )
           case Protocol.BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar, newBar )
           case Protocol.Deleted( sid ) => Directive.Withdraw( sid )
@@ -107,14 +107,14 @@ object RegisterAcceptanceSpec {
   }
 }
 
-class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] with ScalaFutures {
-  import RegisterAcceptanceSpec._
+class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with ScalaFutures {
+  import IndexAcceptanceSpec._
 
-  private val trace = Trace[RegisterAcceptanceSpec]
+  private val trace = Trace[IndexAcceptanceSpec]
 
   override type ID = Foo#ID
-  override type Protocol = RegisterAcceptanceSpec.Protocol.type
-  override val protocol: Protocol = RegisterAcceptanceSpec.Protocol
+  override type Protocol = IndexAcceptanceSpec.Protocol.type
+  override val protocol: Protocol = IndexAcceptanceSpec.Protocol
 
 
   override type Fixture = TestFixture
@@ -142,7 +142,7 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
 
   override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
 
-  "Index Register should" should {
+  "Index Index should" should {
     // "config is okay" taggedAs(WIP) in { f: Fixture =>
     //   val config = f.system.settings.config
     //   config.getString( "akka.persistence.journal.plugin" ) mustBe "inmemory-journal"
@@ -325,11 +325,11 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
 
     // override def indexes: Seq[AggregateIndexSpec[_, _]] = {
     //   Seq(
-    //     RegisterLocalAgent.spec[String, TestModule.TID]( 'bus, RegisterBusSubscription ) {
+    //     IndexLocalAgent.spec[String, TestModule.TID]( 'bus, IndexBusSubscription ) {
     //       case Added( sid, foo, _ ) => Directive.Record( foo, sid )
     //       case Deleted( sid ) => Directive.Withdraw( sid )
     //     },
-    //     RegisterLocalAgent.spec[Int, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
+    //     IndexLocalAgent.spec[Int, TestModule.TID]( 'stream, ContextChannelSubscription( classOf[Added] ) ) {
     //       case Added( sid, _, bar ) => Directive.Record( bar, sid )
     //       case BarChanged( sid, oldBar, newBar ) => Directive.Revise( oldBar, newBar )
     //       case Deleted( sid ) => Directive.Withdraw( sid )
@@ -342,9 +342,9 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       import fixture._
 
       val rt = TestModule.rootType
-      val br = model.aggregateRegisterFor[String, TestModule.TID]( rt, 'bus )
+      val br = model.aggregateIndexFor[String, TestModule.TID]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor[Int, TestModule.TID]( rt, 'stream )
+      val sr = model.aggregateIndexFor[Int, TestModule.TID]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br 
@@ -371,22 +371,22 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
         countDown await 200.millis.dilated
 
         whenReady( busRegister.futureGet( "Test Foo" ) ) { result => result mustBe Some(tid) }
-        trace( s"""bus-register:Test Foo = ${busRegister.get("Test Foo")}""" )
+        trace( s"""bus-index:Test Foo = ${busRegister.get("Test Foo")}""" )
         busRegister.get( "Test Foo" ) mustBe Some(tid)
 
         whenReady( streamRegister.futureGet( 17 ) ) { result => result mustBe Some(tid) }
-        trace( s"stream-register:17 = ${streamRegister.get(17)}" )
+        trace( s"stream-index:17 = ${streamRegister.get(17)}" )
         streamRegister.get( 17 ) mustBe Some(tid)
       }
     }
 
-    "withdrawn from register after delete" in { fixture: Fixture =>
+    "withdrawn from index after delete" in { fixture: Fixture =>
       import fixture._
 
       val rt = TestModule.rootType
-      val br = model.aggregateRegisterFor[String, TestModule.ID]( rt, 'bus )
+      val br = model.aggregateIndexFor[String, TestModule.ID]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor[Int, TestModule.ID]( rt, 'stream )
+      val sr = model.aggregateIndexFor[Int, TestModule.ID]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br
@@ -452,13 +452,13 @@ class RegisterAcceptanceSpec extends AggregateRootSpec[RegisterAcceptanceSpec] w
       }
     }
 
-    "revised in register after change" in { fixture: Fixture =>
+    "revised in index after change" in { fixture: Fixture =>
       import fixture._
 
       val rt = TestModule.rootType
-      val br = model.aggregateRegisterFor[String, TestModule.TID]( rt, 'bus )
+      val br = model.aggregateIndexFor[String, TestModule.TID]( rt, 'bus )
       br.isRight mustBe true
-      val sr = model.aggregateRegisterFor[Int, TestModule.TID]( rt, 'stream )
+      val sr = model.aggregateIndexFor[Int, TestModule.TID]( rt, 'stream )
       sr.isRight mustBe true
       for {
         busRegister <- br

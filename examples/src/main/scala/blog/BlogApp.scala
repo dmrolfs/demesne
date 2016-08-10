@@ -44,7 +44,7 @@ object BlogApp extends StrictLogging {
         result
       }
 
-      DomainModel.register( "blog" )( clusterSystem ) map { dm =>
+      DomainModel.make( "blog" )( clusterSystem ) map { dm =>
         val model = Await.result( dm, 1.second )
         logger.info( s"model [blog] registered [$model]" )
 

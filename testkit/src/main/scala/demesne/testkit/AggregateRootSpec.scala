@@ -75,7 +75,8 @@ with BeforeAndAfterAll
 
     //todo need to figure out how to prevent x-test clobbering of DM across suites
     implicit lazy val model: DomainModel = {
-      val result = DomainModel.register( s"Isolated-${fixtureId}" )( system ) map { Await.result( _, 1.second ) }
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val result = DomainModel.make( s"Isolated-${fixtureId}" )( system, global ) map {Await.result( _, 1.second ) }
       result.toOption.get
     }
 

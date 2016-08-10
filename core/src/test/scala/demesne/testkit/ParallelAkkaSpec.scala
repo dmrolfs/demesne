@@ -28,7 +28,8 @@ trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelT
   extends TestKit( ActorSystem( s"Parallel-${fixtureId}", config ) )
   with ImplicitSender {
     implicit val model: DomainModel = {
-      val result = DomainModel.register( s"Parallel-${fixtureId}" )( system ) map { Await.result( _, 1.second ) }
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val result = DomainModel.make( s"Parallel-${fixtureId}" )( system, global ) map {Await.result( _, 1.second ) }
       result.toOption.get
     }
   }

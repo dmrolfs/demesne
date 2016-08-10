@@ -1,4 +1,4 @@
-package demesne.register
+package demesne.index
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -6,8 +6,8 @@ import akka.actor._
 import akka.event.LoggingReceive
 import akka.testkit._
 import demesne._
-import demesne.register.RegisterSupervisor._
-import demesne.register.local.RegisterLocalAgent
+import demesne.index.IndexSupervisor._
+import demesne.index.local.IndexLocalAgent
 import demesne.testkit.ParallelAkkaSpec
 import org.scalatest.mock.MockitoSugar
 import org.scalatest.{Outcome, Tag}
@@ -16,16 +16,16 @@ import peds.commons.log.Trace
 import scala.concurrent.duration._
 
 
-object RegisterSupervisorSpec {
+object IndexSupervisorSpec {
   val sysId = new AtomicInteger()
 }
 
 /**
  * Created by damonrolfs on 9/18/14.
  */
-class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
+class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
-  private val trace = Trace[RegisterSupervisorSpec]
+  private val trace = Trace[IndexSupervisorSpec]
 
   case class FooAdded( value: String )
 
@@ -53,11 +53,11 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
     def testSpec(
       specName: Symbol,
-      specRelaySubscription: RelaySubscription = RegisterBusSubscription
+      specRelaySubscription: RelaySubscription = IndexBusSubscription
     )(
-      specAgentProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterLocalAgent.props( makeTopic[String, Int]( specName.name, rt) ),
-      specAggregateProps: AggregateRootType => Props = (rt: AggregateRootType) => RegisterAggregate.props( makeTopic[String, Int](specName.name, rt) ),
-      specRelayProps: ActorPath => Props = (ap: ActorPath) => RegisterRelay.props(ap, fooIdExtractor )
+                  specAgentProps: AggregateRootType => Props = (rt: AggregateRootType) => IndexLocalAgent.props( makeTopic[String, Int]( specName.name, rt ) ),
+                  specAggregateProps: AggregateRootType => Props = (rt: AggregateRootType) => IndexAggregate.props( makeTopic[String, Int]( specName.name, rt ) ),
+                  specRelayProps: ActorPath => Props = (ap: ActorPath) => IndexRelay.props( ap, fooIdExtractor )
     ): AggregateIndexSpec[String, Int] = new AggregateIndexSpec[String, Int] {
       override val name: Symbol = specName
       override val keyIdExtractor: KeyIdExtractor = fooIdExtractor
@@ -71,7 +71,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     val constituents = Seq( Agent, Aggregate, Relay )
     val registrant = TestProbe()
 
-    val bus = mock[RegisterBus]
+    val bus = mock[IndexBus]
 
     val busSpec = testSpec( 'busFoo )()
     val busRoot = rootType( busSpec )
@@ -101,9 +101,9 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
   }
 
   def constituencyFor(
-    probes: Map[RegisterConstituent, ActorRef],
-    registrantType: AggregateRootType,
-    spec: AggregateIndexSpec[_, _]
+                       probes: Map[IndexConstituent, ActorRef],
+                       registrantType: AggregateRootType,
+                       spec: AggregateIndexSpec[_, _]
   ): List[RegisterConstituentRef] = {
     val aggregatePath = probes( Aggregate ).path
     List(
@@ -113,18 +113,18 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     )
   }
 
-  def nameFor( constituent: RegisterConstituent, rootType: AggregateRootType, spec: AggregateIndexSpec[_,_] ): String = {
+  def nameFor(constituent: IndexConstituent, rootType: AggregateRootType, spec: AggregateIndexSpec[_,_] ): String = {
     constituent.category.name + "-" + spec.topic( rootType )
   }
 
   trait TestConstituencyProviders extends ConstituencyProvider { outer: Actor =>
-    def paths: Map[RegisterConstituent, ActorPath]
+    def paths: Map[IndexConstituent, ActorPath]
 
     override def pathFor(
       registrantType: AggregateRootType,
       spec: AggregateIndexSpec[_, _]
     )(
-      constituent: RegisterConstituent
+      constituent: IndexConstituent
     ): ActorPath = paths.get( constituent ) getOrElse super.pathFor(registrantType, spec)( constituent )
 
     override def constituencyFor(
@@ -140,10 +140,10 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     }
   }
 
-  def registerSupervisorProps( bus: RegisterBus, constituentPaths: Map[RegisterConstituent, ActorPath] ): Props = {
+  def registerSupervisorProps(bus: IndexBus, constituentPaths: Map[IndexConstituent, ActorPath] ): Props = {
     Props(
-      new RegisterSupervisor( bus ) with TestConstituencyProviders {
-        override val paths: Map[RegisterConstituent, ActorPath] = constituentPaths
+      new IndexSupervisor( bus ) with TestConstituencyProviders {
+        override val paths: Map[IndexConstituent, ActorPath] = constituentPaths
       }
     )
   }
@@ -160,12 +160,12 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
   }
 
 
-  "RegisterSupervisor should" should {
+  "IndexSupervisor should" should {
 
-    "register index for spec with bus subscription" taggedAs(WIP) in { implicit f: Fixture =>
+    "index index for spec with bus subscription" taggedAs(WIP) in { implicit f: Fixture =>
       implicit val system = f.system
-      val real = TestActorRef[RegisterSupervisor]( RegisterSupervisor.props( f.bus ) )
-      real.receive( RegisterSupervisor.RegisterIndex( f.busRoot, f.busSpec ), f.registrant.ref )
+      val real = TestActorRef[IndexSupervisor]( IndexSupervisor.props( f.bus ) )
+      real.receive( IndexSupervisor.RegisterIndex( f.busRoot, f.busSpec ), f.registrant.ref )
 
       f.registrant.expectMsgPF(
         3.seconds.dilated,
@@ -180,10 +180,10 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       actual must be (expected)
     }
 
-    "register index for spec with context subscription" taggedAs(WIP) in { implicit f: Fixture =>
+    "index index for spec with context subscription" taggedAs(WIP) in { implicit f: Fixture =>
       implicit val system = f.system
-      val real = TestActorRef[RegisterSupervisor]( RegisterSupervisor.props( f.bus ) )
-      real.receive( RegisterSupervisor.RegisterIndex( f.contextRoot, f.contextSpec ), f.registrant.ref )
+      val real = TestActorRef[IndexSupervisor]( IndexSupervisor.props( f.bus ) )
+      real.receive( IndexSupervisor.RegisterIndex( f.contextRoot, f.contextSpec ), f.registrant.ref )
 
       f.registrant.expectMsgPF(
         3.seconds.dilated,
@@ -198,24 +198,24 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       actual must be (expected)
     }
 
-    "supervisor restarts register constituent upon failure" in { implicit f: Fixture =>
+    "supervisor restarts index constituent upon failure" in { implicit f: Fixture =>
       implicit val system = f.system
       val aggregateProbe = TestProbe()
       val relayProbe = TestProbe()
-      val constituentPaths: Map[RegisterConstituent, ActorPath] = Map(
+      val constituentPaths: Map[IndexConstituent, ActorPath] = Map(
         Aggregate -> aggregateProbe.ref.path,
         Relay -> relayProbe.ref.path
-      )
+                                                                  )
       val restartSpec = f.testSpec( 'testFoo )( specAgentProps = (rt: AggregateRootType) => Props(new TestConstituent) )
       val restartRoot = f.rootType( restartSpec )
       val real = TestActorRef( registerSupervisorProps( f.bus, constituentPaths ) )
-      real.receive( RegisterSupervisor.RegisterIndex( restartRoot, restartSpec), f.registrant.ref )
+      real.receive( IndexSupervisor.RegisterIndex( restartRoot, restartSpec ), f.registrant.ref )
 
-      aggregateProbe expectMsg register.WaitingForStart
-      aggregateProbe reply register.Started
+      aggregateProbe expectMsg index.WaitingForStart
+      aggregateProbe reply index.Started
 
-      relayProbe expectMsg register.WaitingForStart
-      relayProbe reply register.Started
+      relayProbe expectMsg index.WaitingForStart
+      relayProbe reply index.Started
 
       trace( s"###### LOOKING FOR = IndexRegistered( _, $restartRoot, $restartSpec )  ######")
       f.registrant.expectMsgPF(){ case IndexRegistered( _, restartRoot, restartSpec) => true }
@@ -229,7 +229,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
     //    "no startups after initial create in node" in { implicit f: Fixture =>
 //      implicit val system = f.system
-//      val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
+//      val spec = IndexLocalAgent.spec[String, Int]( 'foo ){
 //        case FooAdded( name ) => (name, name.hashCode)
 //      }
 //      val rt = f.rootType( spec )
@@ -246,7 +246,7 @@ class RegisterSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 //
 //    "relay startup after initial create in node" in { implicit f: Fixture =>
 //      implicit val system = f.system
-//      val spec = RegisterLocalAgent.spec[String, Int]( 'foo ){
+//      val spec = IndexLocalAgent.spec[String, Int]( 'foo ){
 //        case FooAdded( name ) => (name, name.hashCode)
 //      }
 //      val rt = f.rootType( spec )

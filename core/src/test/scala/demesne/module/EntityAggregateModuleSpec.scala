@@ -9,7 +9,7 @@ import scalaz.Scalaz._
 import shapeless._
 import demesne._
 import demesne.module.entity.{messages => EntityProtocol}
-import demesne.register.{AggregateIndexSpec, StackableRegisterBusPublisher}
+import demesne.index.{AggregateIndexSpec, StackableIndexBusPublisher}
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
@@ -96,11 +96,11 @@ object EntityAggregateModuleSpec {
   object FooAggregateRoot {
     val myIndexes: () => Seq[AggregateIndexSpec[_, _]] = () => trace.briefBlock( "myIndexes" ) {
       Seq(
-        demesne.register.local.RegisterLocalAgent.spec[String, Foo#TID]( 'name ) {
+        demesne.index.local.IndexLocalAgent.spec[String, Foo#TID]( 'name ) {
           case EntityProtocol.Added( id, info ) => {
             module.triedToEntity( info )
-            .map { e => demesne.register.Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id ) }
-            .getOrElse { demesne.register.Directive.Record( id, id ) }
+            .map { e => demesne.index.Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id ) }
+            .getOrElse { demesne.index.Directive.Record( id, id ) }
           }
 
           // case module.Disabled( id, _ ) => Directive.Withdraw( id )
@@ -129,7 +129,7 @@ object EntityAggregateModuleSpec {
     
     object FooActor {
       def props( model: DomainModel, rt: AggregateRootType ): Props = {
-        Props( new FooActor(model, rt) with StackableStreamPublisher with StackableRegisterBusPublisher )
+        Props( new FooActor(model, rt) with StackableStreamPublisher with StackableIndexBusPublisher )
       }
     }
 
@@ -175,7 +175,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     override def nextId(): TID = Foo.fooIdentifying.safeNextId
 
     val rootType = FooAggregateRoot.module.rootType
-    def slugIndex = model.aggregateRegisterFor[String, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
+    def slugIndex = model.aggregateIndexFor[String, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
     override val module: AggregateRootModule = FooAggregateRoot.module
     def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
   }
@@ -576,19 +576,19 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
   //     }
   //   }
 
-  //   "recorded in title register after post added via event stream" in { fixture: Fixture =>
+  //   "recorded in title index after post added via event stream" in { fixture: Fixture =>
   //     import fixture._
 
   //     val rt = PostModule.aggregateRootType
-  //     val ar = model.aggregateRegisterFor( rt, 'title )
+  //     val ar = model.aggregateIndexFor( rt, 'title )
   //     ar.isRight mustBe true
   //     for {
-  //       register <- ar 
+  //       index <- ar
   //     } {
   //       val p = TestProbe()
 
   //       val id = PostModule.nextId
-  //       val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+  //       val content = PostContent( author="Damon", title="Test Add", body="testing author index add" )
   //       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
   //       system.eventStream.subscribe( p.ref, classOf[Envelope] )
 
@@ -606,10 +606,10 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
   //       val countDown = new CountDownFunction[String]
 
   //       countDown await 200.millis.dilated
-  //       whenReady( register.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
+  //       whenReady( index.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
 
   // //      countDown await 75.millis.dilated
-  //       register.get( "Test Add" ) mustBe Some(id)
+  //       index.get( "Test Add" ) mustBe Some(id)
   //     }
   //   }
   }
