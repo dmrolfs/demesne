@@ -177,7 +177,7 @@ with ActorLogging {
       }
 
       case m => {
-        log.debug( "aggregate root unhandled class[{}]: object:[{}]", m.getClass.getCanonicalName, m )
+        log.debug( "aggregate root[{}] unhandled class[{}]: object:[{}]", aggregateId, m.getClass.getCanonicalName, m )
         super.unhandled( m )
       }
     }
