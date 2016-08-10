@@ -37,7 +37,7 @@ object ConferenceContextProtocol {
 // use a bloomfilter behand
 // initially use in-memory cache, but later use shard system
 
-//todo replace with aggregate register: slug -> conferenceId
+//todo replace with aggregate index: slug -> conferenceId
 // Conference/Conference/ConferenceContext.cs
 object ConferenceContext {
   def props: Props = Props( new ConferenceContext )

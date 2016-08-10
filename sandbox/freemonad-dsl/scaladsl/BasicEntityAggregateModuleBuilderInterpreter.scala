@@ -8,7 +8,7 @@ import peds.archetype.domain.model.core.Entity
 import peds.commons.log.Trace
 import peds.commons.util._
 import demesne.module.{ AggregateRootProps, BasicEntityAggregateModule }
-import demesne.register.AggregateIndexSpec
+import demesne.index.AggregateIndexSpec
 
 
 object BasicEntityAggregateModuleBuilderInterpreter {

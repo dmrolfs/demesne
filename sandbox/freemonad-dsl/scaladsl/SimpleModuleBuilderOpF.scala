@@ -1,7 +1,7 @@
 package demesne.scaladsl
 
 import scala.language.existentials
-import demesne.register.AggregateIndexSpec
+import demesne.index.AggregateIndexSpec
 
 
 trait SimpleModuleBuilderOpF[+A] extends ModuleBuilderOpF[A]

@@ -242,17 +242,17 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "recorded in author register after post added via bus" in { fixture: Fixture =>
+    "recorded in author index after post added via bus" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.rootType
-      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
+      val ar = model.aggregateIndexFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
       for {
         register <- ar 
       } {
         val id = PostModule.nextId.toOption.get
-        val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+        val content = PostContent( author="Damon", title="Test Add", body="testing author index add" )
         system.eventStream.subscribe( bus.ref, classOf[P.Event] )
 
         val post = PostModule.aggregateOf( id )
@@ -265,16 +265,16 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         countDown await 200.millis.dilated
 
         whenReady( register.futureGet( "Damon" ) ) { result => result mustBe Some(id) }
-        trace( s"""register:Damon = ${register.get("Damon")}""" )
+        trace( s"""index:Damon = ${register.get("Damon")}""" )
         register.get( "Damon" ) mustBe Some(id)
       }
     }
 
-    "recorded in title register after post added via event stream" in { fixture: Fixture =>
+    "recorded in title index after post added via event stream" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.rootType
-      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
+      val ar = model.aggregateIndexFor[String, PostModule.TID]( rt, 'title )
       ar.isRight mustBe true
       for {
         register <- ar 
@@ -282,7 +282,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         val p = TestProbe()
 
         val id = PostModule.nextId.toOption.get
-        val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+        val content = PostContent( author="Damon", title="Test Add", body="testing author index add" )
         system.eventStream.subscribe( bus.ref, classOf[P.Event] )
         system.eventStream.subscribe( p.ref, classOf[P.Event] )
 
@@ -307,13 +307,13 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "withdrawn title in register after post delete via event stream" in { fixture: Fixture =>
+    "withdrawn title in index after post delete via event stream" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.rootType
-      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
+      val ar = model.aggregateIndexFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
-      val tr = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
+      val tr = model.aggregateIndexFor[String, PostModule.TID]( rt, 'title )
       tr.isRight mustBe true
       for {
         authorRegister <- ar
@@ -323,7 +323,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
         val id = PostModule.nextId.toOption.get
 
-        val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
+        val content = PostContent( author="Damon", title="Test Add", body="testing index add" )
         system.eventStream.subscribe( bus.ref, classOf[P.Event] )
         system.eventStream.subscribe( p.ref, classOf[P.Event] )
 
@@ -371,13 +371,13 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "revised title in register after post title change via event stream" in { fixture: Fixture =>
+    "revised title in index after post title change via event stream" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.rootType
-      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
+      val ar = model.aggregateIndexFor[String, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
-      val tr = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
+      val tr = model.aggregateIndexFor[String, PostModule.TID]( rt, 'title )
       tr.isRight mustBe true
       for {
         authorRegister <- ar
@@ -386,7 +386,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         val p = TestProbe()
 
         val id = PostModule.nextId.toOption.get
-        val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
+        val content = PostContent( author="Damon", title="Test Add", body="testing index add" )
         system.eventStream.subscribe( bus.ref, classOf[P.Event] )
         system.eventStream.subscribe( p.ref, classOf[P.Event] )
 

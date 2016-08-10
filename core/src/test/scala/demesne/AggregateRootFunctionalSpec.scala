@@ -387,7 +387,7 @@ object AggregateRootFunctionalSpec {
       |  router-misconfiguration = on
       |}
       |
-      |demesne.register-dispatcher {
+      |demesne.index-dispatcher {
       |  type = Dispatcher
       |  executor = "fork-join-executor"
       |  fork-join-executor {

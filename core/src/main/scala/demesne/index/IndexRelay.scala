@@ -1,4 +1,4 @@
-package demesne.register
+package demesne.index
 
 import scala.concurrent.duration._
 import akka.actor.FSM.{CurrentState, Transition}
@@ -11,16 +11,16 @@ import peds.commons.log.Trace
 import peds.commons.util._
 
 
-object RegisterRelay extends com.typesafe.scalalogging.LazyLogging {
-  def props( registerAggregatePath: ActorPath, extractor: KeyIdExtractor ): Props = {
-    Props( new RegisterRelay( registerAggregatePath, extractor) )
+object IndexRelay extends com.typesafe.scalalogging.LazyLogging {
+  def props( indexAggregatePath: ActorPath, extractor: KeyIdExtractor ): Props = {
+    Props( new IndexRelay( indexAggregatePath, extractor ) )
   }
 }
 
 /**
  * Created by damonrolfs on 10/27/14.
  */
-class RegisterRelay( registerAggregatePath: ActorPath, extractor: KeyIdExtractor )
+class IndexRelay( indexAggregatePath: ActorPath, extractor: KeyIdExtractor )
 extends Actor
 with ActorLogging {
   val trace = Trace( getClass.safeSimpleName, log )
@@ -32,7 +32,7 @@ with ActorLogging {
 
   //todo move into configuration retry timeout
   val proxy: ActorRef = context.actorOf(
-    ReliableProxy.props( targetPath = registerAggregatePath, retryAfter = 100.millis )
+    ReliableProxy.props( targetPath = indexAggregatePath, retryAfter = 100.millis )
   )
   proxy ! FSM.SubscribeTransitionCallBack( self )
 
@@ -41,13 +41,13 @@ with ActorLogging {
 
   def connecting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case CurrentState( _, state ) if state != Connecting => {
-      log.info( "Relay connected to register aggregate at {}", registerAggregatePath )
+      log.info( "Relay connected to index aggregate at {}", indexAggregatePath )
       proxy ! WaitingForStart
       context become starting( waiting )
     }
 
     case Transition( _, Connecting, _) => {
-      log.info( "Relay connected to register aggregate at {}", registerAggregatePath )
+      log.info( "Relay connected to index aggregate at {}", indexAggregatePath )
       proxy ! WaitingForStart
       context become starting( waiting )
     }
@@ -59,7 +59,7 @@ with ActorLogging {
   }
 
   def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
-    case Started if sender().path == registerAggregatePath => {
+    case Started if sender().path == indexAggregatePath => {
       log.info( "relay recd start confirmation from aggregate => activating" )
       waiting foreach { _ ! Started }
       context become active
@@ -75,7 +75,7 @@ with ActorLogging {
     case event if fullExtractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
       val directive = fullExtractor( event )
       proxy ! directive
-      log.info( "relayed to aggregate register: {}", directive )
+      log.info( "relayed to aggregate index: {}", directive )
     }
 
     case WaitingForStart => {

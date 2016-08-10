@@ -8,7 +8,7 @@ import scalaz.{-\/, \/-}
 import scalaz.Scalaz._
 import shapeless.Lens
 import demesne._
-import demesne.register.AggregateIndexSpec
+import demesne.index.AggregateIndexSpec
 import demesne.testkit.AggregateRootSpec
 import org.scalatest.Tag
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
@@ -509,19 +509,19 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
   // //     }
   // //   }
 
-  // //   "recorded in title register after post added via event stream" in { fixture: Fixture =>
+  // //   "recorded in title index after post added via event stream" in { fixture: Fixture =>
   // //     import fixture._
 
   // //     val rt = PostModule.aggregateRootType
-  // //     val ar = model.aggregateRegisterFor( rt, 'title )
+  // //     val ar = model.aggregateIndexFor( rt, 'title )
   // //     ar.isRight mustBe true
   // //     for {
-  // //       register <- ar 
+  // //       index <- ar
   // //     } {
   // //       val p = TestProbe()
 
   // //       val id = PostModule.nextId
-  // //       val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+  // //       val content = PostContent( author="Damon", title="Test Add", body="testing author index add" )
   // //       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
   // //       system.eventStream.subscribe( p.ref, classOf[Envelope] )
 
@@ -539,10 +539,10 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
   // //       val countDown = new CountDownFunction[String]
 
   // //       countDown await 200.millis.dilated
-  // //       whenReady( register.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
+  // //       whenReady( index.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
 
   // // //      countDown await 75.millis.dilated
-  // //       register.get( "Test Add" ) mustBe Some(id)
+  // //       index.get( "Test Add" ) mustBe Some(id)
   // //     }
   // //   }
   }
