@@ -1,8 +1,9 @@
 package sample.blog
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
-import scalaz._, Scalaz._
+import scalaz._
+import Scalaz._
 import akka.actor._
 import akka.cluster.sharding.ClusterSharding
 import akka.pattern.ask
@@ -17,13 +18,14 @@ import sample.blog.post.PostModule
 
 object BlogApp extends StrictLogging {
   def main( args: Array[String] ): Unit = {
+    import ExecutionContext.Implicits.global
     if ( args.isEmpty ) startup( Seq( 2551, 2552, 0 ) )
     else startup( args map { _.toInt } )
   }
 
   // object registry extends AuthorListingModule with PostModule with ClusteredAggregateModuleExtension
 
-  def startup( ports: Seq[Int] ): Unit = {
+  def startup( ports: Seq[Int] )( implicit ec: ExecutionContext ): Unit = {
     ports foreach { port =>
       val config = ConfigFactory.parseString( "akka.remote.netty.tcp.port=" + port ).withFallback( ConfigFactory.load() )
       val clusterSystem = ActorSystem( "ClusterSystem", config )
@@ -44,7 +46,7 @@ object BlogApp extends StrictLogging {
         result
       }
 
-      DomainModel.make( "blog" )( clusterSystem ) map { dm =>
+      DomainModel.make( "blog" )( clusterSystem, ec ) map { dm =>
         val model = Await.result( dm, 1.second )
         logger.info( s"model [blog] registered [$model]" )
 

@@ -1,9 +1,8 @@
 package sample.blog.post
 
-import akka.Done
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect._
+import akka.Done
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
@@ -17,7 +16,7 @@ import peds.commons.{TryV, Valid}
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import demesne._
-import demesne.index.local.IndexLocalAgent$
+import demesne.index.local.IndexLocalAgent
 import demesne.index._
 import sample.blog.post.{PostPrototol => P}
 
