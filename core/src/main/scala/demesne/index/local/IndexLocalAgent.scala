@@ -42,6 +42,12 @@ object IndexLocalAgent {
   )(
     implicit override val ec: ExecutionContext
   ) extends Index[K, I] {
+    /** Returns all of the current aggregate id key entries.
+      *
+      * @return a map containing the aggregate ids and associated keys.
+      */
+    override def entries: Map[K, I] = agent.get()
+    override def futureEntries: Future[Map[K, I]] = agent.future()
     override def get( key: K ): Option[I] = agent.get get key
     override def toString: String = getClass.safeSimpleName + s"( ${agent.get.mkString( "," )} )"
     override def futureGet( key: K ): Future[Option[I]] = agent.future() map { _ get key }
