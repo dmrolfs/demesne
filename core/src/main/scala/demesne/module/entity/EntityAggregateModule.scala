@@ -21,7 +21,7 @@ import peds.commons.TryV
 
 object EntityAggregateModule {
   type MakeIndexSpec = Function0[Seq[AggregateIndexSpec[_,_]]]
-  val makeEmptyIndexSpec = () => Seq.empty[AggregateIndexSpec[_,_]]
+  val makeEmptyIndexSpec: MakeIndexSpec = () => Seq.empty[AggregateIndexSpec[_,_]]
 
   def builderFor[E <: Entity : ClassTag : EntityIdentifying]: BuilderFactory[E] = new BuilderFactory[E]
 

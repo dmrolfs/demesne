@@ -5,7 +5,7 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
  * Created by damonrolfs on 11/5/14.
  */
-trait Index[K, I] {
+abstract class Index[K, I] {
   //todo: path dependent types for local and shared (via Future[]) work? PredicateResult seems to be the difficult part
   type Result
   type OptionalResult = Option[Result]
@@ -14,6 +14,13 @@ trait Index[K, I] {
   type Entry = (K, I)
 
   implicit def ec: ExecutionContext
+
+  /** Returns all of the current aggregate id key entries.
+    * @return a map containing the aggregate ids and associated keys.
+    */
+  def entries: Map[K, I]
+
+  def futureEntries: Future[Map[K, I]]
 
   /** Optionally returns the aggregate id associated with a key.
    * @param key the key aggregate id
