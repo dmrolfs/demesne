@@ -35,17 +35,17 @@ trait DomainModel {
   def aggregateOf( name: String, id: Any ): ActorRef
 
   import DomainModel.AggregateIndex
-  def aggregateIndexFor[K, TID]( rootType: AggregateRootType, name: Symbol ): TryV[AggregateIndex[K, TID]] = {
-    aggregateIndexFor[K, TID]( rootType.name, name )
+  def aggregateIndexFor[K, TID, V]( rootType: AggregateRootType, name: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
+    aggregateIndexFor[K, TID, V]( rootType.name, name )
   }
 
-  def aggregateIndexFor[K, TID]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID]]
+  def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]]
 
   def shutdown(): Future[Terminated]
 }
 
 object DomainModel {
-  type AggregateIndex[K, TID] = Index[K, TID]
+  type AggregateIndex[K, TID, V] = Index[K, TID, V]
 
   trait Provider {
     def model: DomainModel
@@ -95,7 +95,7 @@ object DomainModel {
 
   type RootTypeRef = (ActorRef, AggregateRootType)
   type AggregateRegistry = Map[String, RootTypeRef]
-  type AggregateIndexSpecLike = AggregateIndexSpec[_, _]
+  type AggregateIndexSpecLike = AggregateIndexSpec[_, _, _]
   type IndexAgent = IndexEnvelope
   type SpecAgents = Map[AggregateIndexSpecLike, IndexAgent]
 
@@ -136,7 +136,7 @@ object DomainModel {
       }
     }
 
-    override def aggregateIndexFor[K, TID](rootName: String, registerName: Symbol ): TryV[AggregateIndex[K, TID]] = trace.block( s"registerFor($rootName, $registerName)" ) {
+    override def aggregateIndexFor[K, TID, V](rootName: String, registerName: Symbol ): TryV[AggregateIndex[K, TID, V]] = trace.block( s"registerFor($rootName, $registerName)" ) {
       trace( s"""aggregateRegistry = ${aggregateRegistry().mkString("[",",","]")}""")
       trace( s"""specAgentRegistry=${specAgentRegistry().mkString("[",",","]")}""" )
 
@@ -153,7 +153,7 @@ object DomainModel {
         agent
       }
 
-      result map { _.mapTo[K, TID].right } getOrElse NoRegisterForAggregateError( rootName, specRegistry ).left[Index[K, TID]]
+      result map { _.mapTo[K, TID, V].right } getOrElse NoRegisterForAggregateError( rootName, specRegistry ).left[Index[K, TID, V]]
     }
 
     override def registerAggregateType(

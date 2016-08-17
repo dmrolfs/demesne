@@ -94,13 +94,13 @@ object EntityAggregateModuleSpec {
 
 
   object FooAggregateRoot {
-    val myIndexes: () => Seq[AggregateIndexSpec[_, _]] = () => trace.briefBlock( "myIndexes" ) {
+    val myIndexes: () => Seq[AggregateIndexSpec[_, _, _]] = () => trace.briefBlock( "myIndexes" ) {
       Seq(
-        demesne.index.local.IndexLocalAgent.spec[String, Foo#TID]( 'name ) {
+        demesne.index.local.IndexLocalAgent.spec[String, Foo#TID, Foo#TID]( 'name ) {
           case EntityProtocol.Added( id, info ) => {
             module.triedToEntity( info )
-            .map { e => demesne.index.Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id ) }
-            .getOrElse { demesne.index.Directive.Record( id, id ) }
+            .map { e => demesne.index.Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id, module.idLens.get( e ).id ) }
+            .getOrElse { demesne.index.Directive.Record( id, id, id ) }
           }
 
           // case module.Disabled( id, _ ) => Directive.Withdraw( id )
@@ -175,7 +175,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     override def nextId(): TID = Foo.fooIdentifying.safeNextId
 
     val rootType = FooAggregateRoot.module.rootType
-    def slugIndex = model.aggregateIndexFor[String, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
+    def slugIndex = model.aggregateIndexFor[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
     override val module: AggregateRootModule = FooAggregateRoot.module
     def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
   }

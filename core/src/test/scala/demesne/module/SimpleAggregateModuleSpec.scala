@@ -148,7 +148,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
       val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
         aggregateIdTag = 'fooTAG, 
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
-        indexes = Seq.empty[AggregateIndexSpec[_,_]]
+        indexes = Seq.empty[AggregateIndexSpec[_, _, _]]
       )
 
       val b = SimpleAggregateModule.builderFor[Foo].make
@@ -167,7 +167,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
       val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
         aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
-        indexes = Seq.empty[AggregateIndexSpec[_,_]]
+        indexes = Seq.empty[AggregateIndexSpec[_, _, _]]
       )
 
       FooAggregateRoot.module must equal( expected )

@@ -60,8 +60,8 @@ object IndexSupervisor extends StrictLogging {
 
   import scala.language.existentials
   sealed trait Message
-  case class RegisterIndex( rootType: AggregateRootType, spec: AggregateIndexSpec[_, _] ) extends Message
-  case class IndexRegistered( agentRef: ActorRef, rootType: AggregateRootType, spec: AggregateIndexSpec[_, _] ) extends Message
+  case class RegisterIndex( rootType: AggregateRootType, spec: AggregateIndexSpec[_, _, _] ) extends Message
+  case class IndexRegistered( agentRef: ActorRef, rootType: AggregateRootType, spec: AggregateIndexSpec[_, _, _] ) extends Message
 
 
   type ContextClassifier = (ActorContext, Class[_])
@@ -112,14 +112,14 @@ object IndexSupervisor extends StrictLogging {
   trait ConstituencyProvider { outer: Actor =>
     def pathFor(
       registrantType: AggregateRootType,
-      spec: AggregateIndexSpec[_,_]
+      spec: AggregateIndexSpec[_, _, _]
     )(
       constituent: IndexConstituent
     ): ActorPath = {
       ActorPath.fromString( self.path + "/" + constituent.category.name + "-" + spec.topic(registrantType) )
     }
 
-    def constituencyFor( registrantType: AggregateRootType, spec: AggregateIndexSpec[_, _] ): List[RegisterConstituentRef] = {
+    def constituencyFor( registrantType: AggregateRootType, spec: AggregateIndexSpec[_, _, _] ): List[RegisterConstituentRef] = {
       val p = pathFor( registrantType, spec ) _
       val aggregatePath = p( Aggregate )
 
@@ -137,7 +137,7 @@ object IndexSupervisor extends StrictLogging {
       supervisor: ActorRef,
       constituency: List[RegisterConstituentRef],
       subscription: SubscriptionClassifier,
-      spec: AggregateIndexSpec[_, _],
+      spec: AggregateIndexSpec[_, _, _],
       registrant: ActorRef,
       registrantType: AggregateRootType
     ): Props = Props( new IndexRegistration( supervisor, constituency, subscription, spec, registrant, registrantType ) )
@@ -147,7 +147,7 @@ object IndexSupervisor extends StrictLogging {
     supervisor: ActorRef,
     constituency: List[RegisterConstituentRef],
     subscription: SubscriptionClassifier,
-    spec: AggregateIndexSpec[_, _],
+    spec: AggregateIndexSpec[_, _, _],
     registrant: ActorRef,
     registrantType: AggregateRootType
   ) extends Actor with ActorLogging {

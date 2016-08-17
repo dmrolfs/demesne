@@ -11,7 +11,7 @@ import peds.commons.log.Trace
 
 abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with CommonInitializeAggregateActorType { module =>
   def name: String
-  def indexes: Seq[AggregateIndexSpec[_, _]]
+  def indexes: Seq[AggregateIndexSpec[_, _, _]]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
@@ -25,7 +25,7 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
     new AggregateRootType {
       override val name: String = module.name
       override def aggregateRootProps( implicit model: DomainModel ): Props = SimpleTestActor.props( model, this )
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes
+      override def indexes: Seq[AggregateIndexSpec[_, _, _]] = module.indexes
     }
   }
 

@@ -20,8 +20,8 @@ import peds.commons.TryV
 
 
 object EntityAggregateModule {
-  type MakeIndexSpec = Function0[Seq[AggregateIndexSpec[_,_]]]
-  val makeEmptyIndexSpec: MakeIndexSpec = () => Seq.empty[AggregateIndexSpec[_,_]]
+  type MakeIndexSpec = Function0[Seq[AggregateIndexSpec[_, _, _]]]
+  val makeEmptyIndexSpec: MakeIndexSpec = () => Seq.empty[AggregateIndexSpec[_, _, _]]
 
   def builderFor[E <: Entity : ClassTag : EntityIdentifying]: BuilderFactory[E] = new BuilderFactory[E]
 
@@ -71,7 +71,7 @@ object EntityAggregateModule {
       override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
       override val evState: ClassTag[E] = implicitly[ClassTag[E]]
 
-      override lazy val indexes: Seq[AggregateIndexSpec[_,_]] = _indexes()
+      override lazy val indexes: Seq[AggregateIndexSpec[_, _, _]] = _indexes()
 
       override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[EntityAggregateModuleImpl]
 
@@ -136,21 +136,22 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     new EntityAggregateRootType {
       override def name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes ++ Seq( makeSlugSpec )
+      override def indexes: Seq[AggregateIndexSpec[_, _, _]] = module.indexes ++ Seq( makeSlugSpec )
 
-      def makeSlugSpec: AggregateIndexSpec[_,_] = {
-        IndexLocalAgent.spec[String, module.ID]( 'slug ) { // or 'activeSlug
+      def makeSlugSpec: AggregateIndexSpec[_, _, _] = {
+        IndexLocalAgent.spec[String, module.ID, module.ID]( 'slug ) { // or 'activeSlug
           case Added( id, info ) => {
             module.triedToEntity( info )
-            .map { e => Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id ) }
-            .getOrElse { Directive.Record( id, id ) }
+            .map { e => Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id, module.idLens.get( e ).id ) }
+            .getOrElse { Directive.Record( id, id, id ) }
           }
 
-          case Reslugged( _, oldSlug, newSlug ) => Directive.Revise( oldSlug, newSlug )
+          case Reslugged( _, oldSlug, newSlug ) => Directive.ReviseKey( oldSlug, newSlug )
           case Disabled( tid, _ ) => Directive.Withdraw( tid.id )
-          case Enabled( tid, slug ) => Directive.Record( slug, tid.id )
+          case Enabled( tid, slug ) => Directive.Record( slug, tid.id, tid.id )
         } (
           ClassTag( classOf[String] ),
+          identifying.evID,
           identifying.evID
          )
       }

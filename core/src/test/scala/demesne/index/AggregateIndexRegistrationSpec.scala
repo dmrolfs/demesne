@@ -43,10 +43,10 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     val constituent = TestProbe()
     val bus = mock[IndexBus]
 
-    def rootType( specs: AggregateIndexSpec[_,_]* ): AggregateRootType = {
+    def rootType( specs: AggregateIndexSpec[_, _, _]* ): AggregateRootType = {
       new AggregateRootType {
         override def name: String = "foo"
-        override def indexes: Seq[AggregateIndexSpec[_, _]] = specs
+        override def indexes: Seq[AggregateIndexSpec[_, _, _]] = specs
         override def aggregateRootProps(implicit model: DomainModel): Props = {
           throw new Exception( "rootType.aggregateRootProps should not be invoked" )
         }
@@ -70,14 +70,14 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
   object WIP extends Tag( "wip" )
 
-  def childNameFor( prefix: String, rootType: AggregateRootType, spec: AggregateIndexSpec[_,_] ): String = {
+  def childNameFor( prefix: String, rootType: AggregateRootType, spec: AggregateIndexSpec[_, _,_] ): String = {
     s"${prefix}_${rootType.name}-${spec topic rootType}"
   }
 
   def constituencyFor(
                        probes: Map[IndexConstituent, ActorRef],
                        registrantType: AggregateRootType,
-                       spec: AggregateIndexSpec[_, _]
+                       spec: AggregateIndexSpec[_, _, _]
   ): List[RegisterConstituentRef] = {
     val aggregatePath = probes( Aggregate ).path
     List(
@@ -89,7 +89,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
   def indexRegistrationFor(
     rootType: AggregateRootType,
-    spec: AggregateIndexSpec[_,_],
+    spec: AggregateIndexSpec[_, _, _],
     constituency: List[RegisterConstituentRef]
   )(
     implicit system: ActorSystem, f: Fixture
@@ -105,10 +105,10 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
   )
 
   def expectStartWorkflow(
-                           rootType: AggregateRootType,
-                           spec: AggregateIndexSpec[_,_],
-                           constituentProbes: Map[IndexConstituent, TestProbe],
-                           toCheck: Set[IndexConstituent]
+    rootType: AggregateRootType,
+    spec: AggregateIndexSpec[_, _, _],
+    constituentProbes: Map[IndexConstituent, TestProbe],
+    toCheck: Set[IndexConstituent]
   )(
     implicit system: ActorSystem, f: Fixture
   ): Unit = trace.block( "expectStartWorkflow" ) {
@@ -144,8 +144,8 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
     "survey upon first create" in { implicit f: Fixture =>
       implicit val system = f.system
-      val spec = IndexLocalAgent.spec[String, Int]( 'foo ){
-        case FooAdded( name ) => Directive.Record(name, name.hashCode)
+      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ){
+        case FooAdded( name ) => Directive.Record(name, name.hashCode, name.hashCode)
       }
       val rt = f.rootType( spec )
       val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
@@ -163,8 +163,8 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
     "no startups after initial create in node" in { implicit f: Fixture =>
       implicit val system = f.system
-      val spec = IndexLocalAgent.spec[String, Int]( 'foo ){
-        case FooAdded( name ) => Directive.Record(name, name.hashCode)
+      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ){
+        case FooAdded( name ) => Directive.Record(name, name.hashCode, name.hashCode)
       }
       val rt = f.rootType( spec )
       val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
@@ -180,8 +180,8 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
     "relay startup after initial create in node" taggedAs(WIP) in { implicit f: Fixture =>
       implicit val system = f.system
-      val spec = IndexLocalAgent.spec[String, Int]( 'foo ){
-        case FooAdded( name ) => Directive.Record(name, name.hashCode)
+      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ){
+        case FooAdded( name ) => Directive.Record(name, name.hashCode, name.hashCode)
       }
       val rt = f.rootType( spec )
       val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )

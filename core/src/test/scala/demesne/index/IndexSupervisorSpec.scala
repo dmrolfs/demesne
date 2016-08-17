@@ -35,10 +35,10 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     def before( test: OneArgTest ): Unit = { }
     def after( test: OneArgTest ): Unit = { }
 
-    def rootType( specs: AggregateIndexSpec[_,_]* ): AggregateRootType = {
+    def rootType( specs: AggregateIndexSpec[_, _, _]* ): AggregateRootType = {
       new AggregateRootType {
         override def name: String = "foo"
-        override def indexes: Seq[AggregateIndexSpec[_, _]] = specs
+        override def indexes: Seq[AggregateIndexSpec[_, _, _]] = specs
         override def aggregateRootProps(implicit model: DomainModel): Props = {
           throw new Exception( "rootType.aggregateRootProps should not be invoked" )
         }
@@ -48,17 +48,17 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     }
 
     val fooIdExtractor: KeyIdExtractor = {
-      case FooAdded(value) => Directive.Record(value, value.hashCode)
+      case FooAdded(value) => Directive.Record(value, value.hashCode, value.hashCode)
     }
 
     def testSpec(
       specName: Symbol,
       specRelaySubscription: RelaySubscription = IndexBusSubscription
     )(
-                  specAgentProps: AggregateRootType => Props = (rt: AggregateRootType) => IndexLocalAgent.props( makeTopic[String, Int]( specName.name, rt ) ),
-                  specAggregateProps: AggregateRootType => Props = (rt: AggregateRootType) => IndexAggregate.props( makeTopic[String, Int]( specName.name, rt ) ),
-                  specRelayProps: ActorPath => Props = (ap: ActorPath) => IndexRelay.props( ap, fooIdExtractor )
-    ): AggregateIndexSpec[String, Int] = new AggregateIndexSpec[String, Int] {
+      specAgentProps: AggregateRootType => Props = (rt: AggregateRootType) => IndexLocalAgent.props( makeTopic[String, Int]( specName.name, rt ) ),
+      specAggregateProps: AggregateRootType => Props = (rt: AggregateRootType) => IndexAggregate.props( makeTopic[String, Int]( specName.name, rt ) ),
+      specRelayProps: ActorPath => Props = (ap: ActorPath) => IndexRelay.props( ap, fooIdExtractor )
+    ): AggregateIndexSpec[String, Int, Int] = new AggregateIndexSpec[String, Int, Int] {
       override val name: Symbol = specName
       override val keyIdExtractor: KeyIdExtractor = fooIdExtractor
       override val relaySubscription: RelaySubscription = specRelaySubscription
@@ -96,14 +96,14 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
   object WIP extends Tag( "wip" )
 
-  def childNameFor( prefix: String, rootType: AggregateRootType, spec: AggregateIndexSpec[_,_] ): String = {
+  def childNameFor( prefix: String, rootType: AggregateRootType, spec: AggregateIndexSpec[_, _, _] ): String = {
     s"${prefix}_${rootType.name}-${spec topic rootType}"
   }
 
   def constituencyFor(
-                       probes: Map[IndexConstituent, ActorRef],
-                       registrantType: AggregateRootType,
-                       spec: AggregateIndexSpec[_, _]
+    probes: Map[IndexConstituent, ActorRef],
+    registrantType: AggregateRootType,
+    spec: AggregateIndexSpec[_, _, _]
   ): List[RegisterConstituentRef] = {
     val aggregatePath = probes( Aggregate ).path
     List(
@@ -113,7 +113,7 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     )
   }
 
-  def nameFor(constituent: IndexConstituent, rootType: AggregateRootType, spec: AggregateIndexSpec[_,_] ): String = {
+  def nameFor(constituent: IndexConstituent, rootType: AggregateRootType, spec: AggregateIndexSpec[_, _, _] ): String = {
     constituent.category.name + "-" + spec.topic( rootType )
   }
 
@@ -122,14 +122,14 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
     override def pathFor(
       registrantType: AggregateRootType,
-      spec: AggregateIndexSpec[_, _]
+      spec: AggregateIndexSpec[_, _, _]
     )(
       constituent: IndexConstituent
     ): ActorPath = paths.get( constituent ) getOrElse super.pathFor(registrantType, spec)( constituent )
 
     override def constituencyFor(
       registrantType: AggregateRootType,
-      spec: AggregateIndexSpec[_, _]
+      spec: AggregateIndexSpec[_, _, _]
     ): List[RegisterConstituentRef] = {
       val p = pathFor( registrantType, spec ) _
       List(

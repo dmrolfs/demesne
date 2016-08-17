@@ -69,15 +69,15 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       override val name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = PostActor.props( model, this, makeAuthorListing )
 
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = {
+      override def indexes: Seq[AggregateIndexSpec[_, _, _]] = {
         Seq(
-             IndexLocalAgent.spec[String, PostModule.TID]( 'author, IndexBusSubscription /* not reqd - default */ ) {
-            case P.PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId)
+             IndexLocalAgent.spec[String, PostModule.TID, PostModule.TID]( 'author, IndexBusSubscription /* not reqd - default */ ) {
+            case P.PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId, sourceId)
             case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
           },
-             IndexLocalAgent.spec[String, PostModule.TID]( 'title, ContextChannelSubscription( classOf[P.Event] ) ) {
-            case P.PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record(title, sourceId)
-            case P.TitleChanged( sourceId, oldTitle, newTitle ) => Directive.Revise( oldTitle, newTitle )
+             IndexLocalAgent.spec[String, PostModule.TID, PostModule.TID]( 'title, ContextChannelSubscription( classOf[P.Event] ) ) {
+            case P.PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record( title, sourceId, sourceId)
+            case P.TitleChanged( sourceId, oldTitle, newTitle ) => Directive.ReviseKey( oldTitle, newTitle )
             case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
           }
         )

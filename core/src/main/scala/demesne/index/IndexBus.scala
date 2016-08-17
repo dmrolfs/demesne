@@ -20,7 +20,7 @@ object IndexBus extends LazyLogging {
   /**
    * create a publisher corresponding to the system's index bus and a topic based on the root type.
    */
-  def bus(b: IndexBus, rootType: AggregateRootType )(spec: AggregateIndexSpec[_,_] ): Publisher = {
+  def bus( b: IndexBus, rootType: AggregateRootType )( spec: AggregateIndexSpec[_, _, _] ): Publisher = {
     ( event: Any ) => trace.block( "bus" ) {
       b.publish( IndexBus.RecordingEvent( topic = spec.relayClassifier( rootType ), recording = event ) )
       Left( event )

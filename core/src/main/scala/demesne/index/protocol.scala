@@ -25,5 +25,5 @@ case object GetIndex extends IndexMessage
   * envelope message used to deliver the index akka agent
   */
 case class IndexEnvelope(payload: Any ) extends IndexMessage {
-  def mapTo[K, I]: Index[K, I] = payload.asInstanceOf[Index[K, I]]
+  def mapTo[K, I, V]: Index[K, I, V] = payload.asInstanceOf[Index[K, I, V]]
 }

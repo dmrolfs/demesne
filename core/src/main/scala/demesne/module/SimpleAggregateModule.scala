@@ -33,7 +33,7 @@ with InitializeAggregateRootClusterSharding { module =>
     }
   }
 
-  def indexes: Seq[AggregateIndexSpec[_, _]] = Seq.empty[AggregateIndexSpec[_, _]]
+  def indexes: Seq[AggregateIndexSpec[_, _, _]] = Seq.empty[AggregateIndexSpec[_, _, _]]
 
   def aggregateRootPropsOp: AggregateRootProps
   def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
@@ -49,7 +49,7 @@ with InitializeAggregateRootClusterSharding { module =>
   override def rootType: AggregateRootType = {
     new SimpleAggregateRootType {
       override def name: String = module.shardName
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes
+      override def indexes: Seq[AggregateIndexSpec[_, _, _]] = module.indexes
       override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
     }
   }
@@ -67,7 +67,7 @@ object SimpleAggregateModule {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[S]].runtimeClass )
         object Props extends Param[AggregateRootProps]
-        object Indexes extends OptParam[Seq[AggregateIndexSpec[_,_]]]( Seq.empty[AggregateIndexSpec[_,_]] )
+        object Indexes extends OptParam[Seq[AggregateIndexSpec[_, _, _]]]( Seq.empty[AggregateIndexSpec[_, _, _]] )
       }
 
       override val gen = Generic[CC]
@@ -84,7 +84,7 @@ object SimpleAggregateModule {
   final case class SimpleAggregateModuleImpl[S: ClassTag : Identifying](
     override val aggregateIdTag: Symbol,
     override val aggregateRootPropsOp: AggregateRootProps,
-    override val indexes: Seq[AggregateIndexSpec[_,_]]
+    override val indexes: Seq[AggregateIndexSpec[_, _, _]]
   ) extends SimpleAggregateModule[S] with Equals {
     override val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
 
