@@ -2,7 +2,6 @@ package demesne.scaladsl
 
 import demesne.{ AggregateRoot, AggregateRootModule }
 import demesne.module.AggregateRootProps
-import demesne.index.AggregateIndexSpec
 
 
 trait ModuleBuilderOpF[+A]

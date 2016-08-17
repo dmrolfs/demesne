@@ -8,7 +8,6 @@ import peds.archetype.domain.model.core.Entity
 import peds.commons.log.Trace
 import peds.commons.util._
 import demesne.module.{ AggregateRootProps, BasicEntityAggregateModule }
-import demesne.index.AggregateIndexSpec
 
 
 object BasicEntityAggregateModuleBuilderInterpreter {
@@ -56,7 +55,7 @@ class BasicEntityAggregateModuleBuilderInterpreter[S <: Entity : ClassTag]() ext
 
   case class BasicEntityModuleImpl private[scaladsl](
     override val idTagO: Option[Symbol] = None,
-    override val indexes: Seq[AggregateIndexSpec[_, _]] = Seq(),
+    override val indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification],
     override val propsO: Option[AggregateRootProps] = None,
     override val idLensO: Option[Lens[_, _]] = None,
     override val nameLensO: Option[Lens[_, String]] = None,
@@ -96,10 +95,10 @@ class BasicEntityAggregateModuleBuilderInterpreter[S <: Entity : ClassTag]() ext
       }
     }
 
-    override val indexesLens: Lens[SimpleModule, Seq[AggregateIndexSpec[_, _]]] = {
-      new Lens[SimpleModule, Seq[AggregateIndexSpec[_, _]]] {
-        override def get( s: SimpleModule ): Seq[AggregateIndexSpec[_, _]] = s.indexes
-        override def set( s: SimpleModule )( a: Seq[AggregateIndexSpec[_, _]] ): SimpleModule = {
+    override val indexesLens: Lens[SimpleModule, Seq[IndexSpecification]] = {
+      new Lens[SimpleModule, Seq[IndexSpecification]] {
+        override def get( s: SimpleModule ): Seq[IndexSpecification] = s.indexes
+        override def set( s: SimpleModule )( a: Seq[IndexSpecification] ): SimpleModule = {
           BasicEntityModuleImpl( 
             idTagO = s.idTagO, 
             indexes = a, 

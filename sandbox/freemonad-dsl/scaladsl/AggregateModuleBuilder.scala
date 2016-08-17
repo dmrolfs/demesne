@@ -6,7 +6,6 @@ import scalaz.Free._
 import peds.commons.identifier._
 import demesne.{ AggregateRoot, AggregateRootModule }
 import demesne.module.AggregateRootProps
-import demesne.index.AggregateIndexSpec
 
 
 trait AggregateModuleBuilder[A] {

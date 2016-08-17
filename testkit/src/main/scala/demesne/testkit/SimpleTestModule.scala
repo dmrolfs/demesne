@@ -3,7 +3,7 @@ package demesne.testkit
 import scala.reflect.ClassTag
 import akka.actor.Props
 import demesne._
-import demesne.index.{AggregateIndexSpec, StackableIndexBusPublisher}
+import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.identifier.Identifying
 import peds.commons.log.Trace
@@ -11,7 +11,7 @@ import peds.commons.log.Trace
 
 abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with CommonInitializeAggregateActorType { module =>
   def name: String
-  def indexes: Seq[AggregateIndexSpec[_, _, _]]
+  def indexes: Seq[IndexSpecification]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
@@ -25,7 +25,7 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
     new AggregateRootType {
       override val name: String = module.name
       override def aggregateRootProps( implicit model: DomainModel ): Props = SimpleTestActor.props( model, this )
-      override def indexes: Seq[AggregateIndexSpec[_, _, _]] = module.indexes
+      override def indexes: Seq[IndexSpecification] = module.indexes
     }
   }
 

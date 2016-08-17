@@ -92,7 +92,7 @@ object IndexAcceptanceSpec {
 
     override def name: String = "RegisterAcceptance"
 
-    override def indexes: Seq[AggregateIndexSpec[_, _, _]] = {
+    override def indexes: Seq[IndexSpecification] = {
       Seq(
         IndexLocalAgent.spec[String, TestModule.TID, TestModule.TID]( 'bus, IndexBusSubscription ) {
           case Protocol.Added( sid, _, foo, _ ) => Directive.Record( foo, sid, sid )

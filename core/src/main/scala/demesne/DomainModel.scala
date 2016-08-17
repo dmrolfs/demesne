@@ -95,9 +95,8 @@ object DomainModel {
 
   type RootTypeRef = (ActorRef, AggregateRootType)
   type AggregateRegistry = Map[String, RootTypeRef]
-  type AggregateIndexSpecLike = AggregateIndexSpec[_, _, _]
   type IndexAgent = IndexEnvelope
-  type SpecAgents = Map[AggregateIndexSpecLike, IndexAgent]
+  type SpecAgents = Map[IndexSpecification, IndexAgent]
 
 
   final case class DomainModelImpl private[demesne](
@@ -107,7 +106,7 @@ object DomainModel {
     // default dispatcher is okay since mutations are limited to bootstrap.
     val aggregateRegistry: Agent[AggregateRegistry] = Agent( Map.empty[String, RootTypeRef] )( system.dispatcher )
 
-    val specAgentRegistry: Agent[SpecAgents] = Agent( Map.empty[AggregateIndexSpecLike, IndexAgent] )( system.dispatcher )
+    val specAgentRegistry: Agent[SpecAgents] = Agent( Map.empty[IndexSpecification, IndexAgent] )( system.dispatcher )
 
 //use this to make index actors per root type
     val repositorySupervisor: ActorRef = system.actorOf(
@@ -282,7 +281,7 @@ object DomainModel {
   ) with DemesneError
 
 
-  final case class NoRegisterForAggregateError private[demesne]( name: String, registry: Map[AggregateIndexSpecLike, IndexAgent] )
+  final case class NoRegisterForAggregateError private[demesne]( name: String, registry: Map[IndexSpecification, IndexAgent] )
   extends IllegalStateException(
     s"""DomainModel does not have index for root type [${name}]:: specAgentRegistry [${registry.mkString("[",",","]")}]"""
   ) with DemesneError

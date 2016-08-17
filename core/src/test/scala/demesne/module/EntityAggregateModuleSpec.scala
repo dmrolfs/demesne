@@ -7,21 +7,20 @@ import akka.testkit._
 
 import scalaz.Scalaz._
 import shapeless._
-import demesne._
-import demesne.module.entity.{messages => EntityProtocol}
-import demesne.index.{AggregateIndexSpec, StackableIndexBusPublisher}
-import demesne.testkit.AggregateRootSpec
-import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
 import peds.akka.envelope._
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.log.Trace
 import peds.commons.identifier._
-import org.scalatest.concurrent.ScalaFutures
-import com.typesafe.scalalogging.LazyLogging
-import demesne.module.entity.EntityAggregateModule
 import peds.commons.TryV
+import org.scalatest.concurrent.ScalaFutures
+import demesne._
+import demesne.module.entity.{messages => EntityProtocol}
+import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
+import demesne.testkit.AggregateRootSpec
+import demesne.testkit.concurrent.CountDownFunction
+import demesne.module.entity.EntityAggregateModule
 
 
 object EntityAggregateModuleSpec {
@@ -94,7 +93,7 @@ object EntityAggregateModuleSpec {
 
 
   object FooAggregateRoot {
-    val myIndexes: () => Seq[AggregateIndexSpec[_, _, _]] = () => trace.briefBlock( "myIndexes" ) {
+    val myIndexes: () => Seq[IndexSpecification] = () => trace.briefBlock( "myIndexes" ) {
       Seq(
         demesne.index.local.IndexLocalAgent.spec[String, Foo#TID, Foo#TID]( 'name ) {
           case EntityProtocol.Added( id, info ) => {

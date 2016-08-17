@@ -2,20 +2,18 @@ package demesne.module
 
 import scala.reflect._
 import akka.actor.Props
-import akka.testkit._
 
 import scalaz.{-\/, \/-}
 import scalaz.Scalaz._
 import shapeless.Lens
 import demesne._
-import demesne.index.AggregateIndexSpec
 import demesne.testkit.AggregateRootSpec
 import org.scalatest.Tag
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
 import peds.commons.log.Trace
 import peds.commons.identifier._
 import org.scalatest.concurrent.ScalaFutures
-import com.typesafe.scalalogging.LazyLogging
+import demesne.index.IndexSpecification
 import peds.commons._
 
 
@@ -148,7 +146,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
       val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
         aggregateIdTag = 'fooTAG, 
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
-        indexes = Seq.empty[AggregateIndexSpec[_, _, _]]
+        indexes = Seq.empty[IndexSpecification]
       )
 
       val b = SimpleAggregateModule.builderFor[Foo].make
@@ -167,7 +165,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
       val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
         aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
-        indexes = Seq.empty[AggregateIndexSpec[_, _, _]]
+        indexes = Seq.empty[IndexSpecification]
       )
 
       FooAggregateRoot.module must equal( expected )

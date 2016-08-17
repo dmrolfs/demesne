@@ -43,10 +43,10 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     val constituent = TestProbe()
     val bus = mock[IndexBus]
 
-    def rootType( specs: AggregateIndexSpec[_, _, _]* ): AggregateRootType = {
+    def rootType( specs: IndexSpecification* ): AggregateRootType = {
       new AggregateRootType {
         override def name: String = "foo"
-        override def indexes: Seq[AggregateIndexSpec[_, _, _]] = specs
+        override def indexes: Seq[IndexSpecification] = specs
         override def aggregateRootProps(implicit model: DomainModel): Props = {
           throw new Exception( "rootType.aggregateRootProps should not be invoked" )
         }
@@ -70,14 +70,14 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
   object WIP extends Tag( "wip" )
 
-  def childNameFor( prefix: String, rootType: AggregateRootType, spec: AggregateIndexSpec[_, _,_] ): String = {
+  def childNameFor( prefix: String, rootType: AggregateRootType, spec: IndexSpecification ): String = {
     s"${prefix}_${rootType.name}-${spec topic rootType}"
   }
 
   def constituencyFor(
-                       probes: Map[IndexConstituent, ActorRef],
-                       registrantType: AggregateRootType,
-                       spec: AggregateIndexSpec[_, _, _]
+    probes: Map[IndexConstituent, ActorRef],
+    registrantType: AggregateRootType,
+    spec: IndexSpecification
   ): List[RegisterConstituentRef] = {
     val aggregatePath = probes( Aggregate ).path
     List(
@@ -89,7 +89,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
   def indexRegistrationFor(
     rootType: AggregateRootType,
-    spec: AggregateIndexSpec[_, _, _],
+    spec: IndexSpecification,
     constituency: List[RegisterConstituentRef]
   )(
     implicit system: ActorSystem, f: Fixture
@@ -106,7 +106,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
   def expectStartWorkflow(
     rootType: AggregateRootType,
-    spec: AggregateIndexSpec[_, _, _],
+    spec: IndexSpecification,
     constituentProbes: Map[IndexConstituent, TestProbe],
     toCheck: Set[IndexConstituent]
   )(

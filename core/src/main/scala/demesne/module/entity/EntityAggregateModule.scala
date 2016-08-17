@@ -14,14 +14,14 @@ import peds.commons.util._
 import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel}
 import demesne.module.{AggregateRootProps, SimpleAggregateModule}
 import demesne.module.entity.messages._
-import demesne.index.{AggregateIndexSpec, Directive}
+import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent
 import peds.commons.TryV
 
 
 object EntityAggregateModule {
-  type MakeIndexSpec = Function0[Seq[AggregateIndexSpec[_, _, _]]]
-  val makeEmptyIndexSpec: MakeIndexSpec = () => Seq.empty[AggregateIndexSpec[_, _, _]]
+  type MakeIndexSpec = Function0[Seq[IndexSpecification]]
+  val makeEmptyIndexSpec: MakeIndexSpec = () => Seq.empty[IndexSpecification]
 
   def builderFor[E <: Entity : ClassTag : EntityIdentifying]: BuilderFactory[E] = new BuilderFactory[E]
 
@@ -71,7 +71,7 @@ object EntityAggregateModule {
       override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
       override val evState: ClassTag[E] = implicitly[ClassTag[E]]
 
-      override lazy val indexes: Seq[AggregateIndexSpec[_, _, _]] = _indexes()
+      override lazy val indexes: Seq[IndexSpecification] = _indexes()
 
       override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[EntityAggregateModuleImpl]
 
@@ -136,9 +136,9 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     new EntityAggregateRootType {
       override def name: String = module.shardName
       override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
-      override def indexes: Seq[AggregateIndexSpec[_, _, _]] = module.indexes ++ Seq( makeSlugSpec )
+      override def indexes: Seq[IndexSpecification] = module.indexes ++ Seq( makeSlugSpec )
 
-      def makeSlugSpec: AggregateIndexSpec[_, _, _] = {
+      def makeSlugSpec: IndexSpecification = {
         IndexLocalAgent.spec[String, module.ID, module.ID]( 'slug ) { // or 'activeSlug
           case Added( id, info ) => {
             module.triedToEntity( info )

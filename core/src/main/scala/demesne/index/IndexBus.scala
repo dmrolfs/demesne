@@ -4,7 +4,6 @@ import akka.event.{ActorEventBus, SubchannelClassification}
 import akka.util.Subclassification
 import com.typesafe.scalalogging.LazyLogging
 import demesne.AggregateRootType
-import peds.akka.envelope.Envelope
 import peds.akka.publish.Publisher
 import peds.commons.log.Trace
 
@@ -20,7 +19,7 @@ object IndexBus extends LazyLogging {
   /**
    * create a publisher corresponding to the system's index bus and a topic based on the root type.
    */
-  def bus( b: IndexBus, rootType: AggregateRootType )( spec: AggregateIndexSpec[_, _, _] ): Publisher = {
+  def bus( b: IndexBus, rootType: AggregateRootType )( spec: IndexSpecification ): Publisher = {
     ( event: Any ) => trace.block( "bus" ) {
       b.publish( IndexBus.RecordingEvent( topic = spec.relayClassifier( rootType ), recording = event ) )
       Left( event )

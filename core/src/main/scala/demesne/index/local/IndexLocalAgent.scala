@@ -21,13 +21,16 @@ object IndexLocalAgent {
     specRelaySubscription: RelaySubscription = IndexBusSubscription
   )(
     extractor: KeyIdExtractor
-  ): AggregateIndexSpec[K, I, V] = {
-    new AggregateIndexSpec[K, I, V] {
-      override val name: Symbol = specName
-      override def keyIdExtractor: KeyIdExtractor = extractor
-      override def agentProps( rootType: AggregateRootType ): Props = props[K, I, V]( topic(rootType) )
-      override def relaySubscription: RelaySubscription = specRelaySubscription
-    }
+  ): IndexSpecification = {
+    new LocalIndexSpecification[K, I, V]( name = specName, relaySubscription = specRelaySubscription, keyIdExtractor = extractor )
+  }
+
+  final class LocalIndexSpecification[K: ClassTag, I: ClassTag, V: ClassTag] private[IndexLocalAgent](
+    override val name: Symbol,
+    override val relaySubscription: RelaySubscription,
+    override val keyIdExtractor: KeyIdExtractor
+  ) extends CommonIndexSpecification[K, I, V] {
+    override def agentProps( rootType: AggregateRootType ): Props = IndexLocalAgent.props[K, I, V]( topic(rootType) )
   }
 
   def props[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ): Props = Props( new IndexLocalAgent[K, I, V]( topic ) )

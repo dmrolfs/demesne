@@ -5,6 +5,7 @@ import akka.actor.{Props, SupervisorStrategy}
 import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.Passivate
 import com.typesafe.scalalogging.LazyLogging
+import demesne.index.IndexSpecification
 import shapeless.TypeCase
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliablePublisher.ReliableMessage
@@ -82,7 +83,7 @@ trait AggregateRootType extends LazyLogging {
     override val snapshotInterval: FiniteDuration = snapshotPeriod
   }
 
-  def indexes: Seq[DomainModel.AggregateIndexSpecLike] = Seq.empty[DomainModel.AggregateIndexSpecLike]
+  def indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification]
 
   def repositorySupervisionStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 
