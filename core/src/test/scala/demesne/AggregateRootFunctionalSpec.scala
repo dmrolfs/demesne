@@ -174,7 +174,7 @@ object AggregateRootFunctionalSpec {
       override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
       override def nextId: TryV[TID] = tag( ShortUUID() ).right
       override def fromString( idstr: String ): ShortUUID = {
-        logger.info( "fooIdentifying.fromString({}) = [{}]", idstr, ShortUUID(idstr) )
+        logger.info( "identifying.fromString({}) = [{}]", idstr, ShortUUID(idstr) )
         ShortUUID( idstr )
       }
     }

@@ -66,7 +66,7 @@ object IndexAcceptanceSpec {
           ctag
         }
         case -\/( ex ) => {
-          logger.error( "fooIdentifying couldn't provide sufficient ClassTag:", ex )
+          logger.error( "identifying couldn't provide sufficient ClassTag:", ex )
           throw ex
         }
       }

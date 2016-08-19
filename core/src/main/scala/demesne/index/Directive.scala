@@ -12,6 +12,10 @@ object Directive {
     }
   }
 
+  object Record {
+    def apply[K, I]( key: K, identifier: I ): Record[K, I, I] = Record( key = key, identifier = identifier, value = identifier )
+  }
+
   /** Withdraw directive tells the index to remove the identifier from the index index.
    */
   case class Withdraw[K, I]( identifier: I, key: Option[K] = None ) extends Directive

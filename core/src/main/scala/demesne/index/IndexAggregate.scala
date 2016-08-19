@@ -256,12 +256,10 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
       }
 
       case D.Record( k, i, v ) => {
-        log.warning( 
-          "IndexAggregate[{}] UNHANDLED [{}] - verify AggregateRootType indexes() " +
-          "type parameterization matches key-id-value-types:[{}] identifier:[{}]",
-          (topic, self.path), message,
-          (k.getClass.getCanonicalName, i.getClass.getCanonicalName, KeyType.runtimeClass.getCanonicalName),
-          tid.id
+        log.warning(
+          s"topic:[${topic}] + tid:[${tid}] ~> actor:[${self.path}] UNHANDLED [${message}] - verify AggregateRootType.indexes types match Record:" +
+          "key-types:[{}] id-types:[{}] value-types[{}]",
+          (KeyType.runtimeClass, k.getClass), (IdType.runtimeClass, i.getClass), (ValueType, v.getClass)
         )
       }
 

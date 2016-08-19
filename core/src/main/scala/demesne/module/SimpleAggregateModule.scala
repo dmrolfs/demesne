@@ -1,11 +1,9 @@
 package demesne.module
 
-import akka.Done
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect._
 import akka.actor.Props
-
+import akka.Done
 import scalaz._
 import Scalaz._
 import shapeless._
@@ -42,17 +40,15 @@ with InitializeAggregateRootClusterSharding { module =>
   val identifying: Identifying[S] = implicitly[Identifying[S]]
 
 
-  trait SimpleAggregateRootType extends AggregateRootType {
+  class SimpleAggregateRootType(
+    override val name: String,
+    override val indexes: Seq[IndexSpecification]
+  ) extends AggregateRootType {
+    override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
     override def toString: String = name + "SimpleAggregateRootType"
   }
 
-  override def rootType: AggregateRootType = {
-    new SimpleAggregateRootType {
-      override def name: String = module.shardName
-      override def indexes: Seq[IndexSpecification] = module.indexes
-      override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
-    }
-  }
+  override def rootType: AggregateRootType = new SimpleAggregateRootType( name = module.shardName, indexes = module.indexes )
 }
 
 object SimpleAggregateModule {

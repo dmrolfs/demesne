@@ -42,7 +42,7 @@ object EntityAggregateModuleSpec {
   }
 
   object Foo extends EntityLensProvider[Foo] {
-    implicit val fooIdentifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
+    implicit val identifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
       override val evEntity: ClassTag[Foo] = classTag[Foo]
       override type ID = ShortUUID
       override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
@@ -93,17 +93,22 @@ object EntityAggregateModuleSpec {
 
 
   object FooAggregateRoot {
+    import demesne.index.{ Directive => D }
+
     val myIndexes: () => Seq[IndexSpecification] = () => trace.briefBlock( "myIndexes" ) {
       Seq(
+        EntityAggregateModule.makeSlugSpec[Foo]( Foo.idLens, Some(Foo.slugLens) ){
+          case f: Foo => Some( f )
+        },
         demesne.index.local.IndexLocalAgent.spec[String, Foo#TID, Foo#TID]( 'name ) {
           case EntityProtocol.Added( id, info ) => {
             module.triedToEntity( info )
-            .map { e => demesne.index.Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id, module.idLens.get( e ).id ) }
-            .getOrElse { demesne.index.Directive.Record( id, id, id ) }
+            .map { e => D.Record( module.entityLabel(e), module.idLens.get(e) ) }
+            .getOrElse { D.Record(id, id) }
           }
 
-          // case module.Disabled( id, _ ) => Directive.Withdraw( id )
-          // case module.Enabled( id, slug ) => Directive.Record( slug, id )
+           case EntityProtocol.Disabled( id, _ ) => D.Withdraw( id )
+           case EntityProtocol.Enabled( id, slug ) => D.Record( slug, id )
         }
       )
     }
@@ -115,7 +120,7 @@ object EntityAggregateModuleSpec {
       import b.P.{ Tag => BTag, Props => BProps, _ }
 
       b.builder
-       .set( BTag, Foo.fooIdentifying.idTag )
+       .set( BTag, Foo.identifying.idTag )
        .set( BProps, FooActor.props(_,_) )
        .set( Indexes, myIndexes )
        .set( IdLens, Foo.idLens )
@@ -125,7 +130,7 @@ object EntityAggregateModuleSpec {
        .build()
     }
 
-    
+
     object FooActor {
       def props( model: DomainModel, rt: AggregateRootType ): Props = {
         Props( new FooActor(model, rt) with StackableStreamPublisher with StackableIndexBusPublisher )
@@ -135,17 +140,6 @@ object EntityAggregateModuleSpec {
     class FooActor( override val model: DomainModel, override val rootType: AggregateRootType )
     extends module.EntityAggregateActor { publisher: EventPublisher =>
       override var state: Foo = _
-
-//      override def parseId( idstr: String ): ID = {
-//        val identifying = implicitly[Identifying[Foo]]
-//        identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
-//          case scalaz.\/-( id ) => id
-//          case scalaz.-\/( ex ) => {
-//            log.error( ex, "failed to parse id string:[{}]", idstr )
-//            throw ex
-//          }
-//        }
-//      }
 
       override val active: Receive = super.active orElse {
         case Protocol.Bar( _, b ) => {
@@ -171,7 +165,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
   class TestFixture extends AggregateFixture {
     private val trace = Trace[TestFixture]
-    override def nextId(): TID = Foo.fooIdentifying.safeNextId
+    override def nextId(): TID = Foo.identifying.safeNextId
 
     val rootType = FooAggregateRoot.module.rootType
     def slugIndex = model.aggregateIndexFor[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
@@ -192,7 +186,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       import fixture._
 
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
-        aggregateIdTag = Foo.fooIdentifying.idTag,
+        aggregateIdTag = Foo.identifying.idTag,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
         _indexes = FooAggregateRoot.myIndexes,
         idLens = Foo.idLens,
@@ -236,7 +230,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
     }
 
-    "update name" taggedAs WIP in { fixture: Fixture =>
+    "update name" in { fixture: Fixture =>
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
@@ -327,7 +321,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
     }
 
-    "recorded in slug index" in { fixture: Fixture =>
+    "recorded in slug index" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
       val tid = Module.nextId.toOption.get

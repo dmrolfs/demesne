@@ -18,7 +18,7 @@ object AggregateRootType {
   }
 }
 
-trait AggregateRootType extends LazyLogging {
+abstract class AggregateRootType extends LazyLogging {
   def name: String
   def repositoryName: String = name+"Repository"
 
