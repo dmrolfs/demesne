@@ -5,6 +5,7 @@ import akka.actor.{Props, SupervisorStrategy}
 import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.Passivate
 import com.typesafe.scalalogging.LazyLogging
+import demesne.factory.ActorFactory
 import demesne.index.IndexSpecification
 import shapeless.TypeCase
 import peds.akka.envelope.Envelope
@@ -21,6 +22,12 @@ object AggregateRootType {
 abstract class AggregateRootType extends LazyLogging {
   def name: String
   def repositoryName: String = name+"Repository"
+
+  def aggregateRootFactory( implicit model: DomainModel ): ActorFactory = model.aggregateRootFactory
+
+  def repositoryProps( implicit model: DomainModel ): Props = {
+    EnvelopingAggregateRootRepository.props( model, this, aggregateRootFactory )
+  }
 
   def aggregateRootProps( implicit model: DomainModel ): Props
 

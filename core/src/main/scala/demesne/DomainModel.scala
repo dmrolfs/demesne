@@ -42,6 +42,8 @@ trait DomainModel {
   def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]]
 
   def shutdown(): Future[Terminated]
+
+  def aggregateRootFactory: ActorFactory
 }
 
 object DomainModel {
@@ -159,7 +161,7 @@ object DomainModel {
       factory: ActorFactory
     )(
       implicit to: Timeout
-    ): Future[Done] = trace.block( "registerAggregateType" ) {
+    ): Future[Done] = trace.block( s"registerAggregateType(${rootType.name})" ) {
       implicit val ec = system.dispatcher
 
       val (registerIndexBudget, registerAgentBudget, startChildSupervisionBudget) = timeoutBudgets( to )
@@ -183,7 +185,7 @@ object DomainModel {
 
     /**
      * Returns the individual timeout budget components for aggregate type registration.
- *
+     *
      * @return (Index Index, Get Agent Index, Start Supervised Child)
      */
     private def timeoutBudgets( to: Timeout ): (Timeout, Timeout, Timeout) = {
@@ -205,13 +207,16 @@ object DomainModel {
       val aggregate = aggregateRegistry alter { r =>
         trace.block(s"[name=${name}, system=${system}] registry send ${rootType}") {
           trace( s"DomainModel.name= $name" )
-          if (r.contains(rootType.name)) r
+          if ( r contains rootType.name ) r
           else {
-            val props = EnvelopingAggregateRootRepository.props( this, rootType, factory )
             val entry = for {
-              repoStarted <- ask( repositorySupervisor, StartChild(props, rootType.repositoryName) )( budget ).mapTo[ChildStarted]
-              repo = repoStarted.child
-            } yield ( rootType.name, (repo, rootType) )
+              repoStarted <- ask(
+                repositorySupervisor,
+                StartChild( rootType.repositoryProps(this), rootType.repositoryName )
+              )(
+                budget
+              ).mapTo[ChildStarted]
+            } yield ( rootType.name, (repoStarted.child, rootType) )
 
             //todo make configuration driven
             //todo is Await necessary?
@@ -248,7 +253,7 @@ object DomainModel {
       }
 
       Future.sequence( indexes ) map { r =>
-        logger.info( "Registering root-type[{}]@[{}]: registers[{}] established",
+        logger.info( "Registering root-type[{}]@[{}]: indexes[{}] established",
           rootType.name,
           name,
           rootType.indexes.map{ _.toString }.mkString( "[", ",", "]" )
@@ -259,6 +264,11 @@ object DomainModel {
     }
 
     override def shutdown(): Future[Terminated] = system.terminate()
+
+    override lazy val aggregateRootFactory: ActorFactory = {
+      //todo discover if clustering is active and default to clustered factory
+      factory.contextFactory
+    }
 
     override def toString: String = s"DomainModelImpl(name=$name, system=$system)"
   }
