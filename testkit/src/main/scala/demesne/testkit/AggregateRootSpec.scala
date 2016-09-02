@@ -17,7 +17,7 @@ import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
-import demesne.{AggregateProtocol, AggregateRootModule, DomainModel}
+import demesne._
 
 
 object AggregateRootSpec {
@@ -53,46 +53,44 @@ with BeforeAndAfterAll
     import akka.util.Timeout
     implicit val timeout = Timeout( 5.seconds )
 
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
-      for { 
-        init <- moduleCompanions.map{ _ initialize context }.sequence
-      } {
-        Await.ready( Future sequence { init }, 5.seconds )
-      }
-    }
+    def before( test: OneArgTest ): Unit = trace.block( "before" ) { Await.ready( boundedContext.start(), 5.seconds ) }
 
     def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
     val bus = TestProbe()
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
 
-    def moduleCompanions: List[AggregateRootModule]
+    def rootTypes: Set[AggregateRootType]
 
     def nextId(): TID
     lazy val tid: TID = nextId()
 
     lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
 
-    //todo need to figure out how to prevent x-test clobbering of DM across suites
-    implicit lazy val model: DomainModel = {
-      import scala.concurrent.ExecutionContext.Implicits.global
-      val result = DomainModel.make( s"Isolated-${fixtureId}" )( system, global ) map {Await.result( _, 1.second ) }
-      result.toOption.get
-    }
+    lazy val boundedContext: BoundedContext = rootTypes.foldLeft( BoundedContext(s"Isolated-${fixtureId}", config) ){ _ :+ _ }
 
-    def context: Map[Symbol, Any] = trace.block( "context()" ) {
-      Map(
-        demesne.ModelKey -> model,
-        demesne.SystemKey -> system,
-        demesne.FactoryKey -> demesne.factory.contextFactory,
-        demesne.ConfigurationKey -> config
-      )
-    }
+    implicit lazy val model: DomainModel = boundedContext.model
+
+//    //todo need to figure out how to prevent x-test clobbering of DM across suites
+//    implicit lazy val model: DomainModel = {
+//      import scala.concurrent.ExecutionContext.Implicits.global
+//      val result = DomainModel.make( s"Isolated-${fixtureId}" )( system, global ) map {Await.result( _, 1.second ) }
+//      result.toOption.get
+//    }
+
+//    def context: Map[Symbol, Any] = trace.block( "context()" ) {
+//      Map(
+//        demesne.ModelKey -> model,
+//        demesne.SystemKey -> system,
+//        demesne.FactoryKey -> demesne.factory.contextFactory,
+//        demesne.ConfigurationKey -> config
+//      )
+//    }
   }
 
   override type Fixture <: AggregateFixture
 
-  override def withFixture( test: OneArgTest ): Outcome = {
+  override def withFixture( test: OneArgTest ): Outcome = trace.block( "withFixture" ) {
     val fixture = createAkkaFixture( test )
 
     try {

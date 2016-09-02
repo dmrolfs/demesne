@@ -8,10 +8,7 @@ import peds.commons.log.Trace
 import peds.commons.util._
 
 
-abstract class AggregateRootModule
-extends AggregateRootType.Provider
-with CommonInitializeAggregateActorType
-with LazyLogging { module =>
+abstract class AggregateRootModule extends AggregateRootType.Provider with LazyLogging { module =>
   def trace: Trace[_]
 
   type ID

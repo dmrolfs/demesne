@@ -6,9 +6,9 @@ import scala.concurrent.duration._
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.Config
-import demesne.DomainModel
 import org.scalatest.{MustMatchers, Outcome, ParallelTestExecution, fixture}
 import peds.commons.log.Trace
+import demesne.{AggregateRootType, BoundedContext, DomainModel}
 
 
 object ParallelAkkaSpec {
@@ -17,21 +17,23 @@ object ParallelAkkaSpec {
 
 
 // Runs each individual test in parallel. Only possible with Fixture isolation
-trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelTestExecution {
+abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelTestExecution {
   import demesne.testkit.ParallelAkkaSpec._
   private val trace = Trace[ParallelAkkaSpec]
 
   type Fixture <: AkkaFixture
   type FixtureParam = Fixture
 
-  class AkkaFixture( val fixtureId: Int = sysId.incrementAndGet(), val config: Config = demesne.testkit.config )
+  abstract class AkkaFixture( val fixtureId: Int = sysId.incrementAndGet(), val config: Config = demesne.testkit.config )
   extends TestKit( ActorSystem( s"Parallel-${fixtureId}", config ) )
   with ImplicitSender {
-    implicit val model: DomainModel = {
-      import scala.concurrent.ExecutionContext.Implicits.global
-      val result = DomainModel.make( s"Parallel-${fixtureId}" )( system, global ) map {Await.result( _, 1.second ) }
-      result.toOption.get
-    }
+    def before( test: OneArgTest ): Unit = trace.block( "before" ) { Await.ready( boundedContext.start(), 5.seconds ) }
+    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
+
+    def rootTypes: Set[AggregateRootType]
+    lazy val boundedContext: BoundedContext = rootTypes.foldLeft( BoundedContext(s"Parallel-${fixtureId}", config) ){ _ :+ _ }
+
+    implicit lazy val model: DomainModel = boundedContext.model
   }
 
   def createAkkaFixture( test: OneArgTest ): Fixture
@@ -39,8 +41,10 @@ trait ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelT
   override def withFixture( test: OneArgTest ): Outcome = {
     val fixture = createAkkaFixture( test )
     try {
+      fixture before test
       test( fixture )
     } finally {
+      fixture after test
       fixture.system.terminate()
     }
   }

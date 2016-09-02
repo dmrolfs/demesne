@@ -12,10 +12,11 @@ import peds.commons.log.Trace
 import peds.commons.util._
 import peds.commons.TryV
 import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel}
-import demesne.module.{AggregateRootProps, SimpleAggregateModule}
 import demesne.module.entity.{messages => EntityMessages}
 import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent
+import demesne.module.{AggregateEnvironment, LocalAggregate, SimpleAggregateModule}
+import demesne.repository.AggregateRootProps
 
 
 object EntityAggregateModule extends LazyLogging {
@@ -92,6 +93,7 @@ object EntityAggregateModule extends LazyLogging {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
         object Props extends Param[AggregateRootProps]
+        object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
         object Indexes extends OptParam[MakeIndexSpec]( makeEmptyIndexSpec )
         object IdLens extends Param[Lens[E, E#TID]]
         object NameLens extends Param[Lens[E, String]]
@@ -104,7 +106,8 @@ object EntityAggregateModule extends LazyLogging {
 
       override val fieldsContainer = createFieldsContainer( 
         Tag :: 
-        PProps :: 
+        PProps ::
+        Environment ::
         Indexes :: 
         IdLens :: 
         NameLens :: 
@@ -120,6 +123,7 @@ object EntityAggregateModule extends LazyLogging {
     case class EntityAggregateModuleImpl(
       override val aggregateIdTag: Symbol,
       override val aggregateRootPropsOp: AggregateRootProps,
+      override val environment: AggregateEnvironment,
       _indexes: MakeIndexSpec,
       override val idLens: Lens[E, E#TID],
       override val nameLens: Lens[E, String],
@@ -188,13 +192,15 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
 
   class EntityAggregateRootType(
     name: String,
-    indexes: Seq[IndexSpecification]
-  ) extends SimpleAggregateRootType( name, indexes ) {
-//    override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
+    indexes: Seq[IndexSpecification],
+    environment: AggregateEnvironment
+  ) extends SimpleAggregateRootType( name, indexes, environment ) {
     override def toString: String = name + "EntityAggregateRootType"
   }
 
-  override def rootType: AggregateRootType = new EntityAggregateRootType( name = module.shardName, indexes = module.indexes )
+  override def rootType: AggregateRootType = {
+    new EntityAggregateRootType( name = module.shardName, indexes = module.indexes, environment )
+  }
 
 
   abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] { publisher: EventPublisher =>

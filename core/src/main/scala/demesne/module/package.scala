@@ -1,8 +1,6 @@
 package demesne
 
 import scala.reflect.ClassTag
-import akka.actor.Props
-import akka.actor.Actor.Receive
 import peds.commons.util._
 
 
@@ -10,9 +8,6 @@ import peds.commons.util._
  * Created by rolfsd on 5/23/15.
  */
 package object module {
-  type AggregateRootProps = Function2[DomainModel, AggregateRootType, Props]
-
-
   trait DemesneModuleError extends Throwable
 
 
@@ -21,5 +16,4 @@ package object module {
     s"info [${info}: ${implicitly[ClassTag[I]].runtimeClass.safeSimpleName}] cannot be translated into " +
     s"state [${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" 
   ) with DemesneModuleError
-
 }

@@ -41,32 +41,32 @@ with ActorLogging {
 
   def connecting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case CurrentState( _, state ) if state != Connecting => {
-      log.info( "Relay connected to index aggregate at {}", indexAggregatePath )
+      log.debug( "Relay connected to index aggregate at {}", indexAggregatePath )
       proxy ! WaitingForStart
       context become starting( waiting )
     }
 
     case Transition( _, Connecting, _) => {
-      log.info( "Relay connected to index aggregate at {}", indexAggregatePath )
+      log.debug( "Relay connected to index aggregate at {}", indexAggregatePath )
       proxy ! WaitingForStart
       context become starting( waiting )
     }
 
     case WaitingForStart => {
-      log.info( "adding to relay's wait queue: {}", sender() )
+      log.debug( "adding to relay's wait queue: {}", sender() )
       context become connecting( List( sender() ) )
     }
   }
 
   def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
     case Started if sender().path == indexAggregatePath => {
-      log.info( "relay recd start confirmation from aggregate => activating" )
+      log.debug( "relay recd start confirmation from aggregate => activating" )
       waiting foreach { _ ! Started }
       context become active
     }
 
     case WaitingForStart => {
-      log.info( "adding to relay's wait queue: {}", sender() )
+      log.debug( "adding to relay's wait queue: {}", sender() )
       context become starting( List( sender() ) )
     }
   }
@@ -75,11 +75,11 @@ with ActorLogging {
     case event if fullExtractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
       val directive = fullExtractor( event )
       proxy ! directive
-      log.info( "relayed to aggregate index: {}", directive )
+      log.debug( "relayed to aggregate index: {}", directive )
     }
 
     case WaitingForStart => {
-      log.info( "received WaitingForStart: sending Started to {}", sender() )
+      log.debug( "received WaitForStart: sending Started to {}", sender() )
       sender() ! Started
     }
   }
