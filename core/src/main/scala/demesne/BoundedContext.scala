@@ -1,9 +1,11 @@
 package demesne
 
 import scala.concurrent.{ExecutionContext, Future}
+import akka.Done
 import akka.actor.{ActorIdentity, ActorRef, ActorSystem, Identify, Terminated}
 import akka.agent.Agent
 import akka.util.Timeout
+import scalaz.concurrent.Task
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
 import demesne.repository.{RepositorySupervisor, StartProtocol}
@@ -24,6 +26,8 @@ abstract class BoundedContext {
 
   def :+( rootType: AggregateRootType ): BoundedContext
   def +:( rootType: AggregateRootType ): BoundedContext = this :+ rootType
+  def withResources( resources: Map[Symbol, Any] ): BoundedContext
+  def withStartTask( task: Task[Done] ): BoundedContext
   def start(): Future[DomainModel]
   def shutdown(): Future[Terminated] = system.terminate()
 }
@@ -47,7 +51,9 @@ object BoundedContext extends LazyLogging {
   final case class BoundedContextImpl private[BoundedContext](
     override val name: String,
     override val system: ActorSystem,
-    configuration: Config
+    configuration: Config,
+    userResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
+    startTasks: Seq[Task[Done]] = Seq.empty[Task[Done]]
   ) extends BoundedContext {
     override def toString: String = {
       s"""BoundedContext(${name}, system:[${system}], model:[${modelRegistry.get().getOrElse(key, "no-model")}]"""
@@ -70,6 +76,12 @@ object BoundedContext extends LazyLogging {
       }
       this
     }
+
+    override def withResources( resources: Map[Symbol, Any] ): BoundedContext = {
+      this.copy( userResources = userResources ++ resources )
+    }
+
+    override def withStartTask( task: Task[Done] ): BoundedContext = this.copy( startTasks = startTasks :+ task )
 
     private def updateModelCell(
       fn: DomainModelCell => DomainModelCell
@@ -101,35 +113,46 @@ object BoundedContext extends LazyLogging {
       val asker = new AskableActorSelection( sel )
       val result = DomainModelRef( name, system )
 
-      val started = {
+      def verifySupervisor(): Future[Done] = {
         ( asker ? new Identify( repositorySupervisorName.## ) ).mapTo[ActorIdentity] flatMap { identity =>
           identity.ref
           .map { _ =>
             logger.debug( "BC: repository supervisor:[{}] found created" )
-            Future successful result
+            Future successful Done
           }
-          .getOrElse {
-            for {
-              cell <- modelCell()
-              _ = logger.debug( "BC: making repo supervisor" )
-              indexSupervisor <- makeIndexSupervisor( cell )
-              repoSupervisor <- makeRepositorySupervisor( repositorySupervisorName, cell.rootTypes )
-              _ = logger.debug( "BC: updating model cell" )
-              newCell <- updateModelCell {
-                _.copy( indexSupervisor = Some(indexSupervisor), repositorySupervisor = Some(repoSupervisor) )
-              }
-              _ = logger.debug( "BC: starting model cell = [{}]", newCell )
-              _ <- newCell.start()
-              _ = logger.debug( "BC: model cell started" )
-            } yield {
-              result
-            }
-          }
+          .getOrElse { setupSupervisors() }
         }
       }
 
-      started foreach { _ => logger.info( "started BoundedContext:[{}]", (name, system.name) ) }
-      started
+      def setupSupervisors(): Future[Done] = {
+        for {
+          cell <- modelCell()
+          _ = logger.debug( "BC: making repo supervisor" )
+          indexSupervisor <- makeIndexSupervisor( cell )
+          repoSupervisor <- makeRepositorySupervisor( repositorySupervisorName, cell.rootTypes, userResources )
+          _ = logger.debug( "BC: updating model cell" )
+          newCell <- updateModelCell {
+            _.copy( indexSupervisor = Some(indexSupervisor), repositorySupervisor = Some(repoSupervisor) )
+          }
+          _ = logger.debug( "BC: starting model cell = [{}]", newCell )
+          _ <- newCell.start()
+          _ = logger.debug( "BC: model cell started" )
+        } yield {
+          Done
+        }
+      }
+
+      import peds.commons.concurrent.TaskExtensionOps
+
+      val tasks = new TaskExtensionOps( Task.gatherUnordered( startTasks ) )
+
+      for {
+        _ <- tasks.runFuture()
+        _ <- verifySupervisor()
+      } yield {
+        logger.info( "started BoundedContext:[{}]", (name, system.name) )
+        result
+      }
     }
 
     private def timeoutBudgets( to: Timeout ): (Timeout, Timeout) = {
@@ -146,13 +169,14 @@ object BoundedContext extends LazyLogging {
 
     private def makeRepositorySupervisor(
       repositorySupervisorName: String,
-      rootTypes: Set[AggregateRootType]
+      rootTypes: Set[AggregateRootType],
+      userResources: Map[Symbol, Any]
     )(
       implicit to: Timeout
     ): Future[ActorRef] = {
       import akka.pattern.ask
       implicit val ec = system.dispatcher
-      val props = RepositorySupervisor.props( model, rootTypes, configuration )
+      val props = RepositorySupervisor.props( model, rootTypes, userResources, configuration )
       val supervisor = system.actorOf( props, repositorySupervisorName )
       ( supervisor ? StartProtocol.WaitForStart ) map { _ =>
         logger.debug(
