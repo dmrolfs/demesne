@@ -16,14 +16,13 @@ import peds.commons.log.Trace
   * Created by rolfsd on 8/20/16.
   */
 object RepositorySupervisor extends LazyLogging {
-  val ModelResource = 'model
-  val SystemResource = 'system
-  val RootTypeResource = Symbol( "root-type" )
-  val ConfigurationResource = 'configuration
-
-
-  def props( model: DomainModel, rootTypes: Set[AggregateRootType], configuration: Config = ConfigFactory.empty() ): Props = {
-    Props( new RepositorySupervisor( model, rootTypes, configuration ) )
+  def props(
+    model: DomainModel,
+    rootTypes: Set[AggregateRootType],
+    userResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
+    configuration: Config = ConfigFactory.empty()
+  ): Props = {
+    Props( new RepositorySupervisor( model, rootTypes, userResources, configuration ) )
   }
 
 
@@ -138,16 +137,10 @@ object RepositorySupervisor extends LazyLogging {
 class RepositorySupervisor(
   model: DomainModel,
   rootTypes: Set[AggregateRootType],
+  userResources: Map[Symbol, Any],
   configuration: Config
 ) extends IsolatedDefaultSupervisor with OneForOneStrategyFactory {
   import RepositorySupervisor._
-
-  val basis: Map[Symbol, Any] = Map(
-    ModelResource -> model,
-    SystemResource -> model.system,
-    RootTypeResource -> rootTypes,
-    ConfigurationResource -> configuration
-  )
 
   override def childStarter(): Unit = {
     rootTypes foreach { rt => self ! StartChild( rt.repositoryProps( model ), rt.repositoryName ) }
@@ -228,6 +221,6 @@ class RepositorySupervisor(
   }
 
   def collectResourcesFor( repository: StartingRepository )( implicit state: ModelStartupState ): Map[Symbol, Any] = {
-    basis ++ repository.collectDependenciesFrom( state.availableResources )
+    userResources ++ repository.collectDependenciesFrom( state.availableResources )
   }
 }

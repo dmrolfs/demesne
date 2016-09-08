@@ -27,13 +27,18 @@ abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with 
   abstract class AkkaFixture( val fixtureId: Int = sysId.incrementAndGet(), val config: Config = demesne.testkit.config )
   extends TestKit( ActorSystem( s"Parallel-${fixtureId}", config ) )
   with ImplicitSender {
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) { Await.ready( boundedContext.start(), 5.seconds ) }
+    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
+      Await.ready( boundedContext.start()( scala.concurrent.ExecutionContext.global ), 5.seconds )
+    }
+
     def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
     def rootTypes: Set[AggregateRootType]
-    lazy val boundedContext: BoundedContext = rootTypes.foldLeft( BoundedContext(s"Parallel-${fixtureId}", config) ){ _ :+ _ }
+    lazy val boundedContext: BoundedContext = {
+      Await.result( BoundedContext.make( Symbol(s"Parallel-${fixtureId}"), config, rootTypes ), 5.seconds )
+    }
 
-    implicit lazy val model: DomainModel = boundedContext.model
+    implicit lazy val model: DomainModel = boundedContext.unsafeModel
   }
 
   def createAkkaFixture( test: OneArgTest ): Fixture

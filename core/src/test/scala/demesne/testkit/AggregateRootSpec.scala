@@ -43,7 +43,7 @@ with BeforeAndAfterAll
     override val fixtureId: Int = AggregateRootSpec.sysId.incrementAndGet(),
     override val config: Config = demesne.testkit.config
   ) extends AkkaFixture( fixtureId, config ) { fixture =>
-    logger.debug( "FIXTURE ID = [{}]", id.toString )
+    logger.debug( "FIXTURE ID = [{}]", fixtureId.toString )
     private val trace = Trace[AggregateFixture]
 
     val module: AggregateRootModule
@@ -56,14 +56,12 @@ with BeforeAndAfterAll
       val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
       implicit val timeout = Timeout( 5.seconds )
 
-      val model = {
-        for {
-          m <- boundedContext.start()
-          _ <- ( supervisorSel ? StartProtocol.WaitForStart )
-        } yield m
-      }
-      val m = Await.result( model, 5.seconds )
-      logger.debug( "model from started BoundedContext = [{}] with root-types=[{}]", m, m.rootTypes.mkString(", ") )
+      Await.ready( ( supervisorSel ? StartProtocol.WaitForStart ), 5.seconds )
+      logger.debug(
+        "model from started BoundedContext = [{}] with root-types=[{}]",
+        boundedContext.unsafeModel,
+        boundedContext.unsafeModel.rootTypes.mkString(", ")
+      )
     }
 
     def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
@@ -78,17 +76,25 @@ with BeforeAndAfterAll
 
     lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
 
-    lazy val boundedContext: BoundedContext = trace.block("boundedContext") {
-      val result: BoundedContext = rootTypes.foldLeft( BoundedContext(s"BoundedContext-${fixtureId}", config) ){ (acc, rt) =>
-        logger.debug( "adding [{}] to bounded context:[{}]", rt.name, (acc.name, acc.system.name) )
-        acc :+ rt
-      }
-      val m = Await.result( result.futureModel, 5.seconds )
-      logger.debug( "Bounded Context root-type:[{}]", m.rootTypes.mkString(", ") )
+    lazy val boundedContext: BoundedContext = trace.block(s"FIXTURE: boundedContext($fixtureId)") {
+      val key = Symbol( s"BoundedContext-${fixtureId}" )
+
+      val bc = for {
+        filled <- rootTypes.foldLeft( BoundedContext.make(key, config) ){ (acc, rt) =>
+          logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc.getClass )
+          acc flatMap { _ :+ rt }
+        }
+        m <- filled.futureModel
+        _ = logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") )
+        started <- filled.start()
+      } yield started
+
+      val result = Await.result( bc, 5.seconds )
+      logger.debug( "Bounded Context root-type:[{}]", result.unsafeModel.rootTypes.mkString(", ") )
       result
     }
 
-    implicit lazy val model: DomainModel = trace.block("model") { boundedContext.model }
+    implicit lazy val model: DomainModel = trace.block("model") { boundedContext.unsafeModel }
   }
 
   override type Fixture <: AggregateFixture

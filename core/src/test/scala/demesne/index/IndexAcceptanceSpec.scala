@@ -168,7 +168,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
   override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
 
   "Index Index should" should {
-    "recorded in registers after added" in { fixture: Fixture =>
+    "recorded in registers after added" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
       val rt = TestModule.rootType
@@ -300,7 +300,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
       }
     }
 
-    "revised in index after change" taggedAs WIP in { fixture: Fixture =>
+    "revised in index after change" in { fixture: Fixture =>
       import fixture._
 
       val rt = TestModule.rootType

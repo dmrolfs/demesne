@@ -11,7 +11,11 @@ sealed trait StartProtocol
 object StartProtocol {
   case object Load extends StartProtocol
 
-  case class Loaded( rootType: AggregateRootType, resources: Map[Symbol, Any], dependencies: Set[Symbol] ) extends StartProtocol {
+  case class Loaded(
+    rootType: AggregateRootType,
+    resources: Map[Symbol, Any] = Map.empty[Symbol, Any],
+    dependencies: Set[Symbol] = Set.empty[Symbol]
+  ) extends StartProtocol {
     override def toString: String = {
       s"""Loaded(${rootType.name} dependencies:[${dependencies.mkString(", ")}] resources:[${resources.mkString(", ")}])"""
     }

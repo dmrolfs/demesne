@@ -7,8 +7,10 @@ import akka.cluster.sharding.ClusterSharding
 import akka.cluster.sharding.ShardRegion.Passivate
 import akka.event.LoggingReceive
 import akka.pattern.pipe
+import scalaz._, Scalaz._
 import peds.akka.envelope._
 import peds.commons.log.Trace
+import peds.commons.Valid
 import demesne.{AggregateRootType, DomainModel}
 
 
@@ -77,11 +79,9 @@ with ActorLogging {
 
   import demesne.repository.{ StartProtocol => SP }
 
-  def doLoad(): Future[SP.Loaded] = {
-    Future successful { SP.Loaded(rootType, resources = Map.empty[Symbol, Any], dependencies = Set.empty[Symbol]) }
-  }
+  def doLoad(): SP.Loaded = SP.Loaded(rootType, resources = Map.empty[Symbol, Any], dependencies = Set.empty[Symbol])
 
-  def doInitialize( resources: Map[Symbol, Any] ): Future[Done] = Future successful { Done }
+  def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = { Done.successNel }
 
   override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 
@@ -92,13 +92,17 @@ with ActorLogging {
   val quiscent: Receive = {
     case SP.Load => {
       val coordinator = sender()
-      doLoad() pipeTo coordinator
+      Future { doLoad() } pipeTo coordinator
     }
 
     case SP.Initialize( resources ) => {
       val coordinator = sender()
-      val reply = doInitialize( resources ) map { _ => SP.Started }
-      reply pipeTo coordinator
+      val replying = Future {
+        doInitialize( resources )
+        SP.Started
+      }
+
+      replying pipeTo coordinator
       context become LoggingReceive { nonfunctional orElse repository }
     }
   }
