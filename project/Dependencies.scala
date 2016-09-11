@@ -27,7 +27,7 @@ object Dependencies {
   }
 
   object scalaz {
-    val version = "7.2.2"
+    val version = "7.2.5"
     def module( id: String ) = "org.scalaz" %% s"scalaz-$id" % version
 
     val core = module( "core" )

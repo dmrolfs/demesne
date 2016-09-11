@@ -1,21 +1,28 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
+
+import akka.Done
+
 import scala.concurrent.duration._
 import scala.reflect.ClassTag
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import akka.actor.ActorRef
+import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit._
+
 import scalaz._
 import Scalaz._
 import com.typesafe.config.Config
+import demesne.BoundedContext.StartTask
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
 import demesne._
 import demesne.repository.StartProtocol
+
+import scalaz.concurrent.Task
 
 
 object AggregateRootSpec {
@@ -70,6 +77,8 @@ with BeforeAndAfterAll
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
 
     def rootTypes: Set[AggregateRootType]
+    def resources: Map[Symbol, Any] = Map.empty[Symbol, Any]
+    def startTasks( system: ActorSystem ): Set[StartTask] = Set.empty[StartTask]
 
     def nextId(): TID
     lazy val tid: TID = nextId()
@@ -80,12 +89,12 @@ with BeforeAndAfterAll
       val key = Symbol( s"BoundedContext-${fixtureId}" )
 
       val bc = for {
-        filled <- rootTypes.foldLeft( BoundedContext.make(key, config) ){ (acc, rt) =>
+        made <- BoundedContext.make( key, config, userResources = resources, startTasks = startTasks(system) )
+        filled = rootTypes.foldLeft( made ){ (acc, rt) =>
           logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc.getClass )
-          acc flatMap { _ :+ rt }
+          acc :+ rt
         }
-        m <- filled.futureModel
-        _ = logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") )
+        _ <- filled.futureModel map { m => logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") ); m }
         started <- filled.start()
       } yield started
 

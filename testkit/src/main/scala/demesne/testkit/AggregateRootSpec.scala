@@ -2,22 +2,27 @@ package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import akka.Done
+
 import scala.concurrent.duration._
 import scala.reflect.ClassTag
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import akka.actor.ActorRef
+import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit._
 
 import scalaz._
 import Scalaz._
 import com.typesafe.config.Config
-import com.typesafe.scalalogging.LazyLogging
+import demesne.BoundedContext.StartTask
 import org.scalatest._
 import org.scalatest.mock.MockitoSugar
 import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
 import demesne._
+import demesne.repository.StartProtocol
+
+import scalaz.concurrent.Task
 
 
 object AggregateRootSpec {
@@ -45,7 +50,7 @@ with BeforeAndAfterAll
     override val fixtureId: Int = AggregateRootSpec.sysId.incrementAndGet(),
     override val config: Config = demesne.testkit.config
   ) extends AkkaFixture( fixtureId, config ) { fixture =>
-    logger.info( "FIXTURE ID = [{}]", id.toString )
+    logger.debug( "FIXTURE ID = [{}]", fixtureId.toString )
     private val trace = Trace[AggregateFixture]
 
     val module: AggregateRootModule
@@ -53,7 +58,18 @@ with BeforeAndAfterAll
     import akka.util.Timeout
     implicit val timeout = Timeout( 5.seconds )
 
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) { Await.ready( boundedContext.start(), 5.seconds ) }
+    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
+      import akka.pattern.AskableActorSelection
+      val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
+      implicit val timeout = Timeout( 5.seconds )
+
+      Await.ready( ( supervisorSel ? StartProtocol.WaitForStart ), 5.seconds )
+      logger.debug(
+        "model from started BoundedContext = [{}] with root-types=[{}]",
+        boundedContext.unsafeModel,
+        boundedContext.unsafeModel.rootTypes.mkString(", ")
+      )
+    }
 
     def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
@@ -61,31 +77,33 @@ with BeforeAndAfterAll
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
 
     def rootTypes: Set[AggregateRootType]
+    def resources: Map[Symbol, Any] = Map.empty[Symbol, Any]
+    def startTasks( system: ActorSystem ): Set[StartTask] = Set.empty[StartTask]
 
     def nextId(): TID
     lazy val tid: TID = nextId()
 
     lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
 
-    lazy val boundedContext: BoundedContext = rootTypes.foldLeft( BoundedContext(s"Isolated-${fixtureId}", config) ){ _ :+ _ }
+    lazy val boundedContext: BoundedContext = trace.block(s"FIXTURE: boundedContext($fixtureId)") {
+      val key = Symbol( s"BoundedContext-${fixtureId}" )
 
-    implicit lazy val model: DomainModel = boundedContext.model
+      val bc = for {
+        made <- BoundedContext.make( key, config, userResources = resources, startTasks = startTasks(system) )
+        filled = rootTypes.foldLeft( made ){ (acc, rt) =>
+          logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc.getClass )
+          acc :+ rt
+        }
+        _ <- filled.futureModel map { m => logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") ); m }
+        started <- filled.start()
+      } yield started
 
-//    //todo need to figure out how to prevent x-test clobbering of DM across suites
-//    implicit lazy val model: DomainModel = {
-//      import scala.concurrent.ExecutionContext.Implicits.global
-//      val result = DomainModel.make( s"Isolated-${fixtureId}" )( system, global ) map {Await.result( _, 1.second ) }
-//      result.toOption.get
-//    }
+      val result = Await.result( bc, 5.seconds )
+      logger.debug( "Bounded Context root-type:[{}]", result.unsafeModel.rootTypes.mkString(", ") )
+      result
+    }
 
-//    def context: Map[Symbol, Any] = trace.block( "context()" ) {
-//      Map(
-//        demesne.ModelKey -> model,
-//        demesne.SystemKey -> system,
-//        demesne.FactoryKey -> demesne.factory.contextFactory,
-//        demesne.ConfigurationKey -> config
-//      )
-//    }
+    implicit lazy val model: DomainModel = trace.block("model") { boundedContext.unsafeModel }
   }
 
   override type Fixture <: AggregateFixture
@@ -95,8 +113,10 @@ with BeforeAndAfterAll
 
     try {
       fixture before test
+      logger.debug( "++++++++++ entering test ++++++++++" )
       test( fixture )
     } finally {
+      logger.debug( "---------- exited test ------------" )
       fixture after test
       fixture.system.terminate()
     }

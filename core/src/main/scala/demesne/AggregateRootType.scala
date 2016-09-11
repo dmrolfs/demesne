@@ -22,7 +22,7 @@ abstract class AggregateRootType extends LazyLogging {
   def name: String
   def repositoryName: String = org.atteo.evo.inflector.English.plural( name )
 
-  def repositoryProps( implicit model: DomainModel ): Props //= {
+  def repositoryProps( implicit model: DomainModel ): Props
 
   val TaggedIdType = TypeCase[TaggedID[_]]
 

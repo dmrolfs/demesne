@@ -24,10 +24,13 @@ abstract class BoundedContext {
   def unsafeModel: DomainModel
   def futureModel: Future[DomainModel]
   def resources: Map[Symbol, Any]
-  def :+( rootType: AggregateRootType ): Future[BoundedContext]
-  def +:( rootType: AggregateRootType ): Future[BoundedContext] = this :+ rootType
+  def :+( rootType: AggregateRootType ): BoundedContext
+  def +:( rootType: AggregateRootType ): BoundedContext = this :+ rootType
   def withResources( rs: Map[Symbol, Any] ): BoundedContext
-  def withStartTask( task: Task[Done] ): BoundedContext
+  def withStartTask( task: BoundedContext.StartTask ): BoundedContext
+  def withStartTask( task: BoundedContext => Done, description: String = "" ): BoundedContext = {
+    withStartTask( BoundedContext.StartTask(task, description) )
+  }
   def start()( implicit ec: ExecutionContext ): Future[BoundedContext]
   def shutdown(): Future[Terminated]
 }
@@ -36,6 +39,8 @@ object BoundedContext extends StrictLogging { outer =>
   import scala.concurrent.ExecutionContext.global
 
   private val trace = Trace( "BoundedContext", logger )
+
+  final case class StartTask( task: BoundedContext => Done, description: String = "" )
 
 
   def apply( key: Symbol ): BoundedContext = {
@@ -59,7 +64,9 @@ object BoundedContext extends StrictLogging { outer =>
   def make(
     key: Symbol,
     configuration: Config,
-    rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
+    rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType],
+    userResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
+    startTasks: Set[StartTask] = Set.empty[StartTask]
   )(
     implicit system: ActorSystem,
     ec: ExecutionContext = global
@@ -74,8 +81,10 @@ object BoundedContext extends StrictLogging { outer =>
           BoundedContextCell(
             key,
             system,
-            modelCell = DomainModelCell( key, system, rootTypes = rootTypes ),
-            configuration = configuration
+            DomainModelCell( key, system, rootTypes = rootTypes ),
+            configuration,
+            userResources,
+            startTasks.toSeq
           )
         }
       }
@@ -162,17 +171,17 @@ object BoundedContext extends StrictLogging { outer =>
 
     override def resources: Map[Symbol, Any] = unsafeCell.resources
 
-    override def :+( rootType: AggregateRootType ): Future[BoundedContext] = {
+    override def :+( rootType: AggregateRootType ): BoundedContext = {
       implicit val ec = alteringContext
 
       for {
         cell <- futureCell
-        newCell <- ( cell :+ rootType ).mapTo[BoundedContextCell]
+        newCell = ( cell :+ rootType ).asInstanceOf[BoundedContextCell]
         _ = logger.debug( "TEST: NEW BC CELL's ROOT-TYPES:[{}]", newCell.modelCell.rootTypes.mkString(", ") )
         altered <- outer.alterContextCell( key, newCell )
-      } yield {
-        this
-      }
+      } yield Done
+
+      this
     }
 
     override def withResources( rs: Map[Symbol, Any] ): BoundedContext = {
@@ -183,10 +192,15 @@ object BoundedContext extends StrictLogging { outer =>
       this
     }
 
-    override def withStartTask( task: Task[Done] ): BoundedContext = {
+    override def withStartTask( task: StartTask ): BoundedContext = {
       implicit val ec = alteringContext
       futureCell foreach { cell =>
-        outer.alterContextCell( key, newCell = cell.withStartTask(task).asInstanceOf[BoundedContextCell] )( alteringContext )
+        outer.alterContextCell(
+          key,
+          cell.withStartTask( task ).asInstanceOf[BoundedContextCell]
+        )(
+          alteringContext
+        )
       }
       this
     }
@@ -242,9 +256,9 @@ object BoundedContext extends StrictLogging { outer =>
     system: ActorSystem,
     modelCell: DomainModelCell,
     configuration: Config,
-    supervisors: Option[Supervisors] = None,
     userResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
-    startTasks: Seq[Task[Done]] = Seq.empty[Task[Done]]
+    startTasks: Seq[StartTask] = Seq.empty[StartTask],
+    supervisors: Option[Supervisors] = None
   ) extends BoundedContext {
     override def toString: String = s"""BoundedContext(${name}, system:[${system}], model:[${modelCell}]"""
 
@@ -261,17 +275,18 @@ object BoundedContext extends StrictLogging { outer =>
       )
     }
 
-    override def :+( rootType: AggregateRootType ): Future[BoundedContext] = {
+    override def :+( rootType: AggregateRootType ): BoundedContext = {
       val newModel = modelCell addAggregateType rootType
       logger.debug( "adding rootType:[{}] to modelCell - new root-types=[{}]", rootType, newModel.rootTypes.mkString(", ") )
-      Future successful { this.copy( modelCell = newModel ) }
+      this.copy( modelCell = newModel )
     }
 
     override def withResources( rs: Map[Symbol, Any] ): BoundedContext = this.copy( userResources = userResources ++ rs )
 
-    override def withStartTask( task: Task[Done] ): BoundedContext = {
+    override def withStartTask( startTask: StartTask ): BoundedContext = {
       if ( supervisors.isDefined ) {
-        task unsafePerformAsync {
+        Task { startTask.task( this ) }
+        .unsafePerformAsync {
           case scalaz.\/-( done )=> logger.debug( "start task completed with result")
           case scalaz.-\/( ex ) => {
             logger.error( "start task failed", ex )
@@ -281,30 +296,48 @@ object BoundedContext extends StrictLogging { outer =>
 
         this
       } else {
-        this.copy( startTasks = startTasks :+ task )
+        this.copy( startTasks = startTasks :+ startTask )
       }
     }
 
     override def start()( implicit ec: ExecutionContext ): Future[BoundedContext] = trace.block("start") {
       import scala.concurrent.duration._
-//throw new IllegalStateException("STOP")
-      logger.debug( "starting BoundedContext:[{}]...", (name, system.name) )
+
+      def debugBoundedContext( label: String, bc: BoundedContextCell ): Unit = {
+        logger.debug(
+          "{}: starting BoundedContext:[{}] root-types:[{}] user-resources:[{}] start-tasks:[{}]:[{}] configuration:[{}]...",
+          label,
+          (bc.name, bc.system.name),
+          bc.modelCell.rootTypes.mkString(", "),
+          bc.userResources.mkString(", "),
+          bc.startTasks.size.toString, startTasks.map{ _.description }.mkString(", "),
+          bc.configuration
+        )
+      }
+      //todo not see author start task!!!
+
       implicit val ec = system.dispatcher
       implicit val timeout = Timeout( 3.seconds )
 
       import peds.commons.concurrent.TaskExtensionOps
 
-      val tasks = new TaskExtensionOps( Task gatherUnordered startTasks )
+      debugBoundedContext( "START", this )
+      val tasks = new TaskExtensionOps( Task gatherUnordered startTasks.map{ t => Task { t.task(this) } } )
 
-      for {
+      val result = for {
         _ <- tasks.runFuture()
-        supervisors <- setupSupervisors()
-        newModelCell = modelCell.copy( supervisors = Some(supervisors) )
+        bcCell <- contexts.future map { _(key) }
+        _ = debugBoundedContext( "BC-CELL", bcCell )
+        supervisors <- bcCell.setupSupervisors()
+        newModelCell = bcCell.modelCell.copy( supervisors = Some(supervisors) )
         startedModelCell <- newModelCell.start()
       } yield {
         logger.info( "started BoundedContext:[{}] model:[{}]", (name, system.name), startedModelCell )
-        this.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[Task[Done]] )
+        bcCell.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[StartTask] )
       }
+
+      result foreach { r => debugBoundedContext( "DONE", r ) }
+      result
     }
 
     override def shutdown(): Future[Terminated] = system.terminate()
