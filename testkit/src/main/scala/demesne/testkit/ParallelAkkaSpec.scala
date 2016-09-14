@@ -28,7 +28,9 @@ abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with 
   extends TestKit( ActorSystem( s"Parallel-${fixtureId}", config ) )
   with ImplicitSender {
     def before( test: OneArgTest ): Unit = trace.block( "before" ) {
-      Await.ready( boundedContext.start()( scala.concurrent.ExecutionContext.global ), 5.seconds )
+      import scala.concurrent.ExecutionContext.global
+      val timeout = akka.util.Timeout( 5.seconds )
+      Await.ready( boundedContext.start()( global, timeout ), timeout.duration )
     }
 
     def after( test: OneArgTest ): Unit = trace.block( "after" ) { }

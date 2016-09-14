@@ -30,4 +30,10 @@ object StartProtocol {
   case object WaitForStart extends StartProtocol
 
   case object Started extends StartProtocol
+
+  case object GetStatus extends StartProtocol
+
+  case class StartStatus( repositories: Map[String, RepositorySupervisor.RepositoryStartupState] ) extends StartProtocol {
+    override def toString: String = s"""StartStatus( ${repositories.map{ case (r, s) => r+":"+s }.mkString("[", ", ", "]")} )"""
+  }
 }

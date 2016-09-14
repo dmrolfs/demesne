@@ -1,11 +1,13 @@
 package demesne
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 import akka.Done
 import akka.actor.{ActorIdentity, ActorRef, ActorSystem, Identify, Terminated}
 import akka.agent.Agent
-import akka.pattern.{ ask, AskableActorSelection }
+import akka.pattern.{AskableActorSelection, ask}
 import akka.util.Timeout
+
 import scalaz.concurrent.Task
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
@@ -31,7 +33,7 @@ abstract class BoundedContext {
   def withStartTask( task: BoundedContext => Done, description: String = "" ): BoundedContext = {
     withStartTask( BoundedContext.StartTask(task, description) )
   }
-  def start()( implicit ec: ExecutionContext ): Future[BoundedContext]
+  def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext]
   def shutdown(): Future[Terminated]
 }
 
@@ -205,7 +207,7 @@ object BoundedContext extends StrictLogging { outer =>
       this
     }
 
-    override def start()( implicit ec: ExecutionContext ): Future[BoundedContext] = {
+    override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = {
       implicit val ec = alteringContext
 
       for {
@@ -243,7 +245,11 @@ object BoundedContext extends StrictLogging { outer =>
     override val name: String = key.name
     override def indexBus: IndexBus = unsafeCell.indexBus
     override def rootTypes: Set[AggregateRootType] = unsafeCell.rootTypes
-    override def get( rootName: String, id: Any ): Option[ActorRef] = unsafeCell.get( rootName, id )
+    override def get( rootName: String, id: Any ): Option[ActorRef] = {
+      val aggregate = unsafeCell.get( rootName, id )
+      logger.debug( "aggregate get([{}], [{}]) = [{}]", rootName, id.toString, aggregate )
+      aggregate
+    }
     override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
       unsafeCell.aggregateIndexFor[K, TID, V]( rootName, indexName )
     }
@@ -300,9 +306,7 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    override def start()( implicit ec: ExecutionContext ): Future[BoundedContext] = trace.block("start") {
-      import scala.concurrent.duration._
-
+    override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = trace.block("start") {
       def debugBoundedContext( label: String, bc: BoundedContextCell ): Unit = {
         logger.debug(
           "{}: starting BoundedContext:[{}] root-types:[{}] user-resources:[{}] start-tasks:[{}]:[{}] configuration:[{}]...",
@@ -317,27 +321,29 @@ object BoundedContext extends StrictLogging { outer =>
       //todo not see author start task!!!
 
       implicit val ec = system.dispatcher
-      implicit val timeout = Timeout( 3.seconds )
 
       import peds.commons.concurrent.TaskExtensionOps
 
       debugBoundedContext( "START", this )
       val tasks = new TaskExtensionOps( Task gatherUnordered startTasks.map{ t => Task { t.task(this) } } )
 
-      val result = for {
+      for {
         _ <- tasks.runFuture()
         bcCell <- contexts.future map { _(key) }
         _ = debugBoundedContext( "BC-CELL", bcCell )
         supervisors <- bcCell.setupSupervisors()
+        repoStatus <- ( supervisors.repository ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
+      _ = logger.debug( "AAAAAAAAAAAAAAAAAAAA - supervisors:[{}] repo-status:[{}]", supervisors, repoStatus )
         newModelCell = bcCell.modelCell.copy( supervisors = Some(supervisors) )
+        _ = logger.debug( "BBBBBBBBBBBBBBBBBBBBBB - newModelCell:[{}]", newModelCell )
         startedModelCell <- newModelCell.start()
+        _ = logger.debug( "CCCCCCCCCCCCCCCCCCCCCC- startedModelCell:[{}]", startedModelCell )
       } yield {
         logger.info( "started BoundedContext:[{}] model:[{}]", (name, system.name), startedModelCell )
-        bcCell.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[StartTask] )
+        val result = bcCell.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[StartTask] )
+        debugBoundedContext( "DONE", result )
+        result
       }
-
-      result foreach { r => debugBoundedContext( "DONE", r ) }
-      result
     }
 
     override def shutdown(): Future[Terminated] = system.terminate()
@@ -356,8 +362,8 @@ object BoundedContext extends StrictLogging { outer =>
 
     private def timeoutBudgets( to: Timeout ): (Timeout, Timeout) = {
       import scala.concurrent.duration._
-      val baseline = to.duration - 100.millis
-      ( Timeout( baseline / 2 ), Timeout( baseline / 2 ) )
+      val baseline = FiniteDuration( (0.9 * to.duration.toNanos).toLong, NANOSECONDS )
+      ( Timeout( baseline / 1 ), Timeout( baseline / 1 ) )
     }
 
     private def setupRepositorySupervisor( budget: Timeout )( implicit ec: ExecutionContext ): Future[ActorRef] = {
@@ -366,8 +372,14 @@ object BoundedContext extends StrictLogging { outer =>
 
       findRepositorySupervisor( repositorySupervisorName ) flatMap { found =>
         found
-        .map { Future successful _ }
-        .getOrElse { makeRepositorySupervisor( repositorySupervisorName, modelCell.rootTypes ) }
+        .map { repo =>
+          logger.debug( "repository supervisor [{}] found", repositorySupervisorName )
+          Future successful repo
+        }
+        .getOrElse {
+          logger.debug( "repository supervisor [{}] not found -- making...", repositorySupervisorName )
+          makeRepositorySupervisor( repositorySupervisorName, modelCell.rootTypes )
+        }
       }
     }
 
@@ -393,20 +405,49 @@ object BoundedContext extends StrictLogging { outer =>
       implicit ec: ExecutionContext,
       to: Timeout
     ): Future[ActorRef] = {
-      for {
-        model <- futureModel
-        props = RepositorySupervisor.props( model, rootTypes, resources, configuration )
-        supervisor = system.actorOf( props, repositorySupervisorName )
-        _ <- ( supervisor ? StartProtocol.WaitForStart )
-      } yield {
+      val supervisor = futureModel map { model =>
         logger.debug(
-          "started repository supervisor:[{}] for root-types:[{}]",
+          "making repository supervisor:[{}] with root-types:[{}] resources:[{}] configuration:[{}]",
           repositorySupervisorName,
-          rootTypes.map{ _.name }.mkString( ", " )
+          rootTypes.map{ _.name }.mkString(", "),
+          resources.mkString(", "),
+          configuration
         )
 
-        supervisor
+        val props = RepositorySupervisor.props( model, rootTypes, resources, configuration )
+        system.actorOf( props, repositorySupervisorName )
       }
+
+      val started = for {
+        s <- supervisor
+        _ <- ( s ? StartProtocol.WaitForStart ).mapTo[StartProtocol.Started.type]
+        status <- ( s ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
+      } yield {
+        logger.debug( "TEST: Repository Supervisor [{}] started - has status: [{}]", repositorySupervisorName, status )
+        s
+      }
+
+      started onComplete {
+        case Success(_) => {
+          logger.debug(
+            "started repository supervisor:[{}] for root-types:[{}]",
+            repositorySupervisorName,
+            rootTypes.map{ _.name }.mkString( ", " )
+          )
+        }
+
+        case Failure( ex ) => {
+          logger.error( "starting repository supervisor failed. look for startup-status in log", ex )
+          for {
+            s <- supervisor
+            status <- ( s ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
+          } {
+            logger.error( "Starting RepositorySupervisor timed out with startup-status:[{}]", status )
+          }
+        }
+      }
+
+      started
     }
 
     private def setupIndexSupervisor( budget: Timeout )( implicit ec: ExecutionContext ): Future[ActorRef] = {

@@ -4,12 +4,11 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
-import demesne.repository.StartProtocol.{Started, WaitForStart}
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
+import peds.commons.log.Trace
 import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
-import peds.commons.log.Trace
 
 
 /**
@@ -27,23 +26,28 @@ object RepositorySupervisor extends LazyLogging {
 
 
   sealed trait RepositoryStartupState
+  case object Quiscent extends RepositoryStartupState
   case object Loading extends RepositoryStartupState
   case object WaitingToInitialize extends RepositoryStartupState
   case object Initializing extends RepositoryStartupState
+  case object Started extends RepositoryStartupState
+
 
   final case class StartingRepository private[RepositorySupervisor](
     name: String,
     state: RepositoryStartupState,
-    repository: ActorRef,
-    initiators: Set[ActorRef],
+    repository: Option[ActorRef] = None,
+    initiators: Set[ActorRef] = Set.empty[ActorRef],
     dependencies: Set[Symbol] = Set.empty[Symbol]
   ) extends Equals {
+    private val trace = Trace[StartingRepository]
+
     override def toString: String = {
       s"""StartingRepository([${name}:${state}] dependencies:[${dependencies.map{ _.name }.mkString(", ")}] """ +
       s"""initiators:[${initiators.map{ _.path.name }.mkString(", ")}])"""
     }
 
-    def isSatisfiedBy( resources: Map[Symbol, Any] ): Boolean = {
+    def isSatisfiedBy( resources: Map[Symbol, Any] ): Boolean = trace.briefBlock( s"""[${name}] isSatisfiedBy [${resources.keySet.mkString(", ")}] """ ){
       val met = dependencies & resources.keySet
       dependencies == met
     }
@@ -72,38 +76,56 @@ object RepositorySupervisor extends LazyLogging {
     }
   }
 
+
+  object ModelStartupState {
+    private[repository] def apply(
+      rootTypes: Set[AggregateRootType],
+      availableResources: Map[Symbol, Any]
+    ): ModelStartupState = {
+      val starting = rootTypes map { rt => StartingRepository( name = rt.repositoryName, state = Quiscent ) }
+      ModelStartupState( starting = starting, availableResources = availableResources )
+    }
+  }
+
   final case class ModelStartupState private[RepositorySupervisor](
-    startingRepositories: Set[StartingRepository] = Set.empty[StartingRepository],
+    starting: Set[StartingRepository] = Set.empty[StartingRepository],
+    started: Set[StartingRepository] = Set.empty[StartingRepository],
     availableResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
     waiting: Set[ActorRef] = Set.empty[ActorRef]
   ) {
     override def toString: String = {
-      s"""ModelStartupState(starting:[${startingRepositories.mkString(", ")}] """ +
+      s"""ModelStartupState(started:[${started.mkString(", ")}] starting:[${starting.mkString(", ")}] """ +
       s"""resources:[${availableResources.mkString(", ")}] waiting:[${waiting.map{ _.path.name }.mkString(", ")}])"""
     }
 
     private val trace = Trace[ModelStartupState]
 
-    def repositoriesInState( state: RepositoryStartupState ): Set[StartingRepository] = trace.block(s"repositoriesInState($state)") {
-      startingRepositories filter { _.state == state }
+    def repositoriesInState( state: RepositoryStartupState ): Set[StartingRepository] = trace.briefBlock(s"repositoriesInState($state)") {
+      starting filter { _.state == state }
     }
 
-    def startingStateFor( name: String ): Option[StartingRepository] = trace.block(s"startingStateFor($name)") { startingRepositories find { _.name == name } }
+    def startingStateFor( name: String ): Option[StartingRepository] = trace.block(s"startingStateFor($name)") { starting find { _.name == name } }
 
     def withLoading( name: String, repository: ActorRef, initiator: ActorRef ): ModelStartupState = trace.block("withLoading") {
-      val newStarting = StartingRepository( name, state = Loading, repository = repository, initiators = Set(initiator) )
-      this.copy( startingRepositories = startingRepositories + newStarting )
+      val newStarting = StartingRepository( name, state = Loading, repository = Option(repository), initiators = Set(initiator) )
+      withStartingRepositoryState( newStarting )
     }
 
-    def withRepositoryState( repositoryState: StartingRepository ): ModelStartupState = trace.block(s"withRepositoryState(${repositoryState})") {
-      val without = startingRepositories - repositoryState
-      this.copy( startingRepositories = without + repositoryState )
+    def withStartingRepositoryState( repositoryState: StartingRepository ): ModelStartupState = trace.block( s"withStartingRepositoryState(${repositoryState})" ) {
+      logger.debug( "BEFORE new repositoryState:[{}]", repositoryState )
+      logger.debug( "BEFORE starting:[{}]", starting.mkString(", ") )
+      val without = starting - repositoryState
+      logger.debug( "AFTER without:[{}]", without.mkString(", ") )
+      this.copy( starting = without + repositoryState )
     }
 
     def withWaiting( ref: ActorRef ): ModelStartupState = trace.block("withWaiting") {
-      if ( startingRepositories.nonEmpty ) this.copy( waiting = waiting + ref )
-      else {
-        ref ! Started
+      if ( starting.nonEmpty ) {
+        logger.debug( "Stashing waiting:[{}] repositories are starting:[{}]", ref.path.name, starting.map{ _.name }.mkString(", ") )
+        this.copy( waiting = waiting + ref )
+      } else {
+        logger.debug( "Reply with Started:[{}] repositories HAVE STARTED:[{}]", ref.path.name, started.map{ _.name }.mkString(", ") )
+        ref ! SP.Started
         this
       }
     }
@@ -112,14 +134,14 @@ object RepositorySupervisor extends LazyLogging {
       this.copy( availableResources = availableResources ++ resources )
     }
 
-    def without( started: StartingRepository ): ModelStartupState = trace.block("without") {
-      val newState = this.copy( startingRepositories = startingRepositories - started )
-      if ( newState.startingRepositories.isEmpty ) newState.drainWaiting() else newState
+    def without( repo: StartingRepository ): ModelStartupState = trace.block("without") {
+      val newState = this.copy( started = started + repo, starting = starting - repo )
+      if ( newState.starting.isEmpty ) newState.drainWaiting() else newState
     }
 
     def drainWaiting(): ModelStartupState = trace.block("drainWaiting") {
       logger.debug( "notifying waiting:[{}] that RepositorySupervisor Started", waiting.map{_.path.name}.mkString(", ") )
-      waiting foreach { _ ! Started }
+      waiting foreach { _ ! SP.Started }
       this.copy( waiting = Set.empty[ActorRef])
     }
   }
@@ -134,36 +156,40 @@ object RepositorySupervisor extends LazyLogging {
   )
 }
 
+
 class RepositorySupervisor(
   model: DomainModel,
   rootTypes: Set[AggregateRootType],
   userResources: Map[Symbol, Any],
   configuration: Config
-) extends IsolatedDefaultSupervisor with OneForOneStrategyFactory {
+) extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with LazyLogging {
   import RepositorySupervisor._
 
   override def childStarter(): Unit = {
     rootTypes foreach { rt => self ! StartChild( rt.repositoryProps( model ), rt.repositoryName ) }
   }
 
-  override val receive: Receive = LoggingReceive { start( ModelStartupState() ) }
+  override val receive: Receive = LoggingReceive { start( ModelStartupState(rootTypes, userResources) ) }
 
   def start( implicit state: ModelStartupState ): Receive = {
-    case WaitForStart => context become LoggingReceive { start( state withWaiting sender() ) }
+    case SP.WaitForStart => {
+      log.debug( "WaitForStart received waiting on [{}]", state )
+      context become LoggingReceive { start( state withWaiting sender() ) }
+    }
 
-    case StartChild( props, name ) if state.startingRepositories.exists( _.name == name ) => {
+    case StartChild( props, name ) if state.started.exists( s => s.name == name ) && context.child( name ).isDefined => {
+      log.debug( "repository found: [{}]", name )
+      context.child( name ) foreach { sender() ! ChildStarted( _ ) }
+    }
+
+    case StartChild( props, name ) if state.starting.exists( s => s.state != Quiscent && s.name == name ) => {
       log.debug( "repository for [{}] is initializing", name )
-      state.startingRepositories
+      state.starting
       .find { _.name == name }
       .foreach { starting =>
         val newStarting = starting.copy( initiators = starting.initiators + sender() )
-        context become LoggingReceive { start( state withRepositoryState newStarting ) }
+        context become LoggingReceive { start( state withStartingRepositoryState newStarting ) }
       }
-    }
-
-    case StartChild( props, name ) if context.child( name ).isDefined => {
-      log.debug( "repository found: [{}]", name )
-      context.child( name ) foreach { sender() ! ChildStarted( _ ) }
     }
 
     case StartChild( props, name ) => {
@@ -176,28 +202,39 @@ class RepositorySupervisor(
 
     case m @ SP.Loaded( rootType, resources, dependencies ) => {
       val starting = startingStateFor( sender() )
+      log.debug( "TEST: LOADED BEFORE state:[{}]", state )
       val waitingState = {
         state
         .addResources( resources )
-        .withRepositoryState( starting.copy(state = WaitingToInitialize, dependencies = dependencies) )
+        .withStartingRepositoryState( starting.copy( state = WaitingToInitialize, dependencies = dependencies ) )
       }
+      log.debug( "TEST: LOADED AFTER waiting state:[{}]", waitingState )
 
       val newState = dispatchAllInitializingResources( waitingState )
+      log.debug( "TEST: LOADED AFTER newState:[{}]", waitingState )
       context become LoggingReceive { start(newState) }
     }
 
     case SP.Started => {
-      val started = startingStateFor( sender() )
-      log.debug(
-        "repository [{}] initialized and started - notifying initiators:[{}]",
-        started.name,
-        started.initiators.map{ _.path }.mkString(", ")
-      )
-      started.initiators foreach { _ ! ChildStarted( started.repository ) }
-      context become LoggingReceive { start( state without started ) }
+      val started = startingStateFor( sender() ).copy( state = Started )
+      started.repository foreach { repo =>
+        log.debug(
+          "repository [{}] initialized and started - notifying initiators:[{}]",
+          started.name,
+          started.initiators.map{ _.path }.mkString(", ")
+        )
+
+        started.initiators foreach { _ ! ChildStarted(repo) }
+        context become LoggingReceive { start( state without started ) }
+      }
     }
 
     case s: ChildStarted if sender() == self => log.debug( "aggregate repository [{}] started at [{}]", s.name, s.child )
+
+    case SP.GetStatus => {
+      val states = ( state.starting ++ state.started ) map { s => (s.name, s.state) }
+      sender() ! SP.StartStatus( Map(states.toSeq:_*) )
+    }
   }
 
   def startingStateFor( sender: ActorRef )( implicit state: ModelStartupState ): StartingRepository = {
@@ -207,20 +244,42 @@ class RepositorySupervisor(
   }
 
   def dispatchAllInitializingResources( implicit state: ModelStartupState ): ModelStartupState = {
+    log.debug( "dispatching with available resources:[{}]", state.availableResources.keySet.mkString(", ") )
     val initializing = {
       for {
-        waiting <- state repositoriesInState WaitingToInitialize if waiting isSatisfiedBy state.availableResources
-        resources = collectResourcesFor( waiting )
+        waiting <- state repositoriesInState WaitingToInitialize
+        if waiting.repository.isDefined
+        _ = log.debug( "waiting repository dependencies:[{}]", waiting.dependencies.mkString(", ") )
+        if waiting.isSatisfiedBy( state.availableResources )
       } yield {
-        waiting.repository ! SP.Initialize( resources )
-        waiting.copy( state = Initializing )
+        waiting.repository map { repo =>
+          val resources = collectResourcesFor( waiting )
+          log.debug(
+            "[{}] dependencies met - dispatching to repository resources:[{}]",
+            waiting.name,
+            resources.keySet.mkString(", ")
+          )
+
+          repo ! SP.Initialize( resources )
+          waiting.copy( state = Initializing )
+        }
       }
     }
 
-    initializing.foldLeft( state ) { _ withRepositoryState _ }
+    log.debug( "TEST: dispatched to Initializing repositories: [{}]", initializing.flatten.map{ _.name }.mkString(", ") )
+    initializing.flatten.foldLeft( state ) { _ withStartingRepositoryState _ }
   }
 
   def collectResourcesFor( repository: StartingRepository )( implicit state: ModelStartupState ): Map[Symbol, Any] = {
-    userResources ++ repository.collectDependenciesFrom( state.availableResources )
+    log.debug(
+      "collecting resources for:[{}] dependencies:[{}] available:[{}]",
+      repository.name,
+      repository.dependencies.mkString(", "),
+      userResources.keySet.mkString(", ")
+    )
+
+    val collected = userResources ++ repository.collectDependenciesFrom( state.availableResources )
+    log.debug( "collected resources: [{}]", collected.mkString(", ") )
+    collected
   }
 }

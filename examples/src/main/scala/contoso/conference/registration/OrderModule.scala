@@ -13,6 +13,8 @@ import com.typesafe.config.ConfigFactory
 import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 import peds.akka.publish.EventPublisher
 import peds.commons.TryV
 import peds.commons.identifier._
@@ -156,18 +158,25 @@ object OrderModule extends AggregateRootModule { module =>
   override type ID = ShortUUID
   override def nextId: TryV[TID] = implicitly[Identifying[OrderState]].nextIdAs[TID]
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = {
-        Order.props(
-          model,
-          this,
-          ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
-        )
-      }
-    }
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
   }
+
+  class Repository( model: DomainModel )
+  extends EnvelopingAggregateRootRepository( model, OrderType ) with ClusteredAggregateContext {
+    override def aggregateProps: Props = {
+      val pricingRetriever = ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
+      Order.props( model, rootType, pricingRetriever )
+    }
+
+  }
+
+  object OrderType extends AggregateRootType {
+    override val name: String = module.shardName
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
+  }
+
+  override val rootType: AggregateRootType = OrderType
 
 
 

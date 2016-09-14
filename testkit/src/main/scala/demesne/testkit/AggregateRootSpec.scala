@@ -98,6 +98,7 @@ with BeforeAndAfterAll
         started <- filled.start()
       } yield started
 
+      logger.debug( "TEST: started bc:[{}]", bc )
       val result = Await.result( bc, 5.seconds )
       logger.debug( "Bounded Context root-type:[{}]", result.unsafeModel.rootTypes.mkString(", ") )
       result

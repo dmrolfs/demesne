@@ -104,7 +104,7 @@ object DomainModel {
     }
 
 
-    def start()( implicit ec: ExecutionContext ): Future[DomainModelCell] = {
+    def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[DomainModelCell] = {
       logger.debug(
         "starting with supervisors:[{}] and rootTypes:[{}]",
         supervisors.map{ s => s"repository:[${s.repository.path.name}] index:[${s.index.path.name}]"},
@@ -113,28 +113,29 @@ object DomainModel {
 
       supervisors
       .map { s =>
-        val (registerIndexBudget, registerAgentBudget, startChildSupervisionBudget) = timeoutBudgets( Timeout(3.seconds) )
+        val (indexBudget, agentBudget, repositoryBudget) = timeoutBudgets( timeout )
+        logger.debug( "Budgets: index:[{}] agent:[{}] child-supervision:[{}]", indexBudget, agentBudget, repositoryBudget )
 
-        rootTypes.foldLeft( Future successful this ){ (acc, rt) =>
-          logger.debug( "Registering root-type[{}]@[{}] -> Started", rt.name, name )
+        val indexes = rootTypes.toSeq map { rt => establishIndexes( rt, s.index, indexBudget, agentBudget )( ec ) }
+        val aggregates = rootTypes map { rt => registerAggregate( rt, s.repository )( ec, repositoryBudget ) }
 
-          val cell = for {
-            cellWithIndexes <- this.establishIndexes( rt, s.index, registerIndexBudget, registerAgentBudget )
-            _ = logger.debug( "TEST: registered indexes:[{}]", cellWithIndexes.specAgents.keySet.map{ _.name }.mkString(", ") )
-            cellWithAll <- cellWithIndexes.registerAggregate( rt, s.repository, startChildSupervisionBudget )
-          } yield cellWithAll
+        val result = for {
+          is <- Future.sequence( indexes ).map { _.flatten }
+          as <- Future sequence aggregates
+        } yield {
+          this.copy( aggregateRefs = aggregateRefs ++ as, specAgents = specAgents ++ is )
+        }
 
-          cell onComplete {
-            case Success(_) => {
-              logger.debug( "TEST: wip domain-cell:[{}]", cell)
-              logger.debug( "Registering root-type[{}]@[{}] <- Completed", rt.name, name )
-            }
-
-            case Failure( ex ) => logger error s"failed to establish index for ${rt}: ${ex}"
+        result onComplete {
+          case Success(cell) => {
+            logger.debug( "TEST: wip domain-cell:[{}]", cell)
+            logger.debug( "Registering root-types[{}]@[{}] <- Completed", rootTypes.map{_.name}.mkString(", "), name )
           }
 
-          cell
+          case Failure( ex ) => logger error s"failed to start domain model: ${ex}"
         }
+
+        result
       }
       .getOrElse {
         Future.failed( new IllegalStateException("DomainModel must have repository and index supervisors set before starting") )
@@ -149,38 +150,43 @@ object DomainModel {
       */
     private def timeoutBudgets( to: Timeout ): (Timeout, Timeout, Timeout) = {
       val baseline = FiniteDuration( (0.9 * to.duration.toNanos).toLong, NANOSECONDS )
-      ( Timeout( baseline / 2 ), Timeout( baseline / 4 ), Timeout( baseline / 4 ) )
+      ( Timeout( baseline / 2 ), Timeout( baseline / 2 ), Timeout( baseline / 1 ) )
     }
 
     private def registerAggregate(
       rootType: AggregateRootType,
-      supervisor: ActorRef,
-      budget: Timeout
+      supervisor: ActorRef
     )(
-      implicit ec: ExecutionContext
-    ): Future[DomainModelCell] = {
-      if ( aggregateRefs.contains( rootType.name ) ) Future successful this
-      else {
-        retrieveAggregate( rootType, supervisor, budget ) map { ref =>
+      implicit ec: ExecutionContext,
+      tiemout: Timeout
+    ): Future[(String, RootTypeRef)] = {
+      aggregateRefs.get( rootType.name )
+      .map { ref =>
+        logger.debug( "aggregate ref found for root-type:[{}]", rootType.name )
+        Future successful (rootType.name -> ref)
+      }
+      .getOrElse {
+        retrieveAggregate( rootType, supervisor )
+        .map { ref =>
           logger.debug( "Registering root-type[{}]@[{}] - aggregate registry established ", rootType.name, name )
-          this.copy( aggregateRefs = aggregateRefs + (rootType.name -> ref) )
+          rootType.name -> ref
         }
       }
     }
 
     private def retrieveAggregate(
       rootType: AggregateRootType,
-      supervisor: ActorRef,
-      budget: Timeout
+      supervisor: ActorRef
     )(
-      implicit ec: ExecutionContext
+      implicit ec: ExecutionContext,
+      to: Timeout
     ): Future[RootTypeRef] = {
       aggregateRefs
       .get( rootType.name )
       .map { Future successful _ }
       .getOrElse {
         logger.debug( "RETRIEVING AGGREGATE from supervisor:[{}]", supervisor.path.name )
-        ask( supervisor, StartChild(rootType.repositoryProps(this), rootType.repositoryName) )( budget )
+        ( supervisor ? StartChild(rootType.repositoryProps(this), rootType.repositoryName) )
         .mapTo[ChildStarted]
         .map { repoStarted =>
           logger.debug( "RETRIEVED AGGREGATE from supervisor:[{}]  child:[{}]", supervisor.path.name, repoStarted.child )
@@ -192,42 +198,37 @@ object DomainModel {
     private def establishIndexes(
       rootType: AggregateRootType,
       supervisor: ActorRef,
-      registerIndexBudget: Timeout,
+      indexBudget: Timeout,
       agentBudget: Timeout
     )(
       implicit ec: ExecutionContext
-    ): Future[DomainModelCell] = {
+    ): Future[Seq[(IndexSpecification, IndexEnvelope)]] = {
       logger.debug( "establishing indexes for rootType:[{}] with supervisor:[{}]", rootType, supervisor.path.name )
-      val result = {
-        rootType.indexes.foldLeft( Future successful this ) { (acc, s) =>
-          logger.debug( "TEST: establishing Index [{}] for rootTYpe:[{}]", s.name, rootType )
-          for {
-            cell <- acc
-            registration <- supervisor.ask( RegisterIndex(rootType, s) )( registerIndexBudget ).mapTo[IndexRegistered]
-            agentRef = registration.agentRef
-            agentEnvelope <- agentRef.ask( GetIndex )( agentBudget ).mapTo[IndexEnvelope]
-          } yield {
-            logger.debug(
-              "TEST: established Index:[{}] for rootType:[{}] spec:[{}] agent:[{}]",
-              s.name, rootType, s, agentEnvelope.payload.toString
-            )
-            val newCell = cell.copy( specAgents = cell.specAgents + (s -> agentEnvelope) )
-            logger.debug( "TEST: after spec:[{}] new-cell established indexes: [{}]", s.name, newCell.specAgents.keySet.map{ _.name }.mkString(", "))
-            newCell
-          }
+
+      val result = rootType.indexes map { spec =>
+        logger.debug( "TEST: establishing Index [{}] for rootTYpe:[{}]", spec.name, rootType )
+
+        for {
+          registration <- supervisor.ask( RegisterIndex(rootType, spec) )( indexBudget ).mapTo[IndexRegistered]
+          ref = registration.agentRef
+          envelope <- ref.ask( GetIndex )( agentBudget ).mapTo[IndexEnvelope]
+        } yield {
+          logger.debug(
+            "TEST: established Index:[{}] for rootType:[{}] spec:[{}] agent:[{}]",
+            spec.name, rootType, spec, envelope.payload.toString
+          )
+          logger.debug(
+            "Registering root-type:[{}] spec->index:[{}] -> [{}]",
+            rootType.name,
+            spec.name,
+            envelope.payload.toString
+          )
+
+          (spec -> envelope)
         }
       }
 
-      result foreach { cell =>
-        logger.debug(
-          "Registering root-type[{}]@[{}]: indexes[{}] established",
-          rootType.name,
-          name,
-          rootType.indexes.map{ _.toString }.mkString( "[", ",", "]" )
-        )
-      }
-
-      result
+      Future sequence result
     }
   }
 

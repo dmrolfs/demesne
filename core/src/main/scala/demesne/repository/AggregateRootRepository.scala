@@ -1,17 +1,21 @@
 package demesne.repository
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import akka.Done
 import akka.actor._
-import akka.cluster.sharding.ClusterSharding
+import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.cluster.sharding.ShardRegion.Passivate
 import akka.event.LoggingReceive
 import akka.pattern.pipe
-import scalaz._, Scalaz._
+
+import scalaz._
+import Scalaz._
 import peds.akka.envelope._
 import peds.commons.log.Trace
 import peds.commons.Valid
 import demesne.{AggregateRootType, DomainModel}
+import demesne.repository.{StartProtocol => SP}
+
 
 
 abstract class EnvelopingAggregateRootRepository(
@@ -24,8 +28,13 @@ abstract class EnvelopingAggregateRootRepository(
     case message => {
       val originalSender = sender()
       val aggregate = aggregateFor( message )
-      log.debug( "in EnvelopingAggregateRootRepository RECEIVE: aggregate=[{}]", aggregate )
-      Option( aggregate ) foreach { _.sendEnvelope( message )( originalSender ) }
+      log.debug( "enveloping-repository:[{}] forwarding to aggregate:[{}] command:[{}]", self.path.name, aggregate, message )
+//      Option( aggregate ) foreach { _.sendEnvelope( message )( originalSender ) }
+      Option( aggregate ) foreach { a =>
+        log.debug( "forwarding enveloped message:[{}] to aggregate:[{}]", message, a.path )
+        log.debug( "message aggregateIdFor:[{}] shardIdFor:[{}]", rootType.aggregateIdFor(message), rootType.shardIdFor(message) )
+        a forwardEnvelope message
+      }
     }
   }
 }
@@ -39,11 +48,13 @@ object AggregateRootRepository {
     def rootType: AggregateRootType
     def aggregateProps: Props
     def aggregateFor( command: Any ): ActorRef
+    def loadContext()( implicit ec: ExecutionContext ): Future[Done] = Future successful Done
+    def initializeContext( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[Done] = Future successful Done
   }
 
-  trait LocalAggregateContext extends AggregateContext { self: Actor with ActorLogging =>
+  trait LocalAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
     override def aggregateFor( command: Any ): ActorRef = trace.block( "aggregateFor" ) {
-      log.debug( "command=[{}]", command.toString )
+      log.debug( "local-repository:[{}] looking for aggregate for command:[{}]", actor.self.path, command.toString )
       if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
         log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
       }
@@ -52,13 +63,30 @@ object AggregateRootRepository {
     }
   }
 
-  trait ClusteredAggregateContext extends AggregateContext { self: Actor with ActorLogging =>
+  trait ClusteredAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
+    override def loadContext()( implicit ec: ExecutionContext ): Future[Done] = {
+      Future {
+        val region = {
+          ClusterSharding( model.system )
+          .start(
+            typeName = rootType.name,
+            entityProps = aggregateProps,
+            settings = ClusterShardingSettings(model.system),
+            extractEntityId = rootType.aggregateIdFor,
+            extractShardId = rootType.shardIdFor
+          )
+        }
+
+        log.debug( "cluster shard started for root-type:[{}] region:[{}]", rootType.name, region )
+        Done
+      }
+    }
+
     override def aggregateFor( command: Any ): ActorRef = trace.block( "aggregateFor" ) {
-      log.debug( "command=[{}]", command.toString )
+      log.debug( "clustered-repository:[{}] looking for aggregate for command:[{}]", actor.self.path, command.toString )
       if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
         log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
       }
-      val (id, _) = rootType aggregateIdFor command
       ClusterSharding( model.system ) shardRegion rootType.name
     }
   }
@@ -77,32 +105,39 @@ with EnvelopingActor
 with ActorLogging {
   outer: AggregateRootRepository.AggregateContext =>
 
-  import demesne.repository.{ StartProtocol => SP }
+  def handleLoad()( implicit ec: ExecutionContext ): Future[SP.Loaded] = outer.loadContext() map { _ => doLoad() }
 
   def doLoad(): SP.Loaded = SP.Loaded(rootType, resources = Map.empty[Symbol, Any], dependencies = Set.empty[Symbol])
 
-  def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = { Done.successNel }
+  def handleInitialize( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[SP.Started.type] = {
+    outer.initializeContext( resources ) map { _ =>
+      doInitialize( resources ).disjunction match {
+        case \/-(_) => SP.Started
+        case -\/(exs) => {
+          exs foreach { ex => log.error( ex, "initialization failed for resources:[{}]", resources.mkString(", ") ) }
+          throw exs.head
+        }
+      }
+    }
+  }
+
+  def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = Done.successNel
 
   override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 
-  override def receive: Actor.Receive = LoggingReceive { quiscent }
+  override def receive: Actor.Receive = LoggingReceive { quiescent }
 
   implicit val ec = context.dispatcher
 
-  val quiscent: Receive = {
+  val quiescent: Receive = {
     case SP.Load => {
       val coordinator = sender()
-      Future { doLoad() } pipeTo coordinator
+      handleLoad() pipeTo coordinator
     }
 
     case SP.Initialize( resources ) => {
       val coordinator = sender()
-      val replying = Future {
-        doInitialize( resources )
-        SP.Started
-      }
-
-      replying pipeTo coordinator
+      handleInitialize( resources ) pipeTo coordinator
       context become LoggingReceive { nonfunctional orElse repository }
     }
   }
@@ -130,6 +165,10 @@ with ActorLogging {
   }
 
   def repository: Receive = {
-    case c => aggregateFor( c ) forward c
+    case c => {
+      val aggregate = aggregateFor( c )
+      log.debug( "repository:[{}] forwarding to aggregate:[{}] command:[{}]", self.path.name, aggregate, c )
+      aggregate forward c
+    }
   }
 }

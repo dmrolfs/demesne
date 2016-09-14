@@ -9,6 +9,8 @@ import scalaz.Scalaz._
 import contoso.conference.SeatType
 import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 import peds.akka.publish.EventPublisher
 import peds.commons.TryV
 import peds.commons.identifier._
@@ -82,12 +84,22 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
   override def nextId: TryV[TID] = implicitly[Identifying[SeatAssignmentsState]].nextIdAs[TID]
 
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatAssignments.props( model, this )
-    }
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
   }
+
+  class Repository( model: DomainModel )
+    extends EnvelopingAggregateRootRepository( model, SeatAssignmentsType ) with ClusteredAggregateContext {
+    override def aggregateProps: Props = SeatAssignments.props( model, rootType )
+  }
+
+
+  object SeatAssignmentsType extends AggregateRootType {
+    override def name: String = module.shardName
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
+  }
+
+  override val rootType: AggregateRootType = SeatAssignmentsType
 
 
   case class SeatAssignmentsState( id: TID, orderId: OrderModule.TID, seats: Seq[SeatAssignment] )
