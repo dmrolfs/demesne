@@ -8,9 +8,10 @@ import akka.testkit._
 import demesne._
 import demesne.index.IndexSupervisor._
 import demesne.index.local.IndexLocalAgent
+import demesne.repository.CommonLocalRepository
 import demesne.testkit.ParallelAkkaSpec
-import org.scalatest.mock.MockitoSugar
-import org.scalatest.{Outcome, Tag}
+import org.scalatest.mockito.MockitoSugar
+import org.scalatest.Tag
 import peds.commons.log.Trace
 
 import scala.concurrent.duration._
@@ -32,14 +33,18 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
   class Fixture extends AkkaFixture {
     private val trace = Trace[Fixture]
 
-    def before( test: OneArgTest ): Unit = { }
-    def after( test: OneArgTest ): Unit = { }
+    override def rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
 
     def rootType( specs: IndexSpecification* ): AggregateRootType = {
       new AggregateRootType {
         override def name: String = "foo"
         override def indexes: Seq[IndexSpecification] = specs
-        override def aggregateRootProps(implicit model: DomainModel): Props = {
+
+        override def repositoryProps( implicit model: DomainModel ): Props = {
+          CommonLocalRepository.props( model, this, noAggregateProps )
+        }
+
+        val noAggregateProps = (m: DomainModel, rt: AggregateRootType) => {
           throw new Exception( "rootType.aggregateRootProps should not be invoked" )
         }
 
@@ -78,18 +83,6 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
     val contextSpec = testSpec( 'contextFoo, ContextChannelSubscription(classOf[FooAdded]) )()
     val contextRoot = rootType( contextSpec )
-  }
-
-  override def withFixture( test: OneArgTest ): Outcome = {
-    val fixture = createAkkaFixture( test )
-
-    try {
-      fixture before test
-      test( fixture )
-    } finally {
-      fixture after test
-      fixture.system.terminate()
-    }
   }
 
   override def createAkkaFixture( test: OneArgTest ): Fixture = new Fixture
@@ -226,8 +219,9 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       monitor.expectNoMsg( 3.seconds.dilated )
     }
 
+//todo: uncomment and add tests
 
-    //    "no startups after initial create in node" in { implicit f: Fixture =>
+//    "no startups after initial create in node" in { implicit f: Fixture =>
 //      implicit val system = f.system
 //      val spec = IndexLocalAgent.spec[String, Int]( 'foo ){
 //        case FooAdded( name ) => (name, name.hashCode)

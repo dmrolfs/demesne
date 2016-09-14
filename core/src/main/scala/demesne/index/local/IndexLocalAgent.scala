@@ -143,7 +143,7 @@ class IndexLocalAgent[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ex
     case GetIndex => sender() ! IndexEnvelope( new AgentIndex( index )( dispatcher ) )
 
     case WaitingForStart => {
-      log debug s"recd WaitingForStart: sending Started to ${sender()}"
+      log.debug( "recd WaitForStart: sending Started to [{}]", sender() )
       sender() ! Started
     }
   }

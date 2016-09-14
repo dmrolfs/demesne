@@ -4,7 +4,7 @@ import sbt._
 import spray.revolver.RevolverPlugin._
 
 object BuildSettings {
-  val VERSION = "1.1.3-SNAPSHOT"
+  val VERSION = "2.0.0-SNAPSHOT"
 
   val defaultBuildSettings = Defaults.coreDefaultSettings ++ Format.settings ++ Revolver.settings ++
     Seq(
@@ -73,6 +73,8 @@ object BuildSettings {
           .getMethod( "getLogger", classLoader.loadClass("java.lang.String") )
           .invoke( null, "ROOT" )
       ),
+      testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-oDFT"),
+
       triggeredMessage in ThisBuild := Watched.clearWhenTriggered,
       cancelable in Global := true
     )

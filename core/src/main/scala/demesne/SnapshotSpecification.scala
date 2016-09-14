@@ -1,9 +1,8 @@
 package demesne
 
-import akka.actor.{ActorRef, ActorSystem, Cancellable}
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import akka.actor.{ActorRef, ActorSystem, Cancellable}
 
 
 object SnapshotSpecification {

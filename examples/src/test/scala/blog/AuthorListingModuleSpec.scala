@@ -1,22 +1,23 @@
 package sample.blog.author
 
 import java.util.concurrent.atomic.AtomicInteger
+
 import scala.collection.immutable
 import scala.concurrent.duration._
+import scala.concurrent.Await
 import scala.util.Success
-
 import akka.testkit.{TestActorRef, TestProbe}
 import akka.util.Timeout
+import com.typesafe.scalalogging.StrictLogging
 import demesne._
 import demesne.testkit._
 import org.scalatest.{Outcome, Tag}
-import peds.akka.envelope.{ ComponentPath => EnvComponentPath, ComponentType => EnvComponentType, _ }
+import peds.akka.envelope.{ComponentPath => EnvComponentPath, ComponentType => EnvComponentType, _}
 import peds.akka.publish.ReliablePublisher.ReliableMessage
 import peds.commons.identifier.{ShortUUID, TaggedID}
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule.{GetPosts, Posts}
 import sample.blog.post.PostPrototol.PostPublished
-
 
 
 object AuthorListingModuleSpec {
@@ -26,7 +27,7 @@ object AuthorListingModuleSpec {
 /**
  * Created by damonrolfs on 9/18/14.
  */
-class AuthorListingModuleSpec extends ParallelAkkaSpec {
+class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
 
   private val trace = Trace[AuthorListingModuleSpec]
 
@@ -34,30 +35,36 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec {
 
   class AuthorListingFixture extends AkkaFixture {
     private val trace = Trace[AuthorListingFixture]
+    import scala.concurrent.ExecutionContext.Implicits.global
 
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
-      import scala.concurrent.ExecutionContext.Implicits.global
-      implicit val to = Timeout( 5.seconds )
-      AuthorListingModule initialize context 
+    override def before( test: OneArgTest ): Unit = trace.block( "before" ) {
+      import demesne.repository.StartProtocol
+
+      import akka.pattern.AskableActorSelection
+      val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
+      implicit val timeout = Timeout( 5.seconds )
+      Await.ready( ( supervisorSel ? StartProtocol.WaitForStart ), 5.seconds )
     }
 
-    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
+    override def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
-    // def module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
-
-    // def model: DomainModel = trace.block( s"model()" ) { DomainModel() }
+    override val rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
 
     val authorProbe = TestProbe()
 
-    def context: Map[Symbol, Any] = trace.block( "context()" ) {
-      val makeAuthorListing = () => trace.block( "makeAuthorList" ){ authorProbe.ref }
 
-      Map(
-        demesne.ModelKey -> model,
-        demesne.SystemKey -> system,
-        demesne.FactoryKey -> demesne.factory.systemFactory,
-        'authorListing -> makeAuthorListing
-      )
+    override lazy val boundedContext: BoundedContext = {
+      val key = Symbol( s"Blog-${fixtureId}" )
+
+      val result = {
+        for {
+          made <- BoundedContext.make( key, config, userResources = AuthorListingModule.resources(system) )
+          ready = made.withStartTask( AuthorListingModule startTask system )
+          started <- ready.start()( global, Timeout(5.seconds) )
+        } yield started
+      }
+
+      Await.result( result, 5.seconds )
     }
   }
 

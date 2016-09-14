@@ -6,9 +6,11 @@ import scala.reflect._
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.testkit._
+
 import scalaz.Scalaz._
 import shapeless._
 import com.typesafe.config.{Config, ConfigFactory}
+import demesne.repository.CommonLocalRepository
 import org.scalatest.OptionValues
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
@@ -23,6 +25,7 @@ import peds.commons.log.Trace
   */
 class AggregateRootFunctionalSpec extends demesne.testkit.AggregateRootSpec[AggregateRootFunctionalSpec] with OptionValues {
   import AggregateRootFunctionalSpec._
+  private val trace = Trace[AggregateRootFunctionalSpec]
 
   override type ID = Foo#ID
 
@@ -31,25 +34,15 @@ class AggregateRootFunctionalSpec extends demesne.testkit.AggregateRootSpec[Aggr
 
 
   class Fixture extends AggregateFixture( config = AggregateRootFunctionalSpec.config ) {
+    private val trace = Trace[Fixture]
     override val module: AggregateRootModule = AggregateRootFunctionalSpec.FooModule
-    override def moduleCompanions: List[AggregateRootModule] = List( AggregateRootFunctionalSpec.FooModule )
+
+    override def rootTypes: Set[AggregateRootType] = trace.block("rootTypes") { Set( AggregateRootFunctionalSpec.FooModule.rootType ) }
 
     override def nextId(): TID = Foo.fooIdentifying.safeNextId
-
-
-    override implicit def before( test: OneArgTest ): Unit = super.before( test )  //todo: module initialize and context() happens in testkit.AggregateRootSpec.AggregateFixture.before
-
-    override def context: Map[Symbol, Any] = {
-      Map(
-        demesne.ModelKey -> model,
-        demesne.SystemKey -> system,
-        demesne.FactoryKey -> demesne.factory.contextFactory
-//        demesne.FactoryKey -> demesne.factory.clusteredFactory
-      )
-    }
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new Fixture
+  override def createAkkaFixture( test: OneArgTest ): Fixture = trace.block("createAkkaFixture") { new Fixture }
 
 
   "AggregateRoot" should {
@@ -90,9 +83,9 @@ class AggregateRootFunctionalSpec extends demesne.testkit.AggregateRootSpec[Aggr
       }
       infoFrom( entityRef ).value mustBe p2
 
-      logger.info( "TEST:SLEEPING...")
+      logger.debug( "TEST:SLEEPING...")
       Thread.sleep( 5000 )
-      logger.info( "TEST:AWAKE...")
+      logger.debug( "TEST:AWAKE...")
 
       infoFrom( entityRef ).value mustBe p2
 
@@ -174,7 +167,7 @@ object AggregateRootFunctionalSpec {
       override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
       override def nextId: TryV[TID] = tag( ShortUUID() ).right
       override def fromString( idstr: String ): ShortUUID = {
-        logger.info( "identifying.fromString({}) = [{}]", idstr, ShortUUID(idstr) )
+        logger.debug( "identifying.fromString({}) = [{}]", idstr, ShortUUID(idstr) )
         ShortUUID( idstr )
       }
     }
@@ -227,17 +220,23 @@ object AggregateRootFunctionalSpec {
     case class MyState( override val sourceId: MyState#TID, state: Option[FooModule.FooActor.State] ) extends Event
   }
 
-  object FooModule extends AggregateRootModule with CommonInitializeAggregateActorType { module =>
+  object FooModule extends AggregateRootModule { module =>
     override def trace: Trace[_] = Trace[FooModule.type]
 
     override type ID = ShortUUID
     override def nextId: TryV[TID] = Foo.fooIdentifying.nextIdAs[TID]
 
-    override val rootType: AggregateRootType = new AggregateRootType {
-      override def name: String = FooModule.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = FooModule.FooActor.props( model, this )
-      override val toString: String = "ALTERED_FooAggregateRootType"
-      override def passivateTimeout: Duration = 2.seconds
+    override val rootType: AggregateRootType = trace.block("rootType") {
+      new AggregateRootType {
+        override def repositoryProps( implicit model: DomainModel ): Props = {
+          CommonLocalRepository.props( model, this, FooActor.props(_, _) )
+        }
+
+        override def name: String = FooModule.shardName
+        //      override def aggregateRootProps( implicit model: DomainModel ): Props = FooModule.FooActor.props( model, this )
+        override val toString: String = "FooAggregateRootType"
+        override def passivateTimeout: Duration = 2.seconds
+      }
     }
 
 
@@ -261,11 +260,11 @@ object AggregateRootFunctionalSpec {
 
       override val acceptance: Acceptance = {
         case (Protocol.Barred(id, b), s) if s.isDefined => {
-          log.info( "TEST: accepted BARRED b=[{}]  current-state:[{}]", b, s )
+          log.debug( "TEST: accepted BARRED b=[{}]  current-state:[{}]", b, s )
           s map { cur => FooActor.foob.set( cur )( b ) }
         }
         case (Protocol.Barred(id, b), s) => {
-          log.info( "TEST: accepted BARRED b=[{}]  current-state:[{}]", b, s )
+          log.debug( "TEST: accepted BARRED b=[{}]  current-state:[{}]", b, s )
           val id = outer.id
           Option( State( id = id, foo = Foo(id, "foo", "foo", b = b) ) )
         }
@@ -274,9 +273,9 @@ object AggregateRootFunctionalSpec {
       override def parseId( idstr: String ): FooActor#TID = Foo.fooIdentifying.safeParseId[ShortUUID]( idstr )
 
       val id: TID = {
-        logger.info( "TEST:BEFORE safeParseId:::: idFromPath=[{}]", idFromPath() )
+        logger.debug( "TEST:BEFORE safeParseId:::: idFromPath=[{}]", idFromPath() )
         val i = Foo.fooIdentifying.safeParseId[ShortUUID]( idFromPath() )
-        logger.info( "TEST: i = [{}], classOf(i)=[{}]", i, i.getClass.getCanonicalName )
+        logger.debug( "TEST: i = [{}], classOf(i)=[{}]", i, i.getClass.getCanonicalName )
         Foo.fooIdentifying.tag( i )
       }
       override var state: Option[State] = None
@@ -284,14 +283,14 @@ object AggregateRootFunctionalSpec {
 
       override def receiveCommand: Receive = LoggingReceive { around( action ) }
       val action: Receive = {
-//        case ReceiveTimeout => log.info( "TEST: GOT RECEIVE_TIMEOUT MESSAGE!!!" )
+//        case ReceiveTimeout => log.debug( "TEST: GOT RECEIVE_TIMEOUT MESSAGE!!!" )
         case m @ Protocol.Bar(id, b) => {
-          log.info( "TEST: received [{}]", m )
+          log.debug( "TEST: received [{}]", m )
           persist( Protocol.Barred(id, b) ) { acceptAndPublish }
         }
         case m: Protocol.GetState => {
-          log.info( "TEST: received [{}]", m )
-          log.info( "TEST: context receiveTimeout: [{}]", context.receiveTimeout )
+          log.debug( "TEST: received [{}]", m )
+          log.debug( "TEST: context receiveTimeout: [{}]", context.receiveTimeout )
           sender() ! Protocol.MyState( id, state )
         }
       }

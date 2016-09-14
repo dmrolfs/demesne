@@ -20,6 +20,8 @@ import peds.akka.publish._
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 
 
 object ConferenceProtocol extends AggregateProtocol[ShortUUID] {
@@ -70,45 +72,49 @@ object ConferenceModule extends AggregateRootModule { module =>
   override type ID = ShortUUID
   override def nextId: TryV[TID] = implicitly[Identifying[ConferenceState]].nextIdAs[TID]
 
-  var conferenceContext: ActorRef = _
 
-  override def initializer( 
-    rootType: AggregateRootType, 
-    model: DomainModel, 
-    props: Map[Symbol, Any] 
-  )( 
-    implicit ec: ExecutionContext
-  ) : Valid[Future[Done]] = {
-    checkConferenceContext( props ) map { cc => 
-      Future successful {
-        conferenceContext = cc
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
+  }
+
+  class Repository( model: DomainModel )
+  extends EnvelopingAggregateRootRepository( model, ConferenceType ) with ClusteredAggregateContext {
+    import demesne.repository.{ StartProtocol => SP }
+    var conferenceContext: ActorRef = model.system.deadLetters
+
+    override def aggregateProps: Props = Conference.props( model, rootType, conferenceContext )
+
+    override def doLoad(): SP.Loaded = {
+      logger.info( "loading" )
+      SP.Loaded( rootType, dependencies = Set(ConferenceContext.ResourceKey) )
+    }
+
+    override def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = {
+      checkConferenceContext( resources ) map { confCtx =>
+        logger.info( "initializing conference context:[{}]", confCtx.path.name )
+        conferenceContext = confCtx
+        Done
       }
     }
 
-    super.initializer( rootType, model, props )
+    private def checkConferenceContext( resources: Map[Symbol, Any] ): Valid[ActorRef] = {
+      val result = for {
+        cc <- resources get ConferenceContext.ResourceKey
+        r <- scala.util.Try[ActorRef]{ cc.asInstanceOf[ActorRef] }.toOption
+      } yield r.successNel[Throwable]
+
+      result getOrElse Validation.failureNel( UnspecifiedConferenceContextError('ConferenceContext) )
+    }
   }
-
-  private def checkConferenceContext( props: Map[Symbol, Any] ): Valid[ActorRef] = {
-    val result = for {
-      cc <- props get 'ConferenceContext
-      r <- scala.util.Try[ActorRef]{ cc.asInstanceOf[ActorRef] }.toOption
-    } yield r.successNel[Throwable]
-
-    result getOrElse Validation.failureNel( UnspecifiedConferenceContextError('ConferenceContext) )
-  }
-
 
   override val aggregateIdTag: Symbol = 'conference
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override val name: String = module.shardName
-
-      override def aggregateRootProps( implicit model: DomainModel ): Props = {
-        Conference.props( model, this, conferenceContext )
-      }
-    }
+  object ConferenceType extends AggregateRootType {
+    override val name: String = module.shardName
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
+
+  override val rootType: AggregateRootType = ConferenceType
 
 
   case class ConferenceState(

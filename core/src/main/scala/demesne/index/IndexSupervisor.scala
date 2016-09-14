@@ -1,5 +1,7 @@
 package demesne.index
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import akka.actor._
 import akka.event.LoggingReceive
 import akka.pattern.{ask, pipe}
@@ -12,9 +14,6 @@ import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChi
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
 import peds.commons.util._
-
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 
 /**
@@ -204,7 +203,7 @@ object IndexSupervisor extends StrictLogging {
 //ref akka concurrency for controlled startup pattern
       case Startup( Nil ) => {
         constituentRefs.values foreach { cref =>
-          log.debug( "sending WaitingForStart to {}" , cref )
+          log.debug( "sending WaitForStart to {}" , cref )
           cref ! index.WaitingForStart
         }
         context become verify( constituentRefs )
@@ -212,7 +211,7 @@ object IndexSupervisor extends StrictLogging {
 
       case Startup( pieces ) => {
         val p = pieces.head
-        log.info( "starting for spec[{}]: {}", spec, p.name )
+        log.debug( "starting for spec[{}]: {}", spec, p.name )
         val createPiece = StartChild( props = p.props, name = p.name )
         supervisor ? createPiece map {
           case ChildStarted( child ) => {
@@ -235,7 +234,7 @@ object IndexSupervisor extends StrictLogging {
           throw new IllegalStateException(s"failed to recognize index constituent[$c] in toCheck[${toCheck}}]")
         }
 
-        log.info( "verified constituent: {}", verified )
+        log.debug( "verified constituent: {}", verified )
         val next = toCheck - verified._1
         handleNext(toCheck - verified._1)
       }

@@ -1,5 +1,7 @@
 package sample.blog.post
 
+import akka.Done
+import akka.actor.{ActorSystem, Props}
 import akka.testkit._
 import demesne._
 import demesne.testkit.AggregateRootSpec
@@ -12,8 +14,11 @@ import peds.commons.log.Trace
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
 import com.typesafe.scalalogging.LazyLogging
+import demesne.BoundedContext.StartTask
+import sample.blog.author.AuthorListingModule
 import sample.blog.post.{PostPrototol => P}
 
+import scalaz.concurrent.Task
 import scalaz.{-\/, \/-}
 
 
@@ -48,14 +53,26 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    // override val module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
-    def moduleCompanions: List[AggregateRootModule] = List( PostModule )
-
-    override def context: Map[Symbol, Any] = trace.block( "context" ) {
-      val result = super.context
-      val makeAuthorListing = () => trace.block( "makeAuthorList" ){ author.ref }
-      result + ( 'authorListing -> makeAuthorListing )
+    object TestPostRootType extends PostModule.PostType {
+      override def repositoryProps( implicit model: DomainModel ): Props = PostModule.Repository.localProps( model )
     }
+
+    override val rootTypes: Set[AggregateRootType] = Set( TestPostRootType )
+//    override def resources: Map[Symbol, Any] = AuthorListingModule resources system
+    override def resources: Map[Symbol, Any] = {
+      val makeAuthorListing = () => trace.briefBlock( "TEST:makeAuthorList" ){ author.ref }
+      Map( AuthorListingModule.ResourceKey -> makeAuthorListing )
+    }
+//    override def startTasks( system: ActorSystem ): Set[StartTask] = {
+////      Set( StartTask( AuthorListingModule.startTask(system), "AuthorListing" ) )
+//    }
+
+
+//    override def context: Map[Symbol, Any] = trace.block( "context" ) {
+//      val result = super.context
+//      val makeAuthorListing = () => trace.block( "makeAuthorList" ){ author.ref }
+//      result + ( 'authorListing -> makeAuthorListing )
+//    }
   }
 
   override def createAkkaFixture( test: OneArgTest ): Fixture = new PostFixture
@@ -78,8 +95,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       val id = PostModule.nextId.toOption.get
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
+      logger.debug( "TEST: ADD CONTENT to post:[{}]", post )
       post !+ P.AddPost( id, content )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 3000.millis.dilated, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: P.PostAdded => payload.content mustBe content
       }
     }
@@ -206,7 +224,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "follow happy path" taggedAs (WIP) in { fixture: Fixture =>
+    "follow happy path" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId.toOption.get

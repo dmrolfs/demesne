@@ -4,12 +4,13 @@ import scala.reflect.ClassTag
 import akka.actor.Props
 import demesne._
 import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
+import demesne.repository.CommonLocalRepository
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.identifier.Identifying
 import peds.commons.log.Trace
 
 
-abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with CommonInitializeAggregateActorType { module =>
+abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule { module =>
   def name: String
   def indexes: Seq[IndexSpecification]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
@@ -24,7 +25,11 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
   override def rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.name
-      override def aggregateRootProps( implicit model: DomainModel ): Props = SimpleTestActor.props( model, this )
+
+      override def repositoryProps( implicit model: DomainModel ): Props = {
+        CommonLocalRepository.props( model, this, SimpleTestActor.props(_, _) )
+      }
+
       override def indexes: Seq[IndexSpecification] = module.indexes
     }
   }

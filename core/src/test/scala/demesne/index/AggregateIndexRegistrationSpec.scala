@@ -1,16 +1,17 @@
 package demesne.index
 
 import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import akka.actor._
 import akka.testkit._
 import demesne._
 import demesne.index.IndexSupervisor._
 import demesne.index.local.IndexLocalAgent
+import demesne.repository.CommonLocalRepository
 import demesne.testkit.ParallelAkkaSpec
-import org.scalatest.mock.MockitoSugar
-import org.scalatest.{Outcome, Tag}
+import org.scalatest.mockito.MockitoSugar
+import org.scalatest.Tag
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.commons.log.Trace
 
@@ -26,7 +27,6 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
   private val trace = Trace[AggregateIndexRegistrationSpec]
 
-//  override type Fixture = AuthorListingFixture
   case class FooAdded( value: String )
 
   type ConstituentProbes = Map[IndexConstituent, TestProbe]
@@ -35,8 +35,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
   class Fixture extends AkkaFixture {
     private val trace = Trace[Fixture]
 
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) { }
-    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
+    override val rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
 
     val supervisor = TestProbe()
     val registrant = TestProbe()
@@ -47,22 +46,15 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
       new AggregateRootType {
         override def name: String = "foo"
         override def indexes: Seq[IndexSpecification] = specs
-        override def aggregateRootProps(implicit model: DomainModel): Props = {
+
+        override def repositoryProps( implicit model: DomainModel ): Props = {
+          CommonLocalRepository.props( model, this, noAggregateProps )
+        }
+
+        val noAggregateProps = (m: DomainModel, rt: AggregateRootType) => {
           throw new Exception( "rootType.aggregateRootProps should not be invoked" )
         }
       }
-    }
-  }
-
-  override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
-    val fixture = createAkkaFixture( test )
-
-    try {
-      fixture before test
-      test( fixture )
-    } finally {
-      fixture after test
-      fixture.system.terminate()
     }
   }
 

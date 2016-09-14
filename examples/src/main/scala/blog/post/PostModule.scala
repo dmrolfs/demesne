@@ -1,6 +1,5 @@
 package sample.blog.post
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect._
 import akka.Done
 import akka.actor.{ActorRef, Props}
@@ -18,73 +17,79 @@ import peds.commons.log.Trace
 import demesne._
 import demesne.index.local.IndexLocalAgent
 import demesne.index._
+import demesne.repository.AggregateRootRepository.{ClusteredAggregateContext, LocalAggregateContext}
+import demesne.repository.{AggregateRootRepository, EnvelopingAggregateRootRepository}
 import sample.blog.post.{PostPrototol => P}
 
 
-object PostModule extends AggregateRootModule with InitializeAggregateRootClusterSharding { module =>
+object PostModule extends AggregateRootModule { module =>
   override val trace = Trace[PostModule.type]
 
 
   override type ID = ShortUUID
   override def nextId: TryV[TID] = implicitly[Identifying[PostActor.State]].nextIdAs[TID]
 
-  var makeAuthorListing: () => ActorRef = _
+  override val rootType: AggregateRootType = new PostType
 
-  override def initializer( 
-    rootType: AggregateRootType, 
-    model: DomainModel, 
-    context: Map[Symbol, Any] 
-  )( 
-    implicit ec: ExecutionContext
-  ) : Valid[Future[Done]] = trace.block( s"initializer($rootType, $model, $context)" ) {
+  class PostType extends AggregateRootType {
+    override val name: String = module.shardName
 
-//todo: I need to better determine how to support validation+Future or Task, esp to ensure order of operation and dev model.
-// I'm not confident this impl will always work for more complex scenarios since I haven't combined the local V[Future] with
-// the return of super.initializer
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.clusteredProps( model )
 
-    val result = checkAuthorList( context ) map { al => 
-      Future successful {
+    override def indexes: Seq[IndexSpecification] = {
+      Seq(
+        IndexLocalAgent.spec[String, PostModule.TID, PostModule.TID]( 'author, IndexBusSubscription /* not reqd - default */ ) {
+          case P.PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId, sourceId)
+          case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
+        },
+        IndexLocalAgent.spec[String, PostModule.TID, PostModule.TID]( 'title, ContextChannelSubscription( classOf[P.Event] ) ) {
+          case P.PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record( title, sourceId, sourceId)
+          case P.TitleChanged( sourceId, oldTitle, newTitle ) => Directive.ReviseKey( oldTitle, newTitle )
+          case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
+        }
+      )
+    }
+  }
+
+
+  object Repository {
+    def localProps( model: DomainModel ): Props = Props( new Repository(model) with LocalAggregateContext )
+    def clusteredProps( model: DomainModel ): Props = Props( new Repository(model) with ClusteredAggregateContext )
+  }
+
+  class Repository( model: DomainModel )
+  extends EnvelopingAggregateRootRepository( model, module.rootType ) { actor: AggregateRootRepository.AggregateContext =>
+    import sample.blog.author.AuthorListingModule
+
+    import demesne.repository.{ StartProtocol => SP }
+
+    var makeAuthorListing: () => ActorRef = _
+
+    override def doLoad(): SP.Loaded = {
+      logger.info( "loading" )
+      SP.Loaded( rootType, dependencies = Set(AuthorListingModule.ResourceKey) )
+    }
+
+    override def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = {
+      checkAuthorList( resources ) map { al =>
+        logger.info( "initializing makeAuthorListing:[{}]", al )
         makeAuthorListing = al
-        trace( s"makeAuthorListing = $makeAuthorListing .... sample result [${makeAuthorListing()}]" )
+        Done
       }
     }
 
-    super.initializer( rootType, model, context )
-  }
+    override def aggregateProps: Props = PostActor.props( model, rootType, makeAuthorListing )
 
-  private def checkAuthorList( context: Map[Symbol, Any] ): Valid[() => ActorRef] = {
-    val result = for {
-      al <- context get 'authorListing
-      r <- scala.util.Try[() => ActorRef]{ al.asInstanceOf[() => ActorRef] }.toOption
-    } yield r.successNel[Throwable]
+    private def checkAuthorList( resources: Map[Symbol, Any] ): Valid[() => ActorRef] = {
+      val result = for {
+        alValue <- resources get AuthorListingModule.ResourceKey
+        al <- Option( alValue )
+        r <- scala.util.Try[() => ActorRef]{ al.asInstanceOf[() => ActorRef] }.toOption
+      } yield r.successNel[Throwable]
 
-    result getOrElse Validation.failureNel( UnspecifiedMakeAuthorListError('authorListing) )
-  }
-
-  // override val aggregateIdTag: Symbol = 'post
-
-
-  override def rootType: AggregateRootType = {
-    new AggregateRootType {
-      override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = PostActor.props( model, this, makeAuthorListing )
-
-      override def indexes: Seq[IndexSpecification] = {
-        Seq(
-          IndexLocalAgent.spec[String, PostModule.TID, PostModule.TID]( 'author, IndexBusSubscription /* not reqd - default */ ) {
-            case P.PostAdded( sourceId, PostContent(author, _, _) ) => Directive.Record(author, sourceId, sourceId)
-            case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
-          },
-          IndexLocalAgent.spec[String, PostModule.TID, PostModule.TID]( 'title, ContextChannelSubscription( classOf[P.Event] ) ) {
-            case P.PostAdded( sourceId, PostContent(_, title, _) ) => Directive.Record( title, sourceId, sourceId)
-            case P.TitleChanged( sourceId, oldTitle, newTitle ) => Directive.ReviseKey( oldTitle, newTitle )
-            case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
-          }
-        )
-      }
+      result getOrElse Validation.failureNel( UnspecifiedMakeAuthorListError(AuthorListingModule.ResourceKey) )
     }
   }
-
 
   object PostActor {
     def props( model: DomainModel, rt: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = trace.block(s"props(_,${rt}, $makeAuthorListing)") {
@@ -92,12 +97,13 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
 
       Props(
         new PostActor( model, rt )
-            with ReliablePublisher
-            with StackableIndexBusPublisher
-            with StackableStreamPublisher
-            with AtLeastOnceDelivery {
-          trace( s"POST CTOR makeAuthorListing = $makeAuthorListing" )
-          val authorListing: ActorRef = makeAuthorListing()
+        with ReliablePublisher
+        with StackableIndexBusPublisher
+        with StackableStreamPublisher
+        with AtLeastOnceDelivery {
+          log.debug( "POST CTOR makeAuthorListing = [{}]", makeAuthorListing)
+          lazy val authorListing: ActorRef = makeAuthorListing()
+          log.debug( "POST CTOR authorListing = [{}]", authorListing )
 
           import peds.commons.util.Chain._
 
@@ -110,6 +116,7 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
             case e: P.PostPublished => logger.info("PASSED TO RELIABLE_PUBLISH:[{}]", e); Left( e )
             case x => logger.info("blocked from reliable_publish:[{}]", x.toString); Right( () )
           }
+
         }
       )
     }
@@ -161,11 +168,11 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
       case ( _: P.Deleted, _ ) => State()
     }
 
-    override def receiveCommand: Receive = around( quiescent )
+    override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
     import peds.akka.envelope._
 
-    val quiescent: Receive = LoggingReceive {
+    val quiescent: Receive = {
       case P.GetContent(_)  => sender() !+ state.content
       case P.AddPost( id, content ) if !content.isIncomplete  => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
         persist( P.PostAdded( id, content ) ) { event =>
@@ -177,12 +184,12 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
             trace.block( s"publish($event)" ) { publish( event ) }
           }
 
-          context become around( created )
+          context become LoggingReceive { around( created ) }
         }
       }
     }
 
-    val created: Receive = LoggingReceive {
+    val created: Receive = {
       case P.GetContent( id ) => sender() !+ state.content
 
       case P.ChangeBody( id, body ) => persist( P.BodyChanged( id, body ) ) { event =>
@@ -200,17 +207,17 @@ object PostModule extends AggregateRootModule with InitializeAggregateRootCluste
           accept( event )
           log info s"Post published: ${state.content.title}"
           publish( event )
-          context become around( published )
+          context become LoggingReceive { around( published ) }
         }
       }
 
       case P.Delete( id ) => persist( P.Deleted(id) ) { event =>
         acceptAndPublish( event ) 
-        context become around( quiescent )
+        context become LoggingReceive { around( quiescent ) }
       }
     }
 
-    val published: Receive = LoggingReceive {
+    val published: Receive = {
       case P.GetContent(_) => sender() !+ state.content
     }
   }

@@ -1,11 +1,16 @@
 package contoso.conference
 
+import akka.Done
+
 import scala.concurrent._
 import scala.concurrent.duration._
-import akka.actor.{ Actor, ActorLogging, Props }
-import akka.pattern.{ pipe }
+import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
+import akka.pattern.pipe
 import akka.event.LoggingReceive
 import com.typesafe.config.ConfigFactory
+import demesne.BoundedContext
+
+import scalaz.concurrent.Task
 
 
 //DMR: implement as ClusterSingleton
@@ -40,6 +45,16 @@ object ConferenceContextProtocol {
 //todo replace with aggregate index: slug -> conferenceId
 // Conference/Conference/ConferenceContext.cs
 object ConferenceContext {
+  val ResourceKey = Symbol( "ConferenceContext" )
+
+  def startTask( system: ActorSystem ): Task[Done] = {
+    Task {
+      val confCtx = system.actorOf( props, "ConferenceContext" )
+      BoundedContext( 'contoso ).withResources( Map( ResourceKey -> confCtx ) )
+      Done
+    }
+  }
+
   def props: Props = Props( new ConferenceContext )
 
   // val shardName: String = "PricingRetrievers"

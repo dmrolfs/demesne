@@ -11,6 +11,8 @@ import contoso.conference.ConferenceModule
 import contoso.conference.payments.PaymentSourceModule
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.TryV
@@ -36,22 +38,30 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   override def nextId: TryV[TID] = implicitly[Identifying[RegistrationSagaState]].nextIdAs[TID]
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override def name: String = module.shardName
 
-      override def aggregateRootProps( implicit model: DomainModel ): Props = {
-        RegistrationSaga.props(
-          rootType = this,
-          model = model,
-          orderType = OrderModule.rootType,
-          availabilityType = SeatsAvailabilityModule.rootType
-        )
-      }
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
+  }
 
-      // override val toString: String = shardName + "AggregateRootType"
+  class Repository( model: DomainModel )
+  extends EnvelopingAggregateRootRepository( model, rootType ) with ClusteredAggregateContext {
+    override def aggregateProps: Props = {
+      RegistrationSaga.props(
+        rootType = RegistrationSagaType,
+        model = model,
+        orderType = OrderModule.rootType,
+        availabilityType = SeatAssignmentsModule.rootType
+      )
     }
   }
+
+
+  object RegistrationSagaType extends AggregateRootType {
+    override def name: String = module.shardName
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
+  }
+
+  override val rootType: AggregateRootType = RegistrationSagaType
 
 
   sealed trait ProcessState

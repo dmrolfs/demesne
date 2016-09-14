@@ -167,10 +167,16 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     private val trace = Trace[TestFixture]
     override def nextId(): TID = Foo.identifying.safeNextId
 
-    val rootType = FooAggregateRoot.module.rootType
-    def slugIndex = model.aggregateIndexFor[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
     override val module: AggregateRootModule = FooAggregateRoot.module
-    def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
+
+    val rootType: AggregateRootType = module.rootType
+
+    type SlugIndex = DomainModel.AggregateIndex[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID]
+    def slugIndex: SlugIndex = {
+      model.aggregateIndexFor[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
+    }
+
+    override def rootTypes: Set[AggregateRootType] = Set( rootType )
   }
 
   override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
@@ -188,6 +194,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
         aggregateIdTag = Foo.identifying.idTag,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
+        environment = LocalAggregate,
         _indexes = FooAggregateRoot.myIndexes,
         idLens = Foo.idLens,
         nameLens = Foo.nameLens,
@@ -408,202 +415,5 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
     }
-
-
-  //   "not respond before added" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-  //     system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     post !! ChangeBody( id, "dummy content" )
-  //     post !! Publish( id )
-  //     bus.expectNoMsg( 200.millis.dilated )
-  //   }
-
-  //   "not respond to incomplete content" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-  //     system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     post !! AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
-  //     bus.expectNoMsg( 200.millis.dilated )
-  //     post !! AddPost( id, PostContent( author = "", title = "Incomplete Content", body = "no author" ) )
-  //     bus.expectNoMsg( 200.millis.dilated )
-  //   }
-
-  //   "have empty contents before use" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     post.send( GetContent( id ) )( author.ref )
-  //     author.expectMsgPF( max = 200.millis.dilated, hint = "empty contents" ){
-  //       case Envelope( payload: PostContent, h ) => {
-  //         payload mustBe PostContent( "", "", "" )
-  //         h.messageNumber mustBe MessageNumber( 2 )
-  //         h.workId must not be WorkId.unknown
-
-  //       }
-  //     }
-  //   }
-
-  //   "have contents after posting" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-
-  //     val clientProbe = TestProbe()
-  //     post !! AddPost( id, content )
-  //     post.send( GetContent( id ))( clientProbe.ref )
-  //     clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "initial contents" ){
-  //       case Envelope( payload: PostContent, h ) if payload == content => true
-  //     }
-  //   }
-
-  //   "have changed contents after change" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-  //     val updated = "updated contents"
-
-  //     system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-  //     system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-
-  //     val clientProbe = TestProbe()
-  //     post !! AddPost( id, content )
-  //     bus.expectMsgPF( hint = "PostAdded" ) {
-  //       case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-  //     }
-
-  //     post !! ChangeBody( id, updated )
-  //     bus.expectMsgPF( hint = "BodyChanged" ) {
-  //       case Envelope( payload: BodyChanged, _ ) => payload.body mustBe updated
-  //     }
-
-  //     post.send( GetContent( id ) )( clientProbe.ref )
-  //     clientProbe.expectMsgPF( max = 200.millis.dilated, hint = "changed contents" ){
-  //       case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-  //     }
-  //   }
-
-  //   "have changed contents after change and published" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-  //     val updated = "updated contents"
-
-  //     val clientProbe = TestProbe()
-  //     post !! AddPost( id, content )
-  //     post !! ChangeBody( id, updated )
-  //     post !! Publish( id )
-  //     post.send( GetContent( id ) )( clientProbe.ref )
-  //     clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
-  //       case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-  //     }
-  //   }
-
-  //   "dont change contents after published" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-  //     val updated = "updated contents"
-
-  //     val clientProbe = TestProbe()
-  //     post !! AddPost( id, content )
-  //     post !! ChangeBody( id, updated )
-  //     post !! Publish( id )
-  //     post !! ChangeBody( id, "BAD CONTENT" )
-  //     post.send( GetContent( id ) )( clientProbe.ref )
-  //     clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
-  //       case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-  //     }
-  //   }
-
-  //   "follow happy path" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val content = PostContent( author = "Damon", title = "Test Add", body = "testing happy path" )
-
-  //     system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-  //     system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-
-  //     PostModule.aggregateOf( id ) !! AddPost( id, content )
-  //     PostModule.aggregateOf( id ) !! ChangeBody( id, "new content" )
-  //     PostModule.aggregateOf( id ) !! Publish( id )
-
-  //     bus.expectMsgPF( hint = "post-added" ) {
-  //       case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-  //     }
-
-  //     bus.expectMsgPF( hint = "body-changed" ) {
-  //       case Envelope( payload: BodyChanged, _ ) => payload.body mustBe "new content"
-  //     }
-
-  //     bus.expectMsgPF( hint = "post-published local" ) {
-  //       case Envelope( PostPublished( pid, _, title ), _ ) => {
-  //         pid mustBe id
-  //         title mustBe "Test Add"
-  //       }
-  //     }
-
-  //     author.expectMsgPF( hint = "post-published reliable" ) {
-  //       case ReliableMessage( 1, Envelope( PostPublished( pid, _, title ), _) ) => {
-  //         pid mustBe id
-  //         title mustBe "Test Add"
-  //       }
-  //     }
-  //   }
-
-  //   "recorded in title index after post added via event stream" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val rt = PostModule.aggregateRootType
-  //     val ar = model.aggregateIndexFor( rt, 'title )
-  //     ar.isRight mustBe true
-  //     for {
-  //       index <- ar
-  //     } {
-  //       val p = TestProbe()
-
-  //       val id = PostModule.nextId
-  //       val content = PostContent( author="Damon", title="Test Add", body="testing author index add" )
-  //       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-  //       system.eventStream.subscribe( p.ref, classOf[Envelope] )
-
-  //       val post = PostModule.aggregateOf( id )
-  //       post !! AddPost( id, content )
-
-  //       bus.expectMsgPF( hint = "post-added" ) {
-  //         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-  //       }
-
-  //       p.expectMsgPF( hint = "post-added stream" ) {
-  //         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-  //       }
-
-  //       val countDown = new CountDownFunction[String]
-
-  //       countDown await 200.millis.dilated
-  //       whenReady( index.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
-
-  // //      countDown await 75.millis.dilated
-  //       index.get( "Test Add" ) mustBe Some(id)
-  //     }
-  //   }
   }
 }

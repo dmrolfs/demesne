@@ -9,6 +9,8 @@ import Scalaz._
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 import peds.commons.TryV
 import peds.commons.identifier._
 import peds.akka.publish.EventPublisher
@@ -95,12 +97,23 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
     new IllegalStateException( "SeatsAvailability supports corresponding Conference so does not have independent ID" ).left
   }
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {// def actorFactory: ActorFactory
-      override def name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatsAvailability.props( model, this )
-    }
+
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
   }
+
+  class Repository( model: DomainModel )
+    extends EnvelopingAggregateRootRepository( model, SeatsAvailabilityType ) with ClusteredAggregateContext {
+    override def aggregateProps: Props = SeatsAvailability.props( model, rootType )
+  }
+
+
+  object SeatsAvailabilityType extends AggregateRootType {
+    override def name: String = module.shardName
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
+  }
+
+  override val rootType: AggregateRootType = SeatsAvailabilityType
 
 
   implicit val seatsAvailabilityIdentifying: Identifying[SeatsAvailabilityState] = {

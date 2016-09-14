@@ -11,8 +11,6 @@ import peds.commons.util._
 import demesne.EventLike
 import peds.commons.identifier.TaggedID
 
-import scala.util.Try
-
 
 object IndexAggregateProtocol {
   sealed trait Event extends EventLike {
@@ -108,26 +106,26 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
     event match {
       case e @ P.Recorded( sid, KeyType(key), IdType(id), ValueType(value) ) => {
         val iValue = IndexedValue[I, V]( id, value )
-        log.info( "IndexAggregate[{}] RECORDED: {} -> {}", self.path, key, iValue )
+        log.debug( "IndexAggregate[{}] RECORDED: {} -> {}", self.path, key, iValue )
         state += ( key -> iValue )
       }
 
       case P.Withdrawn( sid, Some(KeyType(key)), _ ) if state contains key => {
-        log.info( "IndexAggregate[{}] WITHDRAWN via KEY: {}", self.path, key )
+        log.debug( "IndexAggregate[{}] WITHDRAWN via KEY: {}", self.path, key )
         state -= key
       }
 
       case P.Withdrawn( sid, None, IdType(id) ) if state.exists{ case (_, IndexedValue(i, _)) => i == id } => {
-        log.info( "IndexAggregate[{}] WITHDRAWN via ID: {}", self.path, id )
+        log.debug( "IndexAggregate[{}] WITHDRAWN via ID: {}", self.path, id )
         val key = state collectFirst { case (k, IndexedValue(i, _)) if i == id => k }
 
         key match {
           case Some(k) => {
-            log.info( "IndexAggregate removed key:[{}]", k )
+            log.debug( "IndexAggregate removed key:[{}]", k )
             state -= k
           }
 
-          case None => log.info( "IndexAggregate could not find identifier [{}] to withdraw", id )
+          case None => log.debug( "IndexAggregate could not find identifier [{}] to withdraw", id )
         }
       }
 
@@ -135,13 +133,13 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
         val value = state( oldKey )
         state += ( newKey -> value )
         state -= oldKey
-        log.info( "IndexAggregate[{}] REVISED: {} to {}", self.path, oldKey, newKey )
+        log.debug( "IndexAggregate[{}] REVISED: {} to {}", self.path, oldKey, newKey )
       }
 
       case e @ P.ValueRevised( sid, KeyType(key), ValueType(oldValue), ValueType(newValue) ) if state contains key => {
         val iValue = state( key )
         state += ( key -> iValue.copy(value = newValue) )
-        log.info( "IndexAggregate[{}] REVISED Key:[{}] VALUE: {} to {}", self.path, key, oldValue, newValue )
+        log.debug( "IndexAggregate[{}] REVISED Key:[{}] VALUE: {} to {}", self.path, key, oldValue, newValue )
       }
 
       case e: P.Event => {
@@ -207,11 +205,16 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
     }
 
     case D.ReviseValue( KeyType(key), ValueType(oldValue), ValueType(newValue) ) => {
-      log.warning( "IndexAggregate[{}]: UNHANDLED ReviseValue missing key: key=[{}] state=[{}]", self.path, (key, KeyType.runtimeClass), state.mkString("\n", "\n", "\n"))
+      log.warning(
+        "IndexAggregate[{}]: UNHANDLED ReviseValue missing key: key=[{}] state=[{}]",
+        self.path,
+        (key, KeyType.runtimeClass),
+        state.mkString("\n", "\n", "\n")
+      )
     }
 
     case av @ D.AlterValue( KeyType(key) ) if state contains key => {
-      import scalaz._, Scalaz.{ state => -, _ }
+      import scalaz._, Scalaz.{ state => _, _ }
 
       val event = for {
         oldIndexedValue <- state.get(key).toRightDisjunction[Throwable](
@@ -233,9 +236,9 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
       }
     }
 
-    // Index actors dependent on the aggregate issue a WaitingForStart message
+    // Index actors dependent on the aggregate issue a WaitForStart message
     case WaitingForStart => {
-      log.debug( "recd WaitingForStart: sending Started to {}", sender() )
+      log.debug( "recd WaitForStart: sending Started to {}", sender() )
       sender() ! Started
     }
 
@@ -257,8 +260,8 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
 
       case D.Record( k, i, v ) => {
         log.warning(
-          s"topic:[${topic}] + tid:[${tid}] ~> actor:[${self.path}] UNHANDLED [${message}] - verify AggregateRootType.indexes types match Record:" +
-          "key-types:[{}] id-types:[{}] value-types[{}]",
+          s"topic:[${topic}] + tid:[${tid}] ~> actor:[${self.path}] UNHANDLED [${message}] - " +
+          "verify AggregateRootType.indexes types match Record: key-types:[{}] id-types:[{}] value-types[{}]",
           (KeyType.runtimeClass, k.getClass), (IdType.runtimeClass, i.getClass), (ValueType, v.getClass)
         )
       }
@@ -266,7 +269,7 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
       case Directive.ReviseKey( oldKey, newKey ) => {
         log.warning(
           "IndexAggregate[{}] UNHANDLED KEY REVISION [{}] - " +
-            "verify AggregateRootType indexes() type parameterization (old, new):[{}] identifier:[{}]",
+          "verify AggregateRootType indexes() type parameterization (old, new):[{}] identifier:[{}]",
           (topic, self.path), message, (oldKey, newKey), tid.id
         )
       }
@@ -274,7 +277,7 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
       case Directive.ReviseValue( key, oldValue, newValue ) => {
         log.warning(
           "IndexAggregate[{}] UNHANDLED VALUE REVISION:[{}] - " +
-            "verify AggregateRootType indexes type parameterization identifier:[{}]",
+          "verify AggregateRootType indexes type parameterization identifier:[{}]",
           (topic, self.path), message, tid.id
         )
       }

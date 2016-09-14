@@ -1,7 +1,7 @@
 package demesne
 
 import scala.concurrent.duration._
-import akka.actor.{Props, SupervisorStrategy}
+import akka.actor.Props
 import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.Passivate
 import com.typesafe.scalalogging.LazyLogging
@@ -20,9 +20,9 @@ object AggregateRootType {
 
 abstract class AggregateRootType extends LazyLogging {
   def name: String
-  def repositoryName: String = name+"Repository"
+  def repositoryName: String = org.atteo.evo.inflector.English.plural( name )
 
-  def aggregateRootProps( implicit model: DomainModel ): Props
+  def repositoryProps( implicit model: DomainModel ): Props
 
   val TaggedIdType = TypeCase[TaggedID[_]]
 
@@ -84,8 +84,6 @@ abstract class AggregateRootType extends LazyLogging {
   }
 
   def indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification]
-
-  def repositorySupervisionStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 
   override def toString: String = name + "AggregateRootType"
 }
