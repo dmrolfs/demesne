@@ -1,9 +1,6 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
-
-import akka.Done
-
 import scala.concurrent.duration._
 import scala.reflect.ClassTag
 import scala.concurrent.Await
@@ -16,13 +13,11 @@ import Scalaz._
 import com.typesafe.config.Config
 import demesne.BoundedContext.StartTask
 import org.scalatest._
-import org.scalatest.mock.MockitoSugar
+import org.scalatest.mockito.MockitoSugar
 import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
 import demesne._
 import demesne.repository.StartProtocol
-
-import scalaz.concurrent.Task
 
 
 object AggregateRootSpec {
@@ -103,7 +98,7 @@ with BeforeAndAfterAll
       result
     }
 
-    implicit lazy val model: DomainModel = trace.block("model") { boundedContext.unsafeModel }
+    implicit lazy val model: DomainModel = trace.block("model") { Await.result( boundedContext.futureModel, 5.seconds ) }
   }
 
   override type Fixture <: AggregateFixture

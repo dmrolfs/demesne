@@ -100,10 +100,12 @@ object BoundedContext extends StrictLogging { outer =>
 
 
   // bounded context resource keys
-  val ModelResource = 'model
-  val SystemResource = 'system
-  val RootTypesResource = Symbol( "root-types" )
-  val ConfigurationResource = 'configuration
+  object ResourceKeys {
+    val Model = 'model
+    val System = 'system
+    val RootTypes = Symbol( "root-types" )
+    val Configuration = 'configuration
+  }
 
 
   private val contexts: Agent[Map[Symbol, BoundedContextCell]] = Agent( Map.empty[Symbol, BoundedContextCell] )( global )
@@ -256,7 +258,6 @@ object BoundedContext extends StrictLogging { outer =>
   }
 
 
-
   final case class BoundedContextCell private[BoundedContext](
     key: Symbol,
     system: ActorSystem,
@@ -274,10 +275,10 @@ object BoundedContext extends StrictLogging { outer =>
 
     override lazy val resources: Map[Symbol, Any] = {
       userResources ++ Map(
-        ModelResource -> DomainModelRef( key, system ),
-        SystemResource -> system,
-        RootTypesResource -> modelCell.rootTypes,
-        ConfigurationResource -> configuration
+        ResourceKeys.Model -> DomainModelRef( key, system ),
+        ResourceKeys.System -> system,
+        ResourceKeys.RootTypes -> modelCell.rootTypes,
+        ResourceKeys.Configuration -> configuration
       )
     }
 
@@ -324,20 +325,20 @@ object BoundedContext extends StrictLogging { outer =>
 
       import peds.commons.concurrent.TaskExtensionOps
 
-      debugBoundedContext( "START", this )
+//      debugBoundedContext( "START", this )
       val tasks = new TaskExtensionOps( Task gatherUnordered startTasks.map{ t => Task { t.task(this) } } )
 
       for {
         _ <- tasks.runFuture()
         bcCell <- contexts.future map { _(key) }
-        _ = debugBoundedContext( "BC-CELL", bcCell )
+//        _ = debugBoundedContext( "BC-CELL", bcCell )
         supervisors <- bcCell.setupSupervisors()
-        repoStatus <- ( supervisors.repository ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
-      _ = logger.debug( "AAAAAAAAAAAAAAAAAAAA - supervisors:[{}] repo-status:[{}]", supervisors, repoStatus )
+//        repoStatus <- ( supervisors.repository ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
+//      _ = logger.debug( "AAAAAAAAAAAAAAAAAAAA - supervisors:[{}] repo-status:[{}]", supervisors, repoStatus )
         newModelCell = bcCell.modelCell.copy( supervisors = Some(supervisors) )
-        _ = logger.debug( "BBBBBBBBBBBBBBBBBBBBBB - newModelCell:[{}]", newModelCell )
+//        _ = logger.debug( "BBBBBBBBBBBBBBBBBBBBBB - newModelCell:[{}]", newModelCell )
         startedModelCell <- newModelCell.start()
-        _ = logger.debug( "CCCCCCCCCCCCCCCCCCCCCC- startedModelCell:[{}]", startedModelCell )
+//        _ = logger.debug( "CCCCCCCCCCCCCCCCCCCCCC- startedModelCell:[{}]", startedModelCell )
       } yield {
         logger.info( "started BoundedContext:[{}] model:[{}]", (name, system.name), startedModelCell )
         val result = bcCell.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[StartTask] )
@@ -372,14 +373,8 @@ object BoundedContext extends StrictLogging { outer =>
 
       findRepositorySupervisor( repositorySupervisorName ) flatMap { found =>
         found
-        .map { repo =>
-          logger.debug( "repository supervisor [{}] found", repositorySupervisorName )
-          Future successful repo
-        }
-        .getOrElse {
-          logger.debug( "repository supervisor [{}] not found -- making...", repositorySupervisorName )
-          makeRepositorySupervisor( repositorySupervisorName, modelCell.rootTypes )
-        }
+        .map { repo => Future successful repo }
+        .getOrElse { makeRepositorySupervisor( repositorySupervisorName, modelCell.rootTypes ) }
       }
     }
 
@@ -483,262 +478,6 @@ object BoundedContext extends StrictLogging { outer =>
   }
 
 
-
   final case class BoundedContextlNotRegisteredError private[demesne]( key: Symbol )
   extends NoSuchElementException( s"no BoundedContext registered for key:[${key.name}]" ) with DemesneError
-
 }
-
-
-
-
-/////////////////////////////////////////////////////////
-
-//object BoundedContext extends LazyLogging {
-//  def apply( key: Symbol ): BoundedContext = {
-//    registry()
-//    .get( key )
-//    .map { cell => BoundedContextRef( key, cell ) }
-//    .getOrElse { throw new BoundedContextlNotRegisteredError( key ) }
-//  }
-
-//  def apply( key: Symbol, configuration: Config )( implicit system: ActorSystem ): BoundedContext = {
-//    val cell = {
-//      registry.get( )
-//      .get( key )
-//      .map { c => c.copy( configuration = c.configuration withFallback configuration ) }
-//      .getOrElse {
-//        val model = DomainModelCell( key, system, new IndexBus )
-//        BoundedContextCell( key, system, model, configuration )
-//      }
-//    }
-//
-//    registry send { _ + ( key -> cell ) }
-//    BoundedContextRef( key, cell )
-//  }
-//
-//  def future( key: Symbol ): Future[BoundedContext] = {
-//    registry
-//    .future()
-//    .map { reg =>
-//      reg
-//      .get( key )
-//      .map { cell => BoundedContextRef( key, cell ) }
-//      .getOrElse { throw new BoundedContextlNotRegisteredError( key ) }
-//    }
-//  }
-
-
-
-//  private def updateCell(
-//    key: Symbol
-//  )(
-//    fn: BoundedContextCell => BoundedContextCell
-//  )(
-//    implicit ec: ExecutionContext
-//  ): Future[BoundedContextCell] = {
-//    registry
-//    .alter { cells =>
-//      logger.debug( "LOOKING for boundedContext: [{}]", key )
-//      cells.get( key )
-//      .map { cell =>
-//        val newCell = fn( cell )
-//        logger.debug( "ALTERING key:[{}] to be BoundedContext:[{}]", key, newCell )
-//        cells + ( key -> newCell )
-//      }
-//      .getOrElse {
-//        logger.error( "BoundedContext not found: [{}]", BoundedContextlNotRegisteredError(key) )
-//        cells
-//      }
-//    }
-//    .map { cells => cells( key ) }
-//  }
-
-
-
-//  object BoundedContextRef {
-//    def apply( key: Symbol, cell: BoundedContextCell ): BoundedContext = new BoundedContextRef( key, cell )
-//  }
-//
-//  final class BoundedContextRef private[BoundedContext]( key: Symbol, cell: BoundedContextCell ) extends BoundedContext {
-//    //  def system: ActorSystem
-//    override def name: String = key.name
-//    override def model: DomainModel = cell.model
-////    override def futureModel: Future[DomainModel] = cell.futureModel
-//    override def :+( rootType: AggregateRootType ): BoundedContext = ???
-//    override def withResources( resources: Map[Symbol, Any] ): BoundedContext = ???
-//    override def withStartTask( task: Task[Done] ): BoundedContext = ???
-//    override def start(): Future[DomainModel] = ???
-//    override def shutdown(): Future[Terminated] = cell.shutdown()
-//  }
-
-
-//  final case class Supervisors private[BoundedContext]( repository: ActorRef, index: ActorRef )
-
-
-////  final case class BoundedContextCell private[BoundedContext](
-////    key: Symbol,
-////    system: ActorSystem,
-////    modelCell: DomainModelCell,
-////    configuration: Config,
-////    supervisors: Option[Supervisors] = None,
-////    userResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
-////    startTasks: Seq[Task[Done]] = Seq.empty[Task[Done]]
-////  ) extends BoundedContext with Equals {
-//    override def toString: String = s"""BoundedContext(${name}, system:[${system}], model:[${modelCell}]"""
-//
-//    override def name: String = key.name
-//
-//    override def model: DomainModel = DomainModelRef( key, system )
-//
-//    override def :+( rootType: AggregateRootType ): BoundedContext = trace.block(s":+ [${rootType.name}]") {
-//      val newModel = modelCell addAggregateType rootType
-//      logger.debug( "in updateModelCell - added rootType:[{}] to domain-model-cell:[{}]", rootType.name, newModel )
-//      this.copy( modelCell = newModel )
-//    }
-
-//    override def withResources( resources: Map[Symbol, Any] ): BoundedContext = {
-//      this.copy( userResources = userResources ++ resources )
-//    }
-//
-//    override def withStartTask( task: Task[Done] ): BoundedContext = this.copy( startTasks = startTasks :+ task )
-
-//    private def updateModelCell(
-//      fn: DomainModelCell => DomainModelCell
-//    )(
-//      implicit ec: ExecutionContext
-//    ): Future[DomainModelCell] = trace.block("updateModelCell") {
-//      modelRegistry
-//      .alter { models =>
-//        logger.debug( "LOOKING for model cell:[{}]", key )
-//        models.get( key )
-//        .map { m =>
-//          logger.debug( "ALTERING - key:[{}] found:[{}]", key, m )
-//          models + ( key -> fn(m) )
-//        }
-//        .getOrElse { models }
-//      }
-//      .map { models => models( key ) }
-//    }
-
-//    override def start(): Future[DomainModel] = {
-//      import scala.concurrent.duration._
-//      import akka.pattern.AskableActorSelection
-//
-//      logger.debug( "starting BoundedContext:[{}]...", (name, system.name) )
-//      implicit val ec = system.dispatcher
-//      implicit val timeout = Timeout( 3.seconds )
-//      val repositorySupervisorName = name + "-repositories"
-//      val sel = system.actorSelection( "/user/"+repositorySupervisorName )
-//      val asker = new AskableActorSelection( sel )
-//      val result = DomainModelRef( key, system )
-//
-//      import peds.commons.concurrent.TaskExtensionOps
-//
-//      val tasks = new TaskExtensionOps( Task.gatherUnordered( startTasks ) )
-//
-//      for {
-//        _ <- tasks.runFuture()
-//        _ <- verifySupervisor()
-//      } yield {
-//        logger.info( "started BoundedContext:[{}]", (name, system.name) )
-//        result
-//      }
-//    }
-
-//    override def shutdown(): Future[Terminated] = system.terminate()
-
-
-//    private def setupSupervisors(): Future[Supervisors] = {
-//      for {
-//        cell <- modelCell()
-//        _ = logger.debug( "BC: making repo supervisor" )
-//        indexSupervisor <- makeIndexSupervisor( cell )
-//        repoSupervisor <- makeRepositorySupervisor( repositorySupervisorName, cell.rootTypes, userResources )
-//        _ = logger.debug( "BC: updating model cell" )
-//        newCell <- updateModelCell {
-//          _.copy( indexSupervisor = Some(indexSupervisor), repositorySupervisor = Some(repoSupervisor) )
-//        }
-//        _ = logger.debug( "BC: starting model cell = [{}]", newCell )
-//        _ <- newCell.start()
-//        _ = logger.debug( "BC: model cell started" )
-//      } yield {
-//        Done
-//      }
-//    }
-
-//    private def verifySupervisor(): Future[Done] = {
-//
-//      ( asker ? new Identify( repositorySupervisorName.## ) ).mapTo[ActorIdentity] flatMap { identity =>
-//        identity.ref
-//        .map { _ =>
-//          logger.debug( "BC: repository supervisor:[{}] found created" )
-//          Future successful Done
-//        }
-//        .getOrElse { setupSupervisors() }
-//      }
-//    }
-
-
-//    private def timeoutBudgets( to: Timeout ): (Timeout, Timeout) = {
-//      import scala.concurrent.duration._
-//      val baseline = to.duration - 100.millis
-//      ( Timeout( baseline / 2 ), Timeout( baseline / 2 ) )
-//    }
-
-//    private def modelCell()( implicit ec: ExecutionContext ): Future[DomainModelCell] = {
-//      modelRegistry.future() map {
-//        _.get( key ) getOrElse { throw new DomainModelNotRegisteredError(name, system) }
-//      }
-//    }
-
-//    private def makeRepositorySupervisor(
-//      repositorySupervisorName: String,
-//      rootTypes: Set[AggregateRootType],
-//      userResources: Map[Symbol, Any]
-//    )(
-//      implicit to: Timeout
-//    ): Future[ActorRef] = {
-//      import akka.pattern.ask
-//      implicit val ec = system.dispatcher
-//      val props = RepositorySupervisor.props( model, rootTypes, userResources, configuration )
-//      val supervisor = system.actorOf( props, repositorySupervisorName )
-//      ( supervisor ? StartProtocol.WaitForStart ) map { _ =>
-//        logger.debug(
-//          "started repository supervisor:[{}] for root-types:[{}]",
-//          repositorySupervisorName,
-//          rootTypes.map{ _.name }.mkString( ", " )
-//        )
-//
-//        supervisor
-//      }
-//    }
-
-//    private def makeIndexSupervisor( model: DomainModel ): Future[ActorRef] = {
-//      Future successful { system.actorOf( IndexSupervisor.props( model.indexBus ), s"${model.name}-indexes" ) }
-//    }
-//  }
-
-
-//  final case class DomainModelRef private[BoundedContext](
-//    key: Symbol,
-//    override val system: ActorSystem
-//  ) extends DomainModel {
-//    override def name: String = key.name
-//
-//    private def underlying: DomainModel = registry()( key ).modelCell
-//    override def indexBus: IndexBus = underlying.indexBus
-//
-//    override def get( rootName: String, id: Any ): Option[ActorRef] = underlying.get( rootName, id )
-//
-//    override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
-//      underlying.aggregateIndexFor[K, TID, V]( rootName, indexName )
-//    }
-//
-//    override def rootTypes: Set[AggregateRootType] = underlying.rootTypes
-//  }
-
-
-//  final case class BoundedContextlNotRegisteredError private[demesne]( key: Symbol )
-//  extends NoSuchElementException( s"no BoundedContext registered for key:[${key.name}]" ) with DemesneError
-//}

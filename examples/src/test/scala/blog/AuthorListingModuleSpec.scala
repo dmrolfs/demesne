@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.immutable
 import scala.concurrent.duration._
+import scala.concurrent.Await
 import scala.util.Success
 import akka.testkit.{TestActorRef, TestProbe}
 import akka.util.Timeout
@@ -17,9 +18,6 @@ import peds.commons.identifier.{ShortUUID, TaggedID}
 import peds.commons.log.Trace
 import sample.blog.author.AuthorListingModule.{GetPosts, Posts}
 import sample.blog.post.PostPrototol.PostPublished
-
-import scala.concurrent.Await
-
 
 
 object AuthorListingModuleSpec {
@@ -45,14 +43,7 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
       import akka.pattern.AskableActorSelection
       val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
       implicit val timeout = Timeout( 5.seconds )
-
       Await.ready( ( supervisorSel ? StartProtocol.WaitForStart ), 5.seconds )
-      logger.debug(
-        "model from started BoundedContext = [{}] with root-types=[{}]",
-        boundedContext.unsafeModel,
-        boundedContext.unsafeModel.rootTypes.mkString(", ")
-      )
-
     }
 
     override def after( test: OneArgTest ): Unit = trace.block( "after" ) { }

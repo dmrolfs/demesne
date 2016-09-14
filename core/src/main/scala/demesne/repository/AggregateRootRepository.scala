@@ -17,7 +17,6 @@ import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
 
 
-
 abstract class EnvelopingAggregateRootRepository(
   model: DomainModel,
   rootType: AggregateRootType
@@ -29,12 +28,7 @@ abstract class EnvelopingAggregateRootRepository(
       val originalSender = sender()
       val aggregate = aggregateFor( message )
       log.debug( "enveloping-repository:[{}] forwarding to aggregate:[{}] command:[{}]", self.path.name, aggregate, message )
-//      Option( aggregate ) foreach { _.sendEnvelope( message )( originalSender ) }
-      Option( aggregate ) foreach { a =>
-        log.debug( "forwarding enveloped message:[{}] to aggregate:[{}]", message, a.path )
-        log.debug( "message aggregateIdFor:[{}] shardIdFor:[{}]", rootType.aggregateIdFor(message), rootType.shardIdFor(message) )
-        a forwardEnvelope message
-      }
+      Option( aggregate ) foreach { _ forwardEnvelope message }
     }
   }
 }
@@ -53,8 +47,7 @@ object AggregateRootRepository {
   }
 
   trait LocalAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
-    override def aggregateFor( command: Any ): ActorRef = trace.block( "aggregateFor" ) {
-      log.debug( "local-repository:[{}] looking for aggregate for command:[{}]", actor.self.path, command.toString )
+    override def aggregateFor( command: Any ): ActorRef = {
       if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
         log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
       }
@@ -82,8 +75,7 @@ object AggregateRootRepository {
       }
     }
 
-    override def aggregateFor( command: Any ): ActorRef = trace.block( "aggregateFor" ) {
-      log.debug( "clustered-repository:[{}] looking for aggregate for command:[{}]", actor.self.path, command.toString )
+    override def aggregateFor( command: Any ): ActorRef = {
       if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
         log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
       }
@@ -92,7 +84,7 @@ object AggregateRootRepository {
   }
 }
 
-/** Supervisor for aggregate root actors. All client commands will go through this actor, who resolves/extracts the
+/** AggregateRootRepository for aggregate root actors. All client commands will go through this actor, who resolves/extracts the
   * aggregate's id from the command and either finds the aggregate or (if there is no such aggregate) creates the new
   * aggregate and delegates the command.
   *
@@ -165,10 +157,6 @@ with ActorLogging {
   }
 
   def repository: Receive = {
-    case c => {
-      val aggregate = aggregateFor( c )
-      log.debug( "repository:[{}] forwarding to aggregate:[{}] command:[{}]", self.path.name, aggregate, c )
-      aggregate forward c
-    }
+    case c => aggregateFor( c ) forward c
   }
 }

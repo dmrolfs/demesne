@@ -23,8 +23,6 @@ object BlogApp extends StrictLogging {
     else startup( args map { _.toInt } )
   }
 
-  // object registry extends AuthorListingModule with PostModule with ClusteredAggregateModuleExtension
-
   def startup( ports: Seq[Int] )( implicit ec: ExecutionContext, timeout: Timeout ): Unit = {
     ports foreach { port =>
       val config = ConfigFactory.parseString( "akka.remote.netty.tcp.port=" + port ).withFallback( ConfigFactory.load() )

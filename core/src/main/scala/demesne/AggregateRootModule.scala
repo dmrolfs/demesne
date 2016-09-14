@@ -19,7 +19,7 @@ abstract class AggregateRootModule extends AggregateRootType.Provider with LazyL
   def aggregateIdTag: Symbol = _aggregateIdTag
   def shardName: String = _shardName
 
-  def aggregateOf( id: TID )( implicit model: DomainModel ): ActorRef = model.aggregateOf( rootType = module.rootType, id )
+  def aggregateOf( id: TID )( implicit model: DomainModel ): ActorRef = model( rootType = module.rootType, id )
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
 

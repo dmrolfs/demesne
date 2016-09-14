@@ -12,7 +12,7 @@ object Dependencies {
   }
 
   object akka {
-    val version = "2.4.8"
+    val version = "2.4.10"
     def module( id: String ) = "com.typesafe.akka" %% s"akka-$id" % version
 
     val actor = module( "actor" )
@@ -27,7 +27,7 @@ object Dependencies {
   }
 
   object scalaz {
-    val version = "7.2.5"
+    val version = "7.2.6"
     def module( id: String ) = "org.scalaz" %% s"scalaz-$id" % version
 
     val core = module( "core" )
@@ -35,27 +35,27 @@ object Dependencies {
   }
 
   object log {
-    val typesafe = "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0"
+    val typesafe = "com.typesafe.scala-logging" %% "scala-logging" % "3.4.0"
 
     object logback {
-      val version = "1.1.3"
+      val version = "1.1.7"
       val classic = "ch.qos.logback" % "logback-classic" % version
     }
 
-    val slf4j = "org.slf4j" % "slf4j-api" % "1.7.13"
+    val slf4j = "org.slf4j" % "slf4j-api" % "1.7.21"
   }
 
   object facility {
     val uuid = "com.eaio.uuid" % "uuid" % "3.4"
     val config = "com.typesafe" % "config" % "1.3.0"
-    val shapeless = "com.chuusai" %% "shapeless" % "2.3.1"
+    val shapeless = "com.chuusai" %% "shapeless" % "2.3.2"
     val inflector = "org.atteo" % "evo-inflector" % "1.2.1"
-    val squants = "com.squants"  %% "squants"  % "0.5.3"
+    val squants = "com.squants"  %% "squants"  % "0.6.2"
     val accord = "com.wix" %% "accord-core" % "0.5"
   }
 
   object qa {
-    val scalatest = "org.scalatest" %% "scalatest" % "2.2.4"
+    val scalatest = "org.scalatest" %% "scalatest" % "3.0.0"
 
     object mockito {
       val version = "1.10.19"
@@ -63,7 +63,7 @@ object Dependencies {
     }
 
     object persistence {
-      val inMemory = "com.github.dnvriend" %% "akka-persistence-inmemory" % "1.1.6"
+      val inMemory = "com.github.dnvriend" %% "akka-persistence-inmemory" % "1.3.8"
       val testkit = "com.github.krasserm" %% "akka-persistence-testkit" % "0.3.4"
     }
   }

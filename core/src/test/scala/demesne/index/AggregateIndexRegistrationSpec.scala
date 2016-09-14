@@ -10,7 +10,7 @@ import demesne.index.IndexSupervisor._
 import demesne.index.local.IndexLocalAgent
 import demesne.repository.CommonLocalRepository
 import demesne.testkit.ParallelAkkaSpec
-import org.scalatest.mock.MockitoSugar
+import org.scalatest.mockito.MockitoSugar
 import org.scalatest.Tag
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.commons.log.Trace

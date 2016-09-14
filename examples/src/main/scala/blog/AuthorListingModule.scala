@@ -38,13 +38,7 @@ object AuthorListingModule extends LazyLogging {
   }
 
   def makeAuthorListing( implicit system: ActorSystem ): () => ActorRef = () => {
-    logger debug s"##### clusterSystem = $system"
-    val cs = ClusterSharding( system )
-    logger debug s"##### cluster sharding = $cs"
-    logger debug s"##### author listing shard name = ${AuthorListingModule.shardName}"
-    val result = cs.shardRegion(AuthorListingModule.shardName)
-    logger debug s"makeAuthorListing() = $result"
-    result
+    ClusterSharding( system ) shardRegion AuthorListingModule.shardName
   }
 
 
