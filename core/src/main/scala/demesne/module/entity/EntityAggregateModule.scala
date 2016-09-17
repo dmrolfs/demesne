@@ -130,7 +130,7 @@ object EntityAggregateModule extends LazyLogging {
       override val slugLens: Option[Lens[E, String]],
       override val isActiveLens: Option[Lens[E, Boolean]]
     ) extends EntityAggregateModule[E] with Equals {
-      override val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
+      private val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
       override val evState: ClassTag[E] = implicitly[ClassTag[E]]
 
       override lazy val indexes: Seq[IndexSpecification] = _indexes()

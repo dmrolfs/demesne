@@ -155,7 +155,7 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
   "IndexSupervisor should" should {
 
-    "index index for spec with bus subscription" taggedAs(WIP) in { implicit f: Fixture =>
+    "index for spec with bus subscription" taggedAs(WIP) in { implicit f: Fixture =>
       implicit val system = f.system
       val real = TestActorRef[IndexSupervisor]( IndexSupervisor.props( f.bus ) )
       real.receive( IndexSupervisor.RegisterIndex( f.busRoot, f.busSpec ), f.registrant.ref )
@@ -173,7 +173,7 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       actual must be (expected)
     }
 
-    "index index for spec with context subscription" taggedAs(WIP) in { implicit f: Fixture =>
+    "index index for spec with context subscription" in { implicit f: Fixture =>
       implicit val system = f.system
       val real = TestActorRef[IndexSupervisor]( IndexSupervisor.props( f.bus ) )
       real.receive( IndexSupervisor.RegisterIndex( f.contextRoot, f.contextSpec ), f.registrant.ref )

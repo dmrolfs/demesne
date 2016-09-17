@@ -223,6 +223,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
 
       val rt = TestModule.rootType
       val br = model.aggregateIndexFor[String, TestModule.TID, TestModule.ID]( rt, 'bus )
+      logger.error( "TEST:bus index = [{}]", br )
       br.isRight mustBe true
       val sr = model.aggregateIndexFor[Int, TestModule.TID, TestModule.ID]( rt, 'stream )
       sr.isRight mustBe true

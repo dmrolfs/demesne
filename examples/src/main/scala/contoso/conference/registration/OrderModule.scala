@@ -152,7 +152,7 @@ object OrderModule extends AggregateRootModule { module =>
     config.getDuration( "reservation-auto-expiration", TU.MILLISECONDS ).toInt
   )
 
-  override val trace = Trace[OrderModule.type]
+  private val trace = Trace[OrderModule.type]
 
 
   override type ID = ShortUUID

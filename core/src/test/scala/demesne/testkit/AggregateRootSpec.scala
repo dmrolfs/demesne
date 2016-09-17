@@ -86,7 +86,7 @@ with BeforeAndAfterAll
       val bc = for {
         made <- BoundedContext.make( key, config, userResources = resources, startTasks = startTasks(system) )
         filled = rootTypes.foldLeft( made ){ (acc, rt) =>
-          logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc.getClass )
+          logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc )
           acc :+ rt
         }
         _ <- filled.futureModel map { m => logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") ); m }

@@ -23,8 +23,7 @@ import sample.blog.post.{PostPrototol => P}
 
 
 object PostModule extends AggregateRootModule { module =>
-  override val trace = Trace[PostModule.type]
-
+  private val trace = Trace[PostModule.type]
 
   override type ID = ShortUUID
   override def nextId: TryV[TID] = implicitly[Identifying[PostActor.State]].nextIdAs[TID]
@@ -57,7 +56,7 @@ object PostModule extends AggregateRootModule { module =>
     def clusteredProps( model: DomainModel ): Props = Props( new Repository(model) with ClusteredAggregateContext )
   }
 
-  class Repository( model: DomainModel )
+  abstract class Repository( model: DomainModel )
   extends EnvelopingAggregateRootRepository( model, module.rootType ) { actor: AggregateRootRepository.AggregateContext =>
     import sample.blog.author.AuthorListingModule
 

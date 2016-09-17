@@ -20,7 +20,7 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule { mo
 
   val evID: ClassTag[ID]
 
-  override val trace = Trace[SimpleTestModule[T]]
+  private val trace = Trace[SimpleTestModule[T]]
 
   override def rootType: AggregateRootType = {
     new AggregateRootType {

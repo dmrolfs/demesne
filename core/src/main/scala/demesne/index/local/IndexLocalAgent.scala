@@ -55,12 +55,7 @@ object IndexLocalAgent {
     override def futureIndexedValueEntries: Future[Map[K, IndexedValue[I, V]]] = agent.future()
     override def getIndexedValue( key: K ): Option[IndexedValue[I, V]] = agent.get get key
     override def toString: String = getClass.safeSimpleName + s"( ${agent.get.mkString( "," )} )"
-    override def futureGetIndexedValue( key: K ): Future[Option[IndexedValue[I, V]]] = {
-      agent.future() map { a =>
-        logger.debug( "IndexLocalAgent.futureGet(")
-        a get key
-      }
-    }
+    override def futureGetIndexedValue( key: K ): Future[Option[IndexedValue[I, V]]] = agent.future() map { _ get key }
   }
 }
 

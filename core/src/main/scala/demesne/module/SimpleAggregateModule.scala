@@ -93,8 +93,7 @@ object SimpleAggregateModule {
     override val environment: AggregateEnvironment,
     override val indexes: Seq[IndexSpecification]
   ) extends SimpleAggregateModule[S] with Equals { module =>
-    override val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
-
+    private val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
 
     def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {
       val lhs = implicitly[ClassTag[I]]

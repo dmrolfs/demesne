@@ -221,7 +221,7 @@ object AggregateRootFunctionalSpec {
   }
 
   object FooModule extends AggregateRootModule { module =>
-    override def trace: Trace[_] = Trace[FooModule.type]
+    private def trace: Trace[_] = Trace[FooModule.type]
 
     override type ID = ShortUUID
     override def nextId: TryV[TID] = Foo.fooIdentifying.nextIdAs[TID]
