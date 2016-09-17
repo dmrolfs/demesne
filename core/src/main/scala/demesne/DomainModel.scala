@@ -28,7 +28,7 @@ abstract class DomainModel {
   def apply( rootType: AggregateRootType, id: Any ): ActorRef = apply( rootType.name, id )
 
   def apply( rootName: String, id: Any ): ActorRef = {
-    get( rootName, id ) getOrElse { throw NoSuchAggregateRootError( name, rootTypes ) }
+    get( rootName, id ) getOrElse { throw NoSuchAggregateRootError( this, rootName ) }
   }
 
   def aggregateOf( rootType: AggregateRootType, id: Any ): ActorRef = apply( rootType.name, id )
@@ -78,6 +78,7 @@ object DomainModel {
     override def name: String = key.name
 
     override def get( rootName: String, id: Any ): Option[ActorRef] = trace.block(s"get($rootName, $id)") {
+      logger.debug( "TEST: aggregateRefs=[{}]", aggregateRefs.mkString(", ") )
       aggregateRefs.get( rootName ) map { _.repositoryRef }
     }
 
@@ -240,9 +241,12 @@ object DomainModel {
   final case class Supervisors private[demesne]( repository: ActorRef, index: ActorRef )
 
 
-  final case class NoSuchAggregateRootError private[demesne]( name: String, rootTypes: Set[AggregateRootType] )
-  extends NoSuchElementException(
-    s"""DomainModel type registry does not have root-type:[${name}]; root-types:[${rootTypes.mkString("[",",","]")}]"""
+  final case class NoSuchAggregateRootError private[demesne](
+    model: DomainModel,
+    rootName: String
+  ) extends NoSuchElementException(
+    s"DomainModel:[${model.name}] aggregate registry does not have aggregate root:[${rootName}]; " +
+    s"""root-types:[${model.rootTypes.mkString(", ")}]"""
   ) with DemesneError
 
   final case class NoIndexForAggregateError private[demesne](name: String, registry: Map[IndexSpecification, IndexEnvelope] )
