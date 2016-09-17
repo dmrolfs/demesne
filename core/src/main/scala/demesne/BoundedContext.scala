@@ -108,21 +108,38 @@ object BoundedContext extends StrictLogging { outer =>
   }
 
 
-  private val contexts: Agent[Map[Symbol, BoundedContextCell]] = Agent( Map.empty[Symbol, BoundedContextCell] )( global )
+  private val contextsExecutionPool: ExecutionContext = global
+  private val contexts: Agent[Map[Symbol, BoundedContextCell]] = {
+    Agent( Map.empty[Symbol, BoundedContextCell] )( contextsExecutionPool )
+  }
 
-  private def alterContextCell(
-    key: Symbol
-  )(
-    f: BoundedContextCell => BoundedContextCell
-  )(
-    implicit ec: ExecutionContext
-  ): Future[BoundedContextCell] = {
+  private def sendContextCell( key: Symbol )( f: BoundedContextCell => BoundedContextCell ): Unit = {
+    contexts
+    .send { cells =>
+      logger.debug( "LOOKING for boundedContext: [{}]", key.name )
+      cells
+      .get( key )
+      .map { c =>
+        val newCell = f( c )
+        logger.debug( "SENDING key:[{}] to be BoundedContext:[{}]", key.name, newCell )
+        cells + ( key -> newCell )
+      }
+      .getOrElse {
+        logger.error( "BoundedContext not found: [{}]", BoundedContextlNotRegisteredError(key) )
+        cells
+      }
+    }
+  }
+
+  private def alterContextCell( key: Symbol )( f: BoundedContextCell => BoundedContextCell ): Future[BoundedContextCell] = {
+    implicit val ec = contextsExecutionPool
     contexts
     .alter { cells =>
       logger.debug( "LOOKING for boundedContext: [{}]", key.name )
-      cells.get( key )
-      .map { cell =>
-        val newCell = f( cell )
+      cells
+      .get( key )
+      .map { c =>
+        val newCell = f( c )
         logger.debug( "ALTERING key:[{}] to be BoundedContext:[{}]", key.name, newCell )
         cells + ( key -> newCell )
       }
@@ -134,22 +151,18 @@ object BoundedContext extends StrictLogging { outer =>
     .map { cells => cells( key ) }
   }
 
-  private def alterContextCell(
-    key: Symbol,
-    newCell: BoundedContextCell
-  )(
-    implicit ec: ExecutionContext
-  ): Future[BoundedContextCell] = {
-    contexts
-    .alter { cells =>
-      logger.debug( "ALTERING key:[{}] to be BoundedContext:[{}]", key, newCell )
-      cells + ( key -> newCell )
-    }
-    .map { cells =>
-      require( cells(key) == newCell, s"cell[${key.name}] not updated with new context:[${newCell}]" )
-      newCell
-    }
-  }
+//  private def alterContextCell( key: Symbol, newCell: BoundedContextCell ): Future[BoundedContextCell] = {
+//    implicit val ec = contextsExecutionPool
+//    contexts
+//    .alter { cells =>
+//      logger.debug( "ALTERING key:[{}] to be BoundedContext:[{}]", key, newCell )
+//      cells + ( key -> newCell )
+//    }
+//    .map { cells =>
+//      require( cells(key) == newCell, s"cell[${key.name}] not updated with new context:[${newCell}]" )
+//      newCell
+//    }
+//  }
 
 
   private[BoundedContext] object BoundedContextRef {
@@ -159,77 +172,64 @@ object BoundedContext extends StrictLogging { outer =>
   final class BoundedContextRef private[BoundedContext]( key: Symbol ) extends BoundedContext {
     override def toString: String = s"BoundedContext(${name} system:${unsafeCell.system})"
 
-    private val alteringContext: ExecutionContext = global
+//    private val alteringContext: ExecutionContext = global
     private def unsafeCell: BoundedContextCell = contexts()( key )
     private def futureCell: Future[BoundedContextCell] = {
-      implicit val ec = alteringContext
+      implicit val ec = contextsExecutionPool
       contexts.future() map { ctxs => ctxs( key ) }
     }
 
     override val name: String = key.name
     override def unsafeModel: DomainModel = unsafeCell.unsafeModel
     override def futureModel: Future[DomainModel] = {
-      implicit val ec = alteringContext
+      implicit val ec = contextsExecutionPool
       futureCell flatMap { _.futureModel }
     }
 
     override def resources: Map[Symbol, Any] = unsafeCell.resources
 
     override def :+( rootType: AggregateRootType ): BoundedContext = {
-      implicit val ec = alteringContext
-
-      for {
-        cell <- futureCell
-        newCell = ( cell :+ rootType ).asInstanceOf[BoundedContextCell]
-        _ = logger.debug( "TEST: NEW BC CELL's ROOT-TYPES:[{}]", newCell.modelCell.rootTypes.mkString(", ") )
-        altered <- outer.alterContextCell( key, newCell )
-      } yield Done
-
+      outer.alterContextCell( key ){ cell =>
+        val newCell = ( cell :+ rootType ).asInstanceOf[BoundedContextCell]
+        logger.debug( "TEST: NEW BC CELL's ROOT-TYPES:[{}]", newCell.modelCell.rootTypes.mkString(", ") )
+        newCell
+      }
       this
     }
 
     override def withResources( rs: Map[Symbol, Any] ): BoundedContext = {
-      implicit val ec = alteringContext
-      futureCell foreach { cell =>
-        outer.alterContextCell( key, newCell = cell.withResources(rs).asInstanceOf[BoundedContextCell] )( alteringContext )
-      }
+      sendContextCell( key ){ _.withResources(rs).asInstanceOf[BoundedContextCell] }
       this
     }
 
     override def withStartTask( task: StartTask ): BoundedContext = {
-      implicit val ec = alteringContext
-      futureCell foreach { cell =>
-        outer.alterContextCell(
-          key,
-          cell.withStartTask( task ).asInstanceOf[BoundedContextCell]
-        )(
-          alteringContext
-        )
-      }
+      sendContextCell( key ){ _.withStartTask( task ).asInstanceOf[BoundedContextCell] }
       this
     }
 
     override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = {
-      implicit val ec = alteringContext
+      import scala.concurrent.Await
+      import scala.concurrent.duration._
 
-      for {
-        cell <- futureCell
-        started <- cell.start().mapTo[BoundedContextCell]
-        _ <- outer.alterContextCell( key, started )
-      } yield {
-        BoundedContextRef( key )
+      val altered = alterContextCell( key ) { cell =>
+        logger.debug( "TEST: starting cell:[{}] ec:[{}] to:[{}]", cell, implicitly[ExecutionContext], implicitly[Timeout] )
+        val newCell = Await.result(cell.start().mapTo[BoundedContextCell], 10.seconds)
+        logger.debug( "TEST: started... new cell:[{}]", newCell )
+        newCell
       }
+
+      altered map { _ => this }
+      for { _ <- alterContextCell( key ){ cell => Await.result(cell.start().mapTo[BoundedContextCell], 10.seconds) } } yield this
     }
 
     override def shutdown(): Future[Terminated] = {
-      implicit val ec = alteringContext
+      implicit val ec = contextsExecutionPool
       for {
         cell <- futureCell
         terminated <- cell.shutdown()
       } yield terminated
     }
   }
-
 
   private[BoundedContext] object DomainModelRef {
     def apply( key: Symbol, system: ActorSystem ): DomainModelRef = new DomainModelRef( key, system )
@@ -321,24 +321,26 @@ object BoundedContext extends StrictLogging { outer =>
       }
       //todo not see author start task!!!
 
-      implicit val ec = system.dispatcher
+//      implicit val ec = system.dispatcher
 
       import peds.commons.concurrent.TaskExtensionOps
 
-//      debugBoundedContext( "START", this )
+      debugBoundedContext( "START", this )
       val tasks = new TaskExtensionOps( Task gatherUnordered startTasks.map{ t => Task { t.task(this) } } )
 
       for {
         _ <- tasks.runFuture()
-        bcCell <- contexts.future map { _(key) }
-//        _ = debugBoundedContext( "BC-CELL", bcCell )
+      _ = logger.debug( "TEST: after tasks run" )
+//        bcCell <- contexts.future map { _(key) }
+        bcCell = this
+      _ = debugBoundedContext( "BC-CELL", bcCell )
         supervisors <- bcCell.setupSupervisors()
-//        repoStatus <- ( supervisors.repository ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
-//      _ = logger.debug( "AAAAAAAAAAAAAAAAAAAA - supervisors:[{}] repo-status:[{}]", supervisors, repoStatus )
+        repoStatus <- ( supervisors.repository ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
+      _ = logger.debug( "AAAAAAAAAAAAAAAAAAAA - supervisors:[{}] repo-status:[{}]", supervisors, repoStatus )
         newModelCell = bcCell.modelCell.copy( supervisors = Some(supervisors) )
-//        _ = logger.debug( "BBBBBBBBBBBBBBBBBBBBBB - newModelCell:[{}]", newModelCell )
+      _ = logger.debug( "BBBBBBBBBBBBBBBBBBBBBB - newModelCell:[{}]", newModelCell )
         startedModelCell <- newModelCell.start()
-//        _ = logger.debug( "CCCCCCCCCCCCCCCCCCCCCC- startedModelCell:[{}]", startedModelCell )
+      _ = logger.debug( "CCCCCCCCCCCCCCCCCCCCCC- startedModelCell:[{}]", startedModelCell )
       } yield {
         logger.info( "started BoundedContext:[{}] model:[{}]", (name, system.name), startedModelCell )
         val result = bcCell.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[StartTask] )
