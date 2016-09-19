@@ -96,6 +96,7 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
 
   object SeatAssignmentsType extends AggregateRootType {
     override def name: String = module.shardName
+    override lazy val identifying: Identifying[_] = seatsAssignmentsIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 

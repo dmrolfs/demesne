@@ -3,11 +3,13 @@ package demesne
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
 import peds.commons.TryV
-import peds.commons.identifier.TaggedID
+import peds.commons.identifier.{Identifying, TaggedID}
 import peds.commons.util._
 
 
 abstract class AggregateRootModule extends AggregateRootType.Provider with LazyLogging { module =>
+//  val identifying: Identifying[_]
+
   type ID
 
   type TID = TaggedID[ID]

@@ -1,20 +1,22 @@
 package demesne.index
 
 import java.util.concurrent.atomic.AtomicInteger
-
+import scala.concurrent.duration._
+import scala.reflect.ClassTag
 import akka.actor._
 import akka.event.LoggingReceive
 import akka.testkit._
+import scalaz._, Scalaz._
+import org.scalatest.mockito.MockitoSugar
+import org.scalatest.Tag
+import peds.commons.TryV
+import peds.commons.identifier.{Identifying, ShortUUID, TaggedID}
+import peds.commons.log.Trace
 import demesne._
 import demesne.index.IndexSupervisor._
 import demesne.index.local.IndexLocalAgent
 import demesne.repository.CommonLocalRepository
 import demesne.testkit.ParallelAkkaSpec
-import org.scalatest.mockito.MockitoSugar
-import org.scalatest.Tag
-import peds.commons.log.Trace
-
-import scala.concurrent.duration._
 
 
 object IndexSupervisorSpec {
@@ -39,6 +41,16 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       new AggregateRootType {
         override def name: String = "foo"
         override def indexes: Seq[IndexSpecification] = specs
+
+        override val identifying: Identifying[_] = new Identifying[ShortUUID] {
+          override type ID = ShortUUID
+          override val evID: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
+          override val evTID: ClassTag[TID] = ClassTag( classOf[TaggedID[ShortUUID]])
+          override val idTag: Symbol = 'foo
+          override def idOf( o: ShortUUID ): TID = tag( o )
+          override def fromString( idstr: String ): ShortUUID = ShortUUID( idstr )
+          override def nextId: TryV[TID] = tag( ShortUUID() ).right
+        }
 
         override def repositoryProps( implicit model: DomainModel ): Props = {
           CommonLocalRepository.props( model, this, noAggregateProps )

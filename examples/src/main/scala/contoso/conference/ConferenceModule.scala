@@ -6,7 +6,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.reflect._
 import scala.util.{Failure, Success}
-import scala.concurrent.Future
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 
@@ -70,7 +69,7 @@ object ConferenceModule extends AggregateRootModule { module =>
   val trace = Trace[ConferenceModule.type]
 
   override type ID = ShortUUID
-  override def nextId: TryV[TID] = implicitly[Identifying[ConferenceState]].nextIdAs[TID]
+  override def nextId: TryV[TID] = conferenceIdentifying.nextIdAs[TID]
 
 
   object Repository {
@@ -111,6 +110,9 @@ object ConferenceModule extends AggregateRootModule { module =>
 
   object ConferenceType extends AggregateRootType {
     override val name: String = module.shardName
+
+    override lazy val identifying: Identifying[_] = conferenceIdentifying
+
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 

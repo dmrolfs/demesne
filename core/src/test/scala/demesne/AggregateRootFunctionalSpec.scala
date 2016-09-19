@@ -16,7 +16,7 @@ import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
 import peds.akka.envelope._
 import peds.commons.TryV
-import peds.commons.identifier.{ShortUUID, TaggedID}
+import peds.commons.identifier.{Identifying, ShortUUID, TaggedID}
 import peds.commons.log.Trace
 
 
@@ -228,6 +228,9 @@ object AggregateRootFunctionalSpec {
 
     override val rootType: AggregateRootType = trace.block("rootType") {
       new AggregateRootType {
+
+        override lazy val identifying: Identifying[_] = Foo.fooIdentifying
+
         override def repositoryProps( implicit model: DomainModel ): Props = {
           CommonLocalRepository.props( model, this, FooActor.props(_, _) )
         }

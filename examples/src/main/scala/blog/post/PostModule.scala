@@ -26,12 +26,14 @@ object PostModule extends AggregateRootModule { module =>
   private val trace = Trace[PostModule.type]
 
   override type ID = ShortUUID
-  override def nextId: TryV[TID] = implicitly[Identifying[PostActor.State]].nextIdAs[TID]
+  override def nextId: TryV[TID] = PostActor.postIdentifying.nextIdAs[TID]
 
   override val rootType: AggregateRootType = new PostType
 
   class PostType extends AggregateRootType {
     override val name: String = module.shardName
+
+    override lazy val identifying: Identifying[_] = PostActor.postIdentifying
 
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.clusteredProps( model )
 

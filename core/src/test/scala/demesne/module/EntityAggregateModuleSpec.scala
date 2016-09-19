@@ -372,7 +372,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       slugIndex.get( "f1" ) mustBe Some(id)
 
       import akka.pattern.ask
-      implicit val timeout = akka.util.Timeout( 1.second )
+//      implicit val timeout = akka.util.Timeout( 1.second )
       val bevt = ( f ? Protocol.Bar( tid, 17 ) ).mapTo[Protocol.Barred]
       whenReady( bevt ) { e => e.b mustBe 17 }
     }

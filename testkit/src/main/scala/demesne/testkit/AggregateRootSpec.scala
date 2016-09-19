@@ -51,12 +51,11 @@ with BeforeAndAfterAll
     val module: AggregateRootModule
 
     import akka.util.Timeout
-    implicit val timeout = Timeout( 5.seconds )
+    implicit val actorTimeout = Timeout( 5.seconds )
 
     def before( test: OneArgTest ): Unit = trace.block( "before" ) {
       import akka.pattern.AskableActorSelection
       val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
-      implicit val timeout = Timeout( 5.seconds )
 
       Await.ready( ( supervisorSel ? StartProtocol.WaitForStart ), 5.seconds )
       logger.debug(
@@ -86,7 +85,7 @@ with BeforeAndAfterAll
       val bc = for {
         made <- BoundedContext.make( key, config, userResources = resources, startTasks = startTasks(system) )
         filled = rootTypes.foldLeft( made ){ (acc, rt) =>
-          logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc.getClass )
+          logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc )
           acc :+ rt
         }
         _ <- filled.futureModel map { m => logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") ); m }
@@ -98,26 +97,41 @@ with BeforeAndAfterAll
       result
     }
 
-    implicit lazy val model: DomainModel = trace.block("model") { Await.result( boundedContext.futureModel, 5.seconds ) }
+    implicit lazy val model: DomainModel = trace.block("model") { Await.result( boundedContext.futureModel, 6.seconds ) }
   }
 
   override type Fixture <: AggregateFixture
 
-  override def withFixture( test: OneArgTest ): Outcome = trace.block( "withFixture" ) {
-    val fixture = createAkkaFixture( test )
+  override def withFixture( test: OneArgTest ): Outcome = {
+    val fixture = \/ fromTryCatchNonFatal { createAkkaFixture( test ) }
+    val results = fixture map { f =>
+      logger.debug( ".......... before test .........." )
+      f before test
+      logger.debug( "++++++++++ starting test ++++++++++" )
+      ( test(f), f )
+    }
 
-    try {
-      fixture before test
-      logger.debug( "++++++++++ entering test ++++++++++" )
-      test( fixture )
-    } finally {
-      logger.debug( "---------- exited test ------------" )
-      fixture after test
-      fixture.system.terminate()
+    val outcome = results map { case (outcome, f) =>
+      logger.debug( "---------- finished test ------------" )
+      f after test
+      logger.debug( ".......... after test .........." )
+
+      Option(f.system) foreach { s =>
+        val terminated = s.terminate()
+        Await.ready( terminated, 1.second )
+      }
+
+      outcome
+    }
+
+    outcome match {
+      case \/-( o ) => o
+      case -\/( ex ) => {
+        logger.error( s"test[${test.name}] failed", ex )
+        throw ex
+      }
     }
   }
-
-
 
 
   object WIP extends Tag( "wip" )

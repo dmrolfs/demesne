@@ -173,6 +173,7 @@ object OrderModule extends AggregateRootModule { module =>
 
   object OrderType extends AggregateRootType {
     override val name: String = module.shardName
+    override lazy val identifying: Identifying[_] = orderIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 

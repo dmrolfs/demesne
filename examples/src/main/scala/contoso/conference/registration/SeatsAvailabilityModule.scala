@@ -110,6 +110,7 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
 
   object SeatsAvailabilityType extends AggregateRootType {
     override def name: String = module.shardName
+    override lazy val identifying: Identifying[_] = seatsAvailabilityIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 

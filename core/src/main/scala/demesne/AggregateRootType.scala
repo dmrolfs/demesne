@@ -9,7 +9,7 @@ import demesne.index.IndexSpecification
 import shapeless.TypeCase
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliablePublisher.ReliableMessage
-import peds.commons.identifier.TaggedID
+import peds.commons.identifier.{Identifying, TaggedID}
 
 
 object AggregateRootType {
@@ -24,7 +24,8 @@ abstract class AggregateRootType extends LazyLogging {
 
   def repositoryProps( implicit model: DomainModel ): Props
 
-  val TaggedIdType = TypeCase[TaggedID[_]]
+  val identifying: Identifying[_]
+  val TaggedIdType: TypeCase[TaggedID[_]] = TypeCase[TaggedID[_]]
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {

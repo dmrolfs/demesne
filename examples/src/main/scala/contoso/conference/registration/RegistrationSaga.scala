@@ -58,6 +58,7 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   object RegistrationSagaType extends AggregateRootType {
     override def name: String = module.shardName
+    override lazy val identifying: Identifying[_] = registrationSagaIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -71,7 +72,6 @@ object RegistrationSagaModule extends SagaModule { module =>
   case object PaymentConfirmationReceived extends ProcessState
   case object FullyConfirmed extends ProcessState
   case object OrderExpired extends ProcessState
-
 
   // Conference/Registration/RegistrationProcessManager.cs [41 - 88]
   case class RegistrationSagaState(

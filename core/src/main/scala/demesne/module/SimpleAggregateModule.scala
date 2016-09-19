@@ -43,6 +43,9 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
     override val indexes: Seq[IndexSpecification],
     environment: AggregateEnvironment
   ) extends AggregateRootType {
+
+    override lazy val identifying: Identifying[_] = module.identifying
+
     override def repositoryProps( implicit model: DomainModel ): Props = {
       environment match {
         case ClusteredAggregate => CommonClusteredRepository.props( model, this, module.aggregateRootPropsOp )
