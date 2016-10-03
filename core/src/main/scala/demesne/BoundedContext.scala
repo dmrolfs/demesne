@@ -310,13 +310,12 @@ object BoundedContext extends StrictLogging { outer =>
     override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = trace.block("start") {
       def debugBoundedContext( label: String, bc: BoundedContextCell ): Unit = {
         logger.debug(
-          "{}: starting BoundedContext:[{}] root-types:[{}] user-resources:[{}] start-tasks:[{}]:[{}] configuration:[{}]...",
+          "{}: starting BoundedContext:[{}] root-types:[{}] user-resources:[{}] start-tasks:[{}]:[{}]...",
           label,
           (bc.name, bc.system.name),
           bc.modelCell.rootTypes.mkString(", "),
           bc.userResources.mkString(", "),
-          bc.startTasks.size.toString, startTasks.map{ _.description }.mkString(", "),
-          bc.configuration
+          bc.startTasks.size.toString, startTasks.map{ _.description }.mkString(", ")
         )
       }
       //todo not see author start task!!!
@@ -326,7 +325,7 @@ object BoundedContext extends StrictLogging { outer =>
       import peds.commons.concurrent.TaskExtensionOps
 
       debugBoundedContext( "START", this )
-      val tasks = new TaskExtensionOps( Task gatherUnordered startTasks.map{ t => Task { t.task(this) } } )
+      val tasks = new TaskExtensionOps( Task gatherUnordered gatherAllTasks() )
 
       for {
         _ <- tasks.runFuture()
@@ -347,6 +346,12 @@ object BoundedContext extends StrictLogging { outer =>
         debugBoundedContext( "DONE", result )
         result
       }
+    }
+
+    private def gatherAllTasks(): Seq[Task[Done]] = {
+      val rootTasks = modelCell.rootTypes.toSeq map { rt => Task { rt.startTask(system)(this) } }
+      val userTasks = startTasks map { t => Task { t.task(this) } }
+      rootTasks ++ userTasks
     }
 
     override def shutdown(): Future[Terminated] = system.terminate()

@@ -1,7 +1,8 @@
 package demesne
 
+import akka.Done
 import scala.concurrent.duration._
-import akka.actor.Props
+import akka.actor.{ActorSystem, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.Passivate
 import com.typesafe.scalalogging.LazyLogging
@@ -21,6 +22,8 @@ object AggregateRootType {
 abstract class AggregateRootType extends LazyLogging {
   def name: String
   def repositoryName: String = org.atteo.evo.inflector.English.plural( name )
+
+  def startTask( system: ActorSystem ): BoundedContext => Done = { bc: BoundedContext => Done }
 
   def repositoryProps( implicit model: DomainModel ): Props
 
