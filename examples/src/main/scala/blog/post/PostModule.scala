@@ -72,22 +72,28 @@ object PostModule extends AggregateRootModule { module =>
     }
 
     override def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = {
-      checkAuthorList( resources ) map { al =>
+      checkAuthorListing( resources ) map { al =>
         logger.info( "initializing makeAuthorListing:[{}]", al )
         makeAuthorListing = al
         Done
       }
     }
 
-    override def aggregateProps: Props = PostActor.props( model, rootType, makeAuthorListing )
+    override def aggregateProps: Props = trace.block( "aggregateProps" ) {
+//      throw new IllegalArgumentException( "LOOK AT FN STACK" )
+      log.debug( "PostModule: making PostActor Props with model:[{}] rootType:[{}] makeAuthorListing:[{}]", model, rootType, makeAuthorListing )
+      PostActor.props( model, rootType, makeAuthorListing )
+    }
 
-    private def checkAuthorList( resources: Map[Symbol, Any] ): Valid[() => ActorRef] = {
+    private def checkAuthorListing( resources: Map[Symbol, Any] ): Valid[() => ActorRef] = trace.block("checkAuthListing()") {
+      log.debug( "resources[{}] = [{}]", AuthorListingModule.ResourceKey, resources get AuthorListingModule.ResourceKey )
       val result = for {
         alValue <- resources get AuthorListingModule.ResourceKey
         al <- Option( alValue )
         r <- scala.util.Try[() => ActorRef]{ al.asInstanceOf[() => ActorRef] }.toOption
       } yield r.successNel[Throwable]
 
+      log.debug( "[{}] resource result = [{}]", AuthorListingModule.ResourceKey, result )
       result getOrElse Validation.failureNel( UnspecifiedMakeAuthorListError(AuthorListingModule.ResourceKey) )
     }
   }

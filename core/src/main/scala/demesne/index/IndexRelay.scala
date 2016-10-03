@@ -89,6 +89,7 @@ with ActorLogging {
       case _: akka.actor.FSM.CurrentState[_] => ()
       case _: akka.actor.FSM.Transition[_] => ()
       case _: akka.contrib.pattern.ReliableProxy.TargetChanged => ()
+      case id: ActorIdentity => log.debug( "received ActorIdentity:[{}]", id )
       case m => log.warning( "RELAY_UNHANDLED [{}]; extractor-defined-at={}", message, fullExtractor.isDefinedAt(message) )
     }
   }

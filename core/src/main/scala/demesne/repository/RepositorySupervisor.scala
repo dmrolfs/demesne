@@ -95,7 +95,7 @@ object RepositorySupervisor extends LazyLogging {
   ) {
     override def toString: String = {
       s"""ModelStartupState(started:[${started.mkString(", ")}] starting:[${starting.mkString(", ")}] """ +
-      s"""resources:[${availableResources.mkString(", ")}] waiting:[${waiting.map{ _.path.name }.mkString(", ")}])"""
+      s"""resources:[${availableResources.keySet.mkString(", ")}] waiting:[${waiting.map{ _.path.name }.mkString(", ")}])"""
     }
 
     private val trace = Trace[ModelStartupState]
