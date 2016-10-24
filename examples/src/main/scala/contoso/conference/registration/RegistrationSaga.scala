@@ -115,13 +115,13 @@ object RegistrationSagaModule extends SagaModule { module =>
     override val model: DomainModel,
     orderType: AggregateRootType,
     seatsAvailabilityType: AggregateRootType
-  ) extends Saga[RegistrationSagaState, ShortUUID] { outer: EventPublisher =>
+  ) extends Saga[RegistrationSagaState, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import contoso.conference.registration.{ RegistrationSagaProtocol => RS }
     import contoso.conference.registration.{ OrderProtocol => O }
     import contoso.conference.registration.{ SeatsAvailabilityProtocol => SA }
     import contoso.conference.payments.{ PaymentSourceProtocol => P }
 
-    override val trace = Trace( "RegistrationSaga", log )
+    private val trace = Trace( "RegistrationSaga", log )
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[RegistrationSagaState]]
@@ -129,6 +129,7 @@ object RegistrationSagaModule extends SagaModule { module =>
     }
 
     override var state: RegistrationSagaState = _
+    override val evState: ClassTag[RegistrationSagaState] = ClassTag( classOf[RegistrationSagaState] )
 
     import context.dispatcher
     var expirationMessager: Cancellable = _

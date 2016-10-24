@@ -81,10 +81,14 @@ abstract class AggregateRootType extends LazyLogging {
     override val inactivityTimeout: Duration = passivateTimeout
   }
 
-  def snapshotPeriod: FiniteDuration = 15.minutes
-  def snapshot: SnapshotSpecification = new SnapshotSpecification {
-    override val snapshotInitialDelay: FiniteDuration = snapshotPeriod
-    override val snapshotInterval: FiniteDuration = snapshotPeriod
+  def snapshotPeriod: Option[FiniteDuration] = Some( 15.minutes )
+  def snapshot: Option[SnapshotSpecification] = {
+    snapshotPeriod map { period =>
+      new SnapshotSpecification {
+        override val snapshotInitialDelay: FiniteDuration = period
+        override val snapshotInterval: FiniteDuration = period
+      }
+    }
   }
 
   def indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification]

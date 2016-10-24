@@ -3,7 +3,7 @@ package demesne
 import peds.commons.identifier.TaggedID
 
 
-trait EventLike {
+trait EventLike extends Serializable {
   type ID
   type TID = TaggedID[ID]
   def sourceId: TID

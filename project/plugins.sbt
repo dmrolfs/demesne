@@ -17,7 +17,7 @@ addSbtPlugin( "com.typesafe.sbt" % "sbt-native-packager" % "1.0.0-M1" )
 // Check for updates.
 addSbtPlugin( "com.timushev.sbt" % "sbt-updates" % "0.1.7" )
 
-addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.0.4")
+addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.4.0")
 
 addSbtPlugin("org.scoverage" % "sbt-coveralls" % "1.0.0")
 

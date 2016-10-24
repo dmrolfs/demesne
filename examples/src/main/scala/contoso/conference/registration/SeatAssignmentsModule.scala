@@ -147,10 +147,10 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
   class SeatAssignments(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SeatAssignmentsState, ShortUUID] {  outer: EventPublisher =>
+  ) extends AggregateRoot[SeatAssignmentsState, ShortUUID] with AggregateRoot.Provider {  outer: EventPublisher =>
     import SeatsAvailabilityProtocol._
 
-    override val trace = Trace( "SeatsAssignment", log )
+    private val trace = Trace( "SeatsAssignment", log )
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[SeatAssignmentsState]]
@@ -158,6 +158,7 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
     }
 
     override var state: SeatAssignmentsState = _
+    override val evState: ClassTag[SeatAssignmentsState] = ClassTag( classOf[SeatAssignmentsState] )
 
     case class SeatAssignmentsCreated(
       override val sourceId: SeatAssigned#TID,
@@ -217,12 +218,12 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
       if ( state.seats.isDefinedAt( position ) && (validate(attendee) == Success) ) => {
         val current = state.seats( position )
         val events = makeAssignmentEvents( current, attendee, position )
-        events foreach { e => persist( e ) { event => acceptAndPublish( event ) } }
+        events foreach { e => persist( e ) { acceptAndPublish } }
       }
 
       case UnassignSeat( id, seatTypeId, position )
       if ( state.seats.isDefinedAt( position ) && state.seats(position).attendee.isDefined ) => {
-        persist( SeatUnassigned( id, position ) ) { event => acceptAndPublish( event ) }
+        persist( SeatUnassigned( id, position ) ) { acceptAndPublish }
       }
     }
 

@@ -159,11 +159,10 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
   class SeatsAvailability(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SeatsAvailabilityState, ShortUUID] { outer: EventPublisher =>
-
+  ) extends AggregateRoot[SeatsAvailabilityState, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import SeatsAvailabilityProtocol._
 
-    override val trace = Trace( "SeatsAvailability", log )
+    private val trace = Trace( "SeatsAvailability", log )
 
     // override val indexBus: IndexBus = model.indexBus
 
@@ -173,6 +172,7 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
     }
 
     override var state: SeatsAvailabilityState = _
+    override val evState: ClassTag[SeatsAvailabilityState] = ClassTag( classOf[SeatsAvailabilityState] )
 
     override def acceptance: Acceptance = {
       // Conference/Registration/SeatsAvailability.cs[185-198]
@@ -209,37 +209,33 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [60-68]
         // Conference/Registration/SeatsAvailability.cs [85-88]
         case AddSeats( _, seatTypeId, quantity ) => {
-          persist( makeAvailableSeatsChangedEvent(seatTypeId, quantity) ) { event => state = acceptAndPublish( event ) }
+          persist( makeAvailableSeatsChangedEvent(seatTypeId, quantity) ) { acceptAndPublish }
         }
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [70-78]
         // Conference/Registration/SeatsAvailability.cs [90-93]
         case RemoveSeats( conferenceId, seatTypeId, quantity ) => {
-          persist( makeAvailableSeatsChangedEvent(seatTypeId, -1 * quantity) ) { e => state = acceptAndPublish( e ) }
+          persist( makeAvailableSeatsChangedEvent(seatTypeId, -1 * quantity) ) { acceptAndPublish }
         }
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [37-42]
         // Conference/Registration/SeatsAvailability.cs [95-135]
         case c @ MakeSeatReservation( conferenceId, reservationId, seats )
         if seats forall { s => state.remainingSeats.contains( s.seatTypeId ) } => {
-          persist( makeSeatsReservedEvent( reservationId, calculateDifference( reservationId, seats ) ) ) { event =>
-            state = acceptAndPublish( event )
-          }
+          persist( makeSeatsReservedEvent( reservationId, calculateDifference( reservationId, seats ) ) ) { acceptAndPublish }
         }
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [44-49]
         // Conference/Registration/SeatsAvailability.cs [137-148]
         case CancelSeatReservation( conferenceId, reservationId ) => {
           val reservation = state.pendingReservations.getOrElse( reservationId, Seq() )
-          persist( SeatsReservationCancelled( conferenceId, reservationId, reservation.toSet ) ) { event =>
-            state = acceptAndPublish( event )
-          }
+          persist( SeatsReservationCancelled( conferenceId, reservationId, reservation.toSet ) ) { acceptAndPublish }
         }
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [51-56]
         // Conference/Registration/SeatsAvailability.cs [150-156]
         case CommitSeatReservation( conferenceId, reservationId ) => {
-          persist( SeatsReservationCommitted( conferenceId, reservationId ) ) { e => state = acceptAndPublish( e ) }
+          persist( SeatsReservationCommitted( conferenceId, reservationId ) ) { acceptAndPublish }
         }
       }
     }

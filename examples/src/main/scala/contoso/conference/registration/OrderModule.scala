@@ -215,10 +215,10 @@ object OrderModule extends AggregateRootModule { module =>
     override val model: DomainModel,
     override val rootType: AggregateRootType,
     pricingRetriever: ActorRef
-  ) extends AggregateRoot[OrderState, ShortUUID] { outer: EventPublisher =>
+  ) extends AggregateRoot[OrderState, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import OrderProtocol._
 
-    override val trace = Trace( "Order", log )
+    private val trace = Trace( "Order", log )
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[OrderState]]
@@ -226,6 +226,8 @@ object OrderModule extends AggregateRootModule { module =>
     }
 
     override var state: OrderState = _
+    override val evState: ClassTag[OrderState] = ClassTag( classOf[OrderState] )
+
     var expirationMessager: Cancellable = _
 
     override def acceptance: Acceptance = {
@@ -274,7 +276,7 @@ object OrderModule extends AggregateRootModule { module =>
           reservationExpiration = expiration,
           seats = reserved
         )
-        persist( completed ) { event => acceptAndPublish( event ) }
+        persist( completed ) { acceptAndPublish }
       }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[39]
@@ -303,7 +305,7 @@ object OrderModule extends AggregateRootModule { module =>
       // Conference/Registration/Handlers/OrderCommandHandler.cs[73]
       // Conference/Registration/Order.cs[145]
       case AssignRegistrantDetails( orderId, firstName, lastName, email ) => {
-        persist( OrderRegistrantAssigned( orderId, firstName, lastName, email ) ) { e => acceptAndPublish( e ) }
+        persist( OrderRegistrantAssigned( orderId, firstName, lastName, email ) ) { acceptAndPublish }
       }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[80]
@@ -328,7 +330,7 @@ object OrderModule extends AggregateRootModule { module =>
           isFreeOfCharge = ( total == 0D )
         )
 
-        persist( totalCalculated ) { e => acceptAndPublish( e ) }
+        persist( totalCalculated ) { acceptAndPublish }
       }
     }
 

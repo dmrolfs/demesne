@@ -203,7 +203,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
   }
 
 
-  abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] { publisher: EventPublisher =>
+  abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] { publisher: AggregateRoot.Provider with EventPublisher =>
     override def parseId( idstr: String ): TID = identifying.safeParseId[ID]( idstr )( identifying.evID )
 
     override def acceptance: Acceptance = entityAcceptance

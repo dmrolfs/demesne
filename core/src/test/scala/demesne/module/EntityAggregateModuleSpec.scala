@@ -133,13 +133,14 @@ object EntityAggregateModuleSpec {
 
     object FooActor {
       def props( model: DomainModel, rt: AggregateRootType ): Props = {
-        Props( new FooActor(model, rt) with StackableStreamPublisher with StackableIndexBusPublisher )
+        Props( new FooActor(model, rt) with AggregateRoot.Provider with StackableStreamPublisher with StackableIndexBusPublisher )
       }
     }
 
     class FooActor( override val model: DomainModel, override val rootType: AggregateRootType )
-    extends module.EntityAggregateActor { publisher: EventPublisher =>
+    extends module.EntityAggregateActor with AggregateRoot.Provider { publisher: EventPublisher =>
       override var state: Foo = _
+      override val evState: ClassTag[Foo] = ClassTag( classOf[Foo] )
 
       override val active: Receive = super.active orElse {
         case Protocol.Bar( _, b ) => {

@@ -17,13 +17,13 @@ object StartProtocol {
     dependencies: Set[Symbol] = Set.empty[Symbol]
   ) extends StartProtocol {
     override def toString: String = {
-      s"""Loaded(${rootType.name} dependencies:[${dependencies.mkString(", ")}] resources:[${resources.mkString(", ")}])"""
+      s"""Loaded(${rootType.name} dependencies:[${dependencies.mkString(", ")}] resources:[${resources.keySet.mkString(", ")}])"""
     }
   }
 
   case class Initialize( resources: Map[Symbol, Any] ) extends StartProtocol {
     override def toString: String = {
-      s"""Initialize( resources:[${resources.mkString(", ")}] )"""
+      s"""Initialize( resources:[${resources.keySet.mkString(", ")}] )"""
     }
   }
 

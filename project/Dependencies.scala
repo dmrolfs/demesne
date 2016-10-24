@@ -3,7 +3,7 @@ import sbt._
 
 object Dependencies {
   object peds {
-    val version = "0.3.3-SNAPSHOT"
+    val version = "0.4.0-SNAPSHOT"
     def module( id: String ) = "com.github.dmrolfs" %% s"peds-$id" % version
 
     val commons = module( "commons" )
@@ -12,7 +12,7 @@ object Dependencies {
   }
 
   object akka {
-    val version = "2.4.10"
+    val version = "2.4.11"
     def module( id: String ) = "com.typesafe.akka" %% s"akka-$id" % version
 
     val actor = module( "actor" )
@@ -24,6 +24,8 @@ object Dependencies {
     val remote = module( "remote" )
     val slf4j = module( "slf4j" )
     val testkit = module( "testkit" )
+
+    val kyro = "com.github.romix.akka" %% "akka-kryo-serialization" % "0.4.1"
   }
 
   object scalaz {
@@ -87,6 +89,7 @@ object Dependencies {
     peds.akka
   ) ++ test(
     akka.remote,
+    akka.kyro,
     akka.testkit,
     qa.scalatest,
     qa.persistence.inMemory,

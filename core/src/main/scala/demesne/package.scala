@@ -23,6 +23,5 @@
   envelope capability at each point otherwise the meta envelope will not follow the unit of work.
  */
 package object demesne {
-  case object SaveSnapshot
   trait DemesneError
 }

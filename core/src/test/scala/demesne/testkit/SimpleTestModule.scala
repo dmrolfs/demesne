@@ -52,13 +52,13 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule { mo
   class SimpleTestActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SimpleTestActor.State, ID] { outer: EventPublisher =>
+  ) extends AggregateRoot[SimpleTestActor.State, ID] with AggregateRoot.Provider { outer: EventPublisher =>
     import SimpleTestActor._
-
-    override val trace = Trace( "SimpleTestActor", log )
 
     override def parseId( idstr: String ): TID = module.parseId( idstr )
     override var state: State = Map.empty[Symbol, Any]
+    override val evState: ClassTag[State] = ClassTag( classOf[Map[Symbol, Any]] )
+
     override val acceptance: Acceptance = module.acceptance
     
     override def receiveCommand: Receive = around {

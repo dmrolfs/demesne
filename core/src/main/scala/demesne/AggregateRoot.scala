@@ -1,8 +1,8 @@
 package demesne
 
-import akka.actor.{ActorLogging, ActorPath, ActorRef, PoisonPill, ReceiveTimeout}
-import akka.event.LoggingReceive
-import akka.persistence.{PersistentActor, RecoveryCompleted, SnapshotOffer}
+import scala.reflect.ClassTag
+import akka.actor.{ActorLogging, ActorPath, ActorRef, ReceiveTimeout}
+import akka.persistence._
 import com.typesafe.scalalogging.LazyLogging
 
 import scalaz._
@@ -50,12 +50,14 @@ object AggregateRoot extends LazyLogging {
 
 abstract class AggregateRoot[S, I]
 extends PersistentActor
-with AggregateRoot.Provider
 with EnvelopingActor
 with ActorLogging {
-  outer: EventPublisher =>
+  outer: AggregateRoot.Provider with EventPublisher =>
 
-  context.setReceiveTimeout( rootType.passivation.inactivityTimeout )
+  private val trace = Trace( s"AggregateRoot", log )
+
+  context.setReceiveTimeout( outer.rootType.passivation.inactivityTimeout )
+  outer.rootType.snapshot foreach { s => s.schedule( context.system, self, aggregateId )( context.system.dispatcher ) }
 
   override protected def onPersistRejected( cause: Throwable, event: Any, seqNr: Long ): Unit = {
     log.error(
@@ -67,17 +69,24 @@ with ActorLogging {
 
   type StateOperation = KOp[S, S]
 
-  val trace = Trace( s"AggregateRoot", log )
-
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
   override val persistenceId: String = self.path.toStringWithoutAddress
 
   type ID = I
-  def parseId( idstr: String ): TID
-
   type TID = TaggedID[ID]
+  lazy val evTID: ClassTag[TID] = {
+    rootType.identifying.bridgeTidClassTag[TID] match {
+      case \/-( ev ) => ev
+      case -\/( ex ) => {
+        log.error( ex, "failed to bridge TID types from rootType:[{}] into aggregate:[{}]", rootType, persistenceId )
+        throw ex
+      }
+    }
+  }
+
+  def parseId( idstr: String ): TID
 
   lazy val aggregateId: TID = parseId( idFromPath() )
 
@@ -90,18 +99,24 @@ with ActorLogging {
 
   def state: S
   def state_=( newState: S ): Unit
+  val evState: ClassTag[S]
 
-
-  override def around( r: Receive ): Receive = {
-    case SaveSnapshot => {
-      log.debug( "received SaveSnapshot command" )
-      saveSnapshot( state )
-      super.around( r )( SaveSnapshot )
-    }
-
-    case msg => trace.block( "AggregateRoot.around(_)" ) { super.around( r )( msg ) }
+  override def around( r: Receive ): Receive = trace.block( s"REAL-around[${self.path}]" ) {
+    case msg => trace.block( s"around( $msg )" ) { super.around( r orElse handleSaveSnapshot )( msg ) }
   }
 
+  val handleSaveSnapshot: Receive = {
+    case SaveSnapshot( evTID(tid) ) if tid == aggregateId => {
+      log.debug( "saving snapshot for pid:[{}] aid:[{}]", persistenceId, aggregateId )
+      saveSnapshot( state )
+    }
+
+    case success: SaveSnapshotSuccess => onSuccessfulSnapshot( success.metadata )
+  }
+
+  def onSuccessfulSnapshot( metadata: SnapshotMetadata ): Unit = {
+    log.debug( "aggregate snapshot successfully saved: [{}]", metadata )
+  }
 
   def accept( event: Any ): S = {
     acceptOp(event) run state match {
@@ -147,7 +162,13 @@ with ActorLogging {
     }
   }
 
-  def acceptSnapshot( snapshotOffer: SnapshotOffer ): S = accept( snapshotOffer.snapshot )
+  def acceptSnapshot( snapshotOffer: SnapshotOffer ): S = {
+    evState.unapply( snapshotOffer.snapshot ) getOrElse {
+      val ex = new IllegalStateException(s"snapshot does not match State type:[${evState}]; offer:[${snapshotOffer.snapshot}]")
+      log.error( ex, "invalid snapshot offer" )
+      throw ex
+    }
+  }
 
 
   override def receiveRecover: Receive = {

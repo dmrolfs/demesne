@@ -176,11 +176,11 @@ object ConferenceModule extends AggregateRootModule { module =>
     override val model: DomainModel,
     override val rootType: AggregateRootType,
     conferenceContext: ActorRef
-  ) extends AggregateRoot[ConferenceState, ShortUUID] { outer: EventPublisher =>
+  ) extends AggregateRoot[ConferenceState, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import ConferenceProtocol._
     import contoso.conference.ConferenceModule.Conference._
 
-    override val trace = Trace( "Conference", log )
+    private val trace = Trace( "Conference", log )
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[ConferenceState]]
@@ -188,6 +188,7 @@ object ConferenceModule extends AggregateRootModule { module =>
     }
 
     override var state: ConferenceState = _
+    override val evState: ClassTag[ConferenceState] = ClassTag( classOf[ConferenceState] )
 
     override val acceptance: Acceptance = {
       case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
@@ -238,22 +239,10 @@ object ConferenceModule extends AggregateRootModule { module =>
 
 
     def draft: Receive = LoggingReceive {
-      case UpdateConference( _, conference ) => {
-        persist( ConferenceCreated( state.id, conference ) ) { event => acceptAndPublish( event ) }
-      }
-
-      case CreateSeat( _, seat ) => {
-        persist( SeatCreated( state.id, seat ) ) { event => acceptAndPublish( event ) }
-      }
-
-      case UpdateSeat( _, seat ) => {
-        persist( SeatUpdated( state.id, seat ) ) { event => acceptAndPublish( event ) }
-      }
-
-      case DeleteSeat( _, seatId ) => {
-        persist( SeatDeleted( state.id, seatId ) ) { event => acceptAndPublish( event ) }
-      }
-
+      case UpdateConference( _, conference ) => persist( ConferenceCreated( state.id, conference ) ) { acceptAndPublish }
+      case CreateSeat( _, seat ) => persist( SeatCreated( state.id, seat ) ) { acceptAndPublish }
+      case UpdateSeat( _, seat ) => persist( SeatUpdated( state.id, seat ) ) { acceptAndPublish }
+      case DeleteSeat( _, seatId ) => persist( SeatDeleted( state.id, seatId ) ) { acceptAndPublish }
       case Publish => {
         persist( ConferencePublished( state.id ) ) { event => 
           acceptAndPublish( event ) 

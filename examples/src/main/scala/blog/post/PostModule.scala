@@ -154,11 +154,10 @@ object PostModule extends AggregateRootModule { module =>
   class PostActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[PostActor.State, ShortUUID] { outer: EventPublisher =>
-
+  ) extends AggregateRoot[PostActor.State, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import PostActor._
 
-    override val trace = Trace( "Post", log )
+    private val trace = Trace( "Post", log )
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[State]]
@@ -166,6 +165,7 @@ object PostModule extends AggregateRootModule { module =>
     }
 
     override var state: State = State()
+    override val evState: ClassTag[State] = ClassTag( classOf[State] )
 
     override val acceptance: Acceptance = {
       case ( P.PostAdded(id, c), _ )=> State( id = id, content = c, published = false )
@@ -205,9 +205,7 @@ object PostModule extends AggregateRootModule { module =>
         publish( event )
       }
 
-      case P.ChangeTitle( id, newTitle ) => persist( P.TitleChanged(id, state.content.title, newTitle) ) { event =>
-        acceptAndPublish( event ) 
-      }
+      case P.ChangeTitle( id, newTitle ) => persist( P.TitleChanged(id, state.content.title, newTitle) ) { acceptAndPublish }
 
       case P.Publish( postId ) => {
         persist( P.PostPublished( postId, state.content.author, state.content.title ) ) { event =>
