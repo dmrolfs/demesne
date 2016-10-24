@@ -322,13 +322,14 @@ object BoundedContext extends StrictLogging { outer =>
 
 //      implicit val ec = system.dispatcher
 
-      import peds.commons.concurrent.TaskExtensionOps
 
       debugBoundedContext( "START", this )
-      val tasks = new TaskExtensionOps( Task gatherUnordered gatherAllTasks() )
+      val tasks = Task gatherUnordered gatherAllTasks()
+
+            import peds.commons.concurrent._
 
       for {
-        _ <- tasks.runFuture()
+        _ <- tasks.unsafeToFuture
       _ = logger.debug( "TEST: after tasks run" )
 //        bcCell <- contexts.future map { _(key) }
         bcCell = this
