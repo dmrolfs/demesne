@@ -101,9 +101,7 @@ with ActorLogging {
   def state_=( newState: S ): Unit
   val evState: ClassTag[S]
 
-  override def around( r: Receive ): Receive = trace.block( s"REAL-around[${self.path}]" ) {
-    case msg => trace.block( s"around( $msg )" ) { super.around( r orElse handleSaveSnapshot )( msg ) }
-  }
+  override def around( r: Receive ): Receive = { case msg => super.around( r orElse handleSaveSnapshot )( msg ) }
 
   val handleSaveSnapshot: Receive = {
     case SaveSnapshot( evTID(tid) ) if tid == aggregateId => {
