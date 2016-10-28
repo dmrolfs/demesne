@@ -3,7 +3,7 @@ package demesne
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.reflect._
-import akka.actor.{ActorRef, Props}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.event.LoggingReceive
 import akka.testkit._
 import org.scalatest.concurrent.ScalaFutures
@@ -39,7 +39,12 @@ with OptionValues {
   override val protocol: Protocol = AggregateRootFunctionalSpec.Protocol
 
 
-  class Fixture extends AggregateFixture( config = AggregateRootFunctionalSpec.config ) {
+  override def testConfiguration( test: OneArgTest, slug: String ): Config = AggregateRootFunctionalSpec.config
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new Fixture( config, system, slug )
+  }
+
+  class Fixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[Fixture]
     override val module: AggregateRootModule = AggregateRootFunctionalSpec.FooModule
 
@@ -53,7 +58,6 @@ with OptionValues {
     }
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = trace.block("createAkkaFixture") { new Fixture }
 
   def assertStates( actual: State, expected: State ): Unit = {
     actual.id.tag.name mustBe expected.id.tag.name

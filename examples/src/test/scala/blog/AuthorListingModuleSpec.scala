@@ -2,12 +2,15 @@ package sample.blog.author
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import akka.actor.ActorSystem
+
 import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.concurrent.Await
 import scala.util.Success
 import akka.testkit.{TestActorRef, TestProbe}
 import akka.util.Timeout
+import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import demesne._
 import demesne.testkit._
@@ -31,9 +34,16 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
 
   private val trace = Trace[AuthorListingModuleSpec]
 
+  override def testSlug( test: OneArgTest ): String = "Blog-" + testPosition.incrementAndGet()
+
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new AuthorListingFixture( config, system, slug )
+  }
+
   override type Fixture = AuthorListingFixture
 
-  class AuthorListingFixture extends AkkaFixture {
+  class AuthorListingFixture( _config: Config, _system: ActorSystem, _slug: String )
+  extends AkkaFixture( _config, _system, _slug ) {
     private val trace = Trace[AuthorListingFixture]
     import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -54,11 +64,9 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
 
 
     override lazy val boundedContext: BoundedContext = {
-      val key = Symbol( s"Blog-${fixtureId}" )
-
       val result = {
         for {
-          made <- BoundedContext.make( key, config, userResources = AuthorListingModule.resources(system) )
+          made <- BoundedContext.make( Symbol(slug), config, userResources = AuthorListingModule.resources(system) )
           ready = made.withStartTask( AuthorListingModule startTask system )
           started <- ready.start()( global, Timeout(5.seconds) )
         } yield started
@@ -68,19 +76,6 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
     }
   }
 
-  override def withFixture( test: OneArgTest ): Outcome = trace.block( s"withFixture(${test}})" ) {
-    val fixture = createAkkaFixture( test )
-
-    try {
-      fixture before test
-      test( fixture )
-    } finally {
-      fixture after test
-      fixture.system.terminate()
-    }
-  }
-
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new AuthorListingFixture
 
   object WIP extends Tag( "wip" )
 

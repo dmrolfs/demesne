@@ -2,8 +2,9 @@ package demesne.module
 
 import scala.concurrent.duration._
 import scala.reflect._
-import akka.actor.Props
+import akka.actor.{ActorSystem, Props}
 import akka.testkit._
+import com.typesafe.config.Config
 
 import scalaz.Scalaz._
 import shapeless._
@@ -162,9 +163,15 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
   override type Protocol = EntityAggregateModuleSpec.Protocol.type
   override val protocol: Protocol = EntityAggregateModuleSpec.Protocol
 
+
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new TestFixture( config, system, slug )
+  }
+
+
   override type Fixture = TestFixture
 
-  class TestFixture extends AggregateFixture {
+  class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[TestFixture]
     override def nextId(): TID = Foo.identifying.safeNextId
 
@@ -180,7 +187,6 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
     override def rootTypes: Set[AggregateRootType] = Set( rootType )
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
 
   object ADD extends Tag( "add" )
   object UPDATE extends Tag( "update" )

@@ -1,8 +1,11 @@
 package demesne.index
 
+import akka.actor.ActorSystem
+
 import scala.concurrent.duration._
 import scala.reflect._
 import akka.testkit._
+import com.typesafe.config.Config
 
 import scalaz._
 import Scalaz._
@@ -147,9 +150,13 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
   override val protocol: Protocol = IndexAcceptanceSpec.Protocol
 
 
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new TestFixture( config, system, slug )
+  }
+
   override type Fixture = TestFixture
 
-  class TestFixture extends AggregateFixture {
+  class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     override def nextId(): TID = {
       Foo.fooIdentifying.nextIdAs[TID] match {
         case \/-( r ) => r
@@ -165,7 +172,6 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
     override def rootTypes: Set[AggregateRootType] = Set( module.rootType )
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
 
   "Index Index should" should {
     "recorded in registers after added" taggedAs WIP in { fixture: Fixture =>

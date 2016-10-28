@@ -41,11 +41,8 @@ with BeforeAndAfterAll
   type Protocol <: AggregateProtocol[ID]
   val protocol: Protocol
 
-  abstract class AggregateFixture(
-    override val fixtureId: Int = AggregateRootSpec.sysId.incrementAndGet(),
-    override val config: Config = demesne.testkit.config
-  ) extends AkkaFixture( fixtureId, config ) { fixture =>
-    logger.debug( "FIXTURE ID = [{}]", fixtureId.toString )
+  abstract class AggregateFixture( _config: Config, _system: ActorSystem, _slug: String )
+  extends AkkaFixture( _config, _system, _slug ) { fixture =>
     private val trace = Trace[AggregateFixture]
 
     val module: AggregateRootModule
@@ -53,7 +50,7 @@ with BeforeAndAfterAll
     import akka.util.Timeout
     implicit val actorTimeout = Timeout( 5.seconds )
 
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
+    override def before( test: OneArgTest ): Unit = trace.block( "before" ) {
       import akka.pattern.AskableActorSelection
       val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
 
@@ -64,8 +61,6 @@ with BeforeAndAfterAll
         boundedContext.unsafeModel.rootTypes.mkString(", ")
       )
     }
-
-    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
     val bus = TestProbe()
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
@@ -79,8 +74,8 @@ with BeforeAndAfterAll
 
     lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
 
-    lazy val boundedContext: BoundedContext = trace.block(s"FIXTURE: boundedContext($fixtureId)") {
-      val key = Symbol( s"BoundedContext-${fixtureId}" )
+    lazy val boundedContext: BoundedContext = trace.block(s"FIXTURE: boundedContext($slug)") {
+      val key = Symbol( s"BoundedContext-${slug}" )
 
       val bc = for {
         made <- BoundedContext.make( key, config, userResources = resources, startTasks = startTasks(system) )
@@ -101,37 +96,6 @@ with BeforeAndAfterAll
   }
 
   override type Fixture <: AggregateFixture
-
-  override def withFixture( test: OneArgTest ): Outcome = {
-    val fixture = \/ fromTryCatchNonFatal { createAkkaFixture( test ) }
-    val results = fixture map { f =>
-      logger.debug( ".......... before test .........." )
-      f before test
-      logger.debug( "++++++++++ starting test ++++++++++" )
-      ( test(f), f )
-    }
-
-    val outcome = results map { case (outcome, f) =>
-      logger.debug( "---------- finished test ------------" )
-      f after test
-      logger.debug( ".......... after test .........." )
-
-      Option(f.system) foreach { s =>
-        val terminated = s.terminate()
-        Await.ready( terminated, 1.second )
-      }
-
-      outcome
-    }
-
-    outcome match {
-      case \/-( o ) => o
-      case -\/( ex ) => {
-        logger.error( s"test[${test.name}] failed", ex )
-        throw ex
-      }
-    }
-  }
 
 
   object WIP extends Tag( "wip" )

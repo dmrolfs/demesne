@@ -1,7 +1,8 @@
 package demesne.module
 
 import scala.reflect._
-import akka.actor.Props
+import akka.actor.{ActorSystem, Props}
+import com.typesafe.config.Config
 
 import scalaz.{-\/, \/-}
 import scalaz.Scalaz._
@@ -112,9 +113,14 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
   override type Protocol = SimpleAggregateModuleSpec.Protocol.type
   override val protocol: Protocol = SimpleAggregateModuleSpec.Protocol
 
+
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new TestFixture( config, system, slug )
+  }
+
   override type Fixture = TestFixture
 
-  class TestFixture extends AggregateFixture {
+  class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     override val module: AggregateRootModule = SimpleAggregateModuleSpec.FooAggregateRoot.module
 
     override def rootTypes: Set[AggregateRootType] = Set( module.rootType )
@@ -132,7 +138,6 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
     }
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
 
   object ADD extends Tag( "add" )
   object UPDATE extends Tag( "update" )

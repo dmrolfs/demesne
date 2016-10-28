@@ -3,6 +3,7 @@ package sample.blog.post
 import akka.Done
 import akka.actor.{ActorSystem, Props}
 import akka.testkit._
+import com.typesafe.config.Config
 import demesne._
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
@@ -34,9 +35,14 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
   override type Protocol = PostPrototol.type
   override val protocol: Protocol = PostPrototol
 
+
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new PostFixture( config, system, slug )
+  }
+
   override type Fixture = PostFixture
 
-  class PostFixture extends AggregateFixture {
+  class PostFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[PostFixture]
 
     override val module: AggregateRootModule = PostModule
@@ -75,7 +81,6 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 //    }
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new PostFixture
 
   object GOOD extends Tag( "good" )
 

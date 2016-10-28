@@ -1,12 +1,16 @@
 package demesne.index
 
 import java.util.concurrent.atomic.AtomicInteger
+
 import scala.concurrent.duration._
 import scala.reflect.ClassTag
 import akka.actor._
 import akka.event.LoggingReceive
 import akka.testkit._
-import scalaz._, Scalaz._
+import com.typesafe.config.Config
+
+import scalaz._
+import Scalaz._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.Tag
 import peds.commons.TryV
@@ -32,7 +36,11 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
 
   case class FooAdded( value: String )
 
-  class Fixture extends AkkaFixture {
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new Fixture( config, system, slug )
+  }
+
+  class Fixture( _config: Config, _system: ActorSystem, _slug: String ) extends AkkaFixture( _config, _system, _slug ) {
     private val trace = Trace[Fixture]
 
     override def rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
@@ -97,7 +105,6 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
     val contextRoot = rootType( contextSpec )
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new Fixture
 
   object WIP extends Tag( "wip" )
 

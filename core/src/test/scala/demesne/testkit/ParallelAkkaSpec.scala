@@ -16,21 +16,21 @@ import scalaz.{-\/, \/, \/-}
 
 
 object ParallelAkkaSpec {
-  val sysId = new AtomicInteger()
+  val testPosition: AtomicInteger = new AtomicInteger()
 }
 
 
 // Runs each individual test in parallel. Only possible with Fixture isolation
 abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelTestExecution with StrictLogging {
-  import demesne.testkit.ParallelAkkaSpec._
   private val trace = Trace[ParallelAkkaSpec]
+
+  def testPosition: AtomicInteger = ParallelAkkaSpec.testPosition
 
   type Fixture <: AkkaFixture
   type FixtureParam = Fixture
 
-  abstract class AkkaFixture( val fixtureId: Int = sysId.incrementAndGet(), val config: Config = demesne.testkit.config )
-  extends TestKit( ActorSystem( s"Parallel-${fixtureId}", config ) )
-  with ImplicitSender {
+  abstract class AkkaFixture( val config: Config, _system: ActorSystem, val slug: String )
+  extends TestKit( _system ) with ImplicitSender {
     def before( test: OneArgTest ): Unit = trace.block( "before" ) {
       import scala.concurrent.ExecutionContext.global
       val timeout = akka.util.Timeout( 5.seconds )
@@ -41,16 +41,26 @@ abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with 
 
     def rootTypes: Set[AggregateRootType]
     lazy val boundedContext: BoundedContext = {
-      Await.result( BoundedContext.make( Symbol(s"Parallel-${fixtureId}"), config, rootTypes ), 5.seconds )
+      Await.result( BoundedContext.make( Symbol(slug), config, rootTypes ), 5.seconds )
     }
 
     implicit lazy val model: DomainModel = boundedContext.unsafeModel
   }
 
-  def createAkkaFixture( test: OneArgTest ): Fixture
+
+  def testSlug( test: OneArgTest ): String = "Parallel-" + ParallelAkkaSpec.testPosition.incrementAndGet()
+  def testConfiguration( test: OneArgTest, slug: String ): Config = demesne.testkit.config
+  def testSystem( test: OneArgTest, config: Config, slug: String ): ActorSystem = ActorSystem( name = slug, config )
+  def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture
 
   override def withFixture( test: OneArgTest ): Outcome = {
-    val fixture = \/ fromTryCatchNonFatal { createAkkaFixture( test ) }
+    val fixture = \/ fromTryCatchNonFatal {
+      val slug = testSlug( test )
+      val config = testConfiguration( test, slug )
+      val system = testSystem( test, config, slug )
+      createAkkaFixture( test, config, system, slug )
+    }
+
     val results = fixture map { f =>
       logger.debug( ".......... before test .........." )
       f before test
