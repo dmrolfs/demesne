@@ -29,9 +29,12 @@ abstract class BoundedContext {
   def :+( rootType: AggregateRootType ): BoundedContext
   def +:( rootType: AggregateRootType ): BoundedContext = this :+ rootType
   def withResources( rs: Map[Symbol, Any] ): BoundedContext
-  def withStartTask( task: BoundedContext.StartTask ): BoundedContext
-  def withStartTask( task: BoundedContext => Done, description: String = "" ): BoundedContext = {
-    withStartTask( BoundedContext.StartTask(task, description) )
+  def withStartTask( task: StartTask ): BoundedContext
+  def withStartTask( description: String )( task: Task[Done] ): BoundedContext = {
+    withStartTask( StartTask.withUnitTask( description )( task ) )
+  }
+  def withStartFunction( description: String )( task: BoundedContext => Done ): BoundedContext = {
+    withStartTask( StartTask.withFunction( description )( task ) )
   }
   def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext]
   def shutdown(): Future[Terminated]
@@ -41,9 +44,6 @@ object BoundedContext extends StrictLogging { outer =>
   import scala.concurrent.ExecutionContext.global
 
   private val trace = Trace( "BoundedContext", logger )
-
-  final case class StartTask( task: BoundedContext => Done, description: String = "" )
-
 
   def apply( key: Symbol ): BoundedContext = {
     contexts()
@@ -326,32 +326,30 @@ object BoundedContext extends StrictLogging { outer =>
       debugBoundedContext( "START", this )
       val tasks = Task gatherUnordered gatherAllTasks()
 
-            import peds.commons.concurrent._
+      import peds.commons.concurrent._
 
       for {
         _ <- tasks.unsafeToFuture
       _ = logger.debug( "TEST: after tasks run" )
-//        bcCell <- contexts.future map { _(key) }
-        bcCell = this
-      _ = debugBoundedContext( "BC-CELL", bcCell )
-        supervisors <- bcCell.setupSupervisors()
+      _ = debugBoundedContext( "BC-CELL", this )
+        supervisors <- setupSupervisors()
         repoStatus <- ( supervisors.repository ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
-      _ = logger.debug( "AAAAAAAAAAAAAAAAAAAA - supervisors:[{}] repo-status:[{}]", supervisors, repoStatus )
-        newModelCell = bcCell.modelCell.copy( supervisors = Some(supervisors) )
-      _ = logger.debug( "BBBBBBBBBBBBBBBBBBBBBB - newModelCell:[{}]", newModelCell )
+      _ = logger.debug( "supervisors:[{}] repo-status:[{}]", supervisors, repoStatus )
+        newModelCell = modelCell.copy( supervisors = Some(supervisors) )
+      _ = logger.debug( "newModelCell:[{}]", newModelCell )
         startedModelCell <- newModelCell.start()
-      _ = logger.debug( "CCCCCCCCCCCCCCCCCCCCCC- startedModelCell:[{}]", startedModelCell )
+      _ = logger.debug( "startedModelCell:[{}]", startedModelCell )
       } yield {
         logger.info( "started BoundedContext:[{}] model:[{}]", (name, system.name), startedModelCell )
-        val result = bcCell.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[StartTask] )
+        val result = this.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[StartTask] )
         debugBoundedContext( "DONE", result )
         result
       }
     }
 
     private def gatherAllTasks(): Seq[Task[Done]] = {
-      val rootTasks = modelCell.rootTypes.toSeq map { rt => Task { rt.startTask(system)(this) } }
-      val userTasks = startTasks map { t => Task { t.task(this) } }
+      val rootTasks = modelCell.rootTypes.toSeq map { _.startTask( system ).task( this ) }
+      val userTasks = startTasks map { _ task this }
       rootTasks ++ userTasks
     }
 

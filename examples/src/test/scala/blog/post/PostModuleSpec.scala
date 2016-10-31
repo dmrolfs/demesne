@@ -1,6 +1,5 @@
 package sample.blog.post
 
-import akka.Done
 import akka.actor.{ActorSystem, Props}
 import akka.testkit._
 import com.typesafe.config.Config
@@ -14,12 +13,8 @@ import peds.commons.log.Trace
 
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
-import com.typesafe.scalalogging.LazyLogging
-import demesne.BoundedContext.StartTask
 import sample.blog.author.AuthorListingModule
 import sample.blog.post.{PostPrototol => P}
-
-import scalaz.concurrent.Task
 import scalaz.{-\/, \/-}
 
 

@@ -41,7 +41,7 @@ object BlogApp extends StrictLogging {
           rootTypes = Set(PostModule.rootType),
           userResources = AuthorListingModule.resources(clusterSystem)
         )
-        built = zero.withStartTask( AuthorListingModule startTask clusterSystem )
+        built = zero.withStartFunction( "starting Author Listing Module" )( AuthorListingModule startTask clusterSystem )
         started <- built.start()
         model <- started.futureModel
       } {

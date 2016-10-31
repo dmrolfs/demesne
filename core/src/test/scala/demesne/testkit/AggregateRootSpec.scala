@@ -11,7 +11,6 @@ import akka.testkit._
 import scalaz._
 import Scalaz._
 import com.typesafe.config.Config
-import demesne.BoundedContext.StartTask
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar
 import peds.commons.identifier.TaggedID
