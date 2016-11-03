@@ -313,8 +313,8 @@ object BoundedContext extends StrictLogging { outer =>
           "{}: starting BoundedContext:[{}] root-types:[{}] user-resources:[{}] start-tasks:[{}]:[{}]...",
           label,
           (bc.name, bc.system.name),
-          bc.modelCell.rootTypes.mkString(", "),
-          bc.userResources.mkString(", "),
+          bc.modelCell.rootTypes map { _.name },
+          bc.userResources.keySet,
           bc.startTasks.size.toString, startTasks.map{ _.description }.mkString(", ")
         )
       }
@@ -407,12 +407,13 @@ object BoundedContext extends StrictLogging { outer =>
       to: Timeout
     ): Future[ActorRef] = {
       val supervisor = futureModel map { model =>
+        import scala.collection.JavaConversions._
+
         logger.debug(
-          "making repository supervisor:[{}] with root-types:[{}] resources:[{}] configuration:[{}]",
+          "making repository supervisor:[{}] with root-types:[{}] resources:[{}]",
           repositorySupervisorName,
-          rootTypes.map{ _.name }.mkString(", "),
-          resources.mkString(", "),
-          configuration
+          rootTypes.map{ _.name },
+          resources.keySet
         )
 
         val props = RepositorySupervisor.props( model, rootTypes, resources, configuration )
