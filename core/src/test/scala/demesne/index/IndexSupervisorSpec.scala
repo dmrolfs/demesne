@@ -161,10 +161,10 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
   }
 
   class TestConstituent extends Actor with ActorLogging {
-    override def receive: Actor.Receive = {
+    override def receive: Actor.Receive = LoggingReceive {
       case WaitingForStart => sender() ! Started
 
-      case "stop" => LoggingReceive {
+      case "stop" => {
         log debug s"KILLING TestConstituent: ${self.path}"
         throw new Exception( s"KILLING constituent: ${self.path}" )
       }
