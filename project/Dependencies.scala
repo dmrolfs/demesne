@@ -3,7 +3,7 @@ import sbt._
 
 object Dependencies {
   object peds {
-    val version = "0.4.0-SNAPSHOT"
+    val version = "0.4.0"
     def module( id: String ) = "com.github.dmrolfs" %% s"peds-$id" % version
 
     val commons = module( "commons" )
@@ -12,7 +12,7 @@ object Dependencies {
   }
 
   object akka {
-    val version = "2.4.11"
+    val version = "2.4.12"
     def module( id: String ) = "com.typesafe.akka" %% s"akka-$id" % version
 
     val actor = module( "actor" )
@@ -37,7 +37,7 @@ object Dependencies {
   }
 
   object log {
-    val typesafe = "com.typesafe.scala-logging" %% "scala-logging" % "3.4.0"
+    val typesafe = "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0"
 
     object logback {
       val version = "1.1.7"
@@ -49,7 +49,7 @@ object Dependencies {
 
   object facility {
     val uuid = "com.eaio.uuid" % "uuid" % "3.4"
-    val config = "com.typesafe" % "config" % "1.3.0"
+    val config = "com.typesafe" % "config" % "1.3.1"
     val shapeless = "com.chuusai" %% "shapeless" % "2.3.2"
     val inflector = "org.atteo" % "evo-inflector" % "1.2.1"
     val squants = "com.squants"  %% "squants"  % "0.6.2"
