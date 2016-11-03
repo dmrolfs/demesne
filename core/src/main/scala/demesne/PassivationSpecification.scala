@@ -1,7 +1,5 @@
 package demesne
 
-import akka.actor.PoisonPill
-
 import scala.concurrent.duration.Duration
 import akka.cluster.sharding.ShardRegion.Passivate
 

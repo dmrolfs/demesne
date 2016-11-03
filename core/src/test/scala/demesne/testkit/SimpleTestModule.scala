@@ -3,15 +3,16 @@ package demesne.testkit
 import scala.reflect.ClassTag
 import akka.actor.Props
 import demesne._
-import demesne.register.{AggregateIndexSpec, StackableRegisterBusPublisher}
+import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
+import demesne.repository.CommonLocalRepository
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.identifier.Identifying
 import peds.commons.log.Trace
 
 
-abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with CommonInitializeAggregateActorType { module =>
+abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule { module =>
   def name: String
-  def indexes: Seq[AggregateIndexSpec[_, _]]
+  def indexes: Seq[IndexSpecification]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
@@ -19,13 +20,20 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
 
   val evID: ClassTag[ID]
 
-  override val trace = Trace[SimpleTestModule[T]]
+  private val trace = Trace[SimpleTestModule[T]]
 
   override def rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.name
-      override def aggregateRootProps( implicit model: DomainModel ): Props = SimpleTestActor.props( model, this )
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes
+
+
+      override lazy val identifying: Identifying[_] = implicitly[Identifying[T]]
+
+      override def repositoryProps( implicit model: DomainModel ): Props = {
+        CommonLocalRepository.props( model, this, SimpleTestActor.props(_, _) )
+      }
+
+      override def indexes: Seq[IndexSpecification] = module.indexes
     }
   }
 
@@ -35,7 +43,7 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
 
     def props( model: DomainModel, rt: AggregateRootType ): Props = {
       Props( 
-        new SimpleTestActor( model, rt ) with StackableStreamPublisher with StackableRegisterBusPublisher
+        new SimpleTestActor( model, rt ) with StackableStreamPublisher with StackableIndexBusPublisher
       )
     }
   }
@@ -44,13 +52,13 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule with
   class SimpleTestActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SimpleTestActor.State, ID] { outer: EventPublisher =>
+  ) extends AggregateRoot[SimpleTestActor.State, ID] with AggregateRoot.Provider { outer: EventPublisher =>
     import SimpleTestActor._
-
-    override val trace = Trace( "SimpleTestActor", log )
 
     override def parseId( idstr: String ): TID = module.parseId( idstr )
     override var state: State = Map.empty[Symbol, Any]
+    override val evState: ClassTag[State] = ClassTag( classOf[Map[Symbol, Any]] )
+
     override val acceptance: Acceptance = module.acceptance
     
     override def receiveCommand: Receive = around {

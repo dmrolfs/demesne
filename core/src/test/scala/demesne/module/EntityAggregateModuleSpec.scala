@@ -2,26 +2,26 @@ package demesne.module
 
 import scala.concurrent.duration._
 import scala.reflect._
-import akka.actor.Props
+import akka.actor.{ActorSystem, Props}
 import akka.testkit._
+import com.typesafe.config.Config
 
 import scalaz.Scalaz._
 import shapeless._
-import demesne._
-import demesne.module.entity.{messages => EntityProtocol}
-import demesne.register.{AggregateIndexSpec, StackableRegisterBusPublisher}
-import demesne.testkit.AggregateRootSpec
-import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
 import peds.akka.envelope._
 import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
 import peds.commons.log.Trace
 import peds.commons.identifier._
-import org.scalatest.concurrent.ScalaFutures
-import com.typesafe.scalalogging.LazyLogging
-import demesne.module.entity.EntityAggregateModule
 import peds.commons.TryV
+import org.scalatest.concurrent.ScalaFutures
+import demesne._
+import demesne.module.entity.{messages => EntityProtocol}
+import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
+import demesne.testkit.AggregateRootSpec
+import demesne.testkit.concurrent.CountDownFunction
+import demesne.module.entity.EntityAggregateModule
 
 
 object EntityAggregateModuleSpec {
@@ -43,7 +43,7 @@ object EntityAggregateModuleSpec {
   }
 
   object Foo extends EntityLensProvider[Foo] {
-    implicit val fooIdentifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
+    implicit val identifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
       override val evEntity: ClassTag[Foo] = classTag[Foo]
       override type ID = ShortUUID
       override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
@@ -94,17 +94,22 @@ object EntityAggregateModuleSpec {
 
 
   object FooAggregateRoot {
-    val myIndexes: () => Seq[AggregateIndexSpec[_, _]] = () => trace.briefBlock( "myIndexes" ) {
+    import demesne.index.{ Directive => D }
+
+    val myIndexes: () => Seq[IndexSpecification] = () => trace.briefBlock( "myIndexes" ) {
       Seq(
-        demesne.register.local.RegisterLocalAgent.spec[String, Foo#TID]( 'name ) {
+        EntityAggregateModule.makeSlugSpec[Foo]( Foo.idLens, Some(Foo.slugLens) ){
+          case f: Foo => Some( f )
+        },
+        demesne.index.local.IndexLocalAgent.spec[String, Foo#TID, Foo#TID]( 'name ) {
           case EntityProtocol.Added( id, info ) => {
             module.triedToEntity( info )
-            .map { e => demesne.register.Directive.Record( module.entityLabel( e ), module.idLens.get( e ).id ) }
-            .getOrElse { demesne.register.Directive.Record( id, id ) }
+            .map { e => D.Record( module.entityLabel(e), module.idLens.get(e) ) }
+            .getOrElse { D.Record(id, id) }
           }
 
-          // case module.Disabled( id, _ ) => Directive.Withdraw( id )
-          // case module.Enabled( id, slug ) => Directive.Record( slug, id )
+           case EntityProtocol.Disabled( id, _ ) => D.Withdraw( id )
+           case EntityProtocol.Enabled( id, slug ) => D.Record( slug, id )
         }
       )
     }
@@ -116,7 +121,7 @@ object EntityAggregateModuleSpec {
       import b.P.{ Tag => BTag, Props => BProps, _ }
 
       b.builder
-       .set( BTag, Foo.fooIdentifying.idTag )
+       .set( BTag, Foo.identifying.idTag )
        .set( BProps, FooActor.props(_,_) )
        .set( Indexes, myIndexes )
        .set( IdLens, Foo.idLens )
@@ -126,27 +131,17 @@ object EntityAggregateModuleSpec {
        .build()
     }
 
-    
+
     object FooActor {
       def props( model: DomainModel, rt: AggregateRootType ): Props = {
-        Props( new FooActor(model, rt) with StackableStreamPublisher with StackableRegisterBusPublisher )
+        Props( new FooActor(model, rt) with AggregateRoot.Provider with StackableStreamPublisher with StackableIndexBusPublisher )
       }
     }
 
     class FooActor( override val model: DomainModel, override val rootType: AggregateRootType )
-    extends module.EntityAggregateActor { publisher: EventPublisher =>
+    extends module.EntityAggregateActor with AggregateRoot.Provider { publisher: EventPublisher =>
       override var state: Foo = _
-
-//      override def parseId( idstr: String ): ID = {
-//        val identifying = implicitly[Identifying[Foo]]
-//        identifying.idAs[ID]( identifying.fromString( idstr ) ) match {
-//          case scalaz.\/-( id ) => id
-//          case scalaz.-\/( ex ) => {
-//            log.error( ex, "failed to parse id string:[{}]", idstr )
-//            throw ex
-//          }
-//        }
-//      }
+      override val evState: ClassTag[Foo] = ClassTag( classOf[Foo] )
 
       override val active: Receive = super.active orElse {
         case Protocol.Bar( _, b ) => {
@@ -168,19 +163,30 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
   override type Protocol = EntityAggregateModuleSpec.Protocol.type
   override val protocol: Protocol = EntityAggregateModuleSpec.Protocol
 
-  override type Fixture = TestFixture
 
-  class TestFixture extends AggregateFixture {
-    private val trace = Trace[TestFixture]
-    override def nextId(): TID = Foo.fooIdentifying.safeNextId
-
-    val rootType = FooAggregateRoot.module.rootType
-    def slugIndex = model.aggregateRegisterFor[String, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
-    override val module: AggregateRootModule = FooAggregateRoot.module
-    def moduleCompanions: List[AggregateRootModule] = List( FooAggregateRoot.module )
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new TestFixture( config, system, slug )
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new TestFixture
+
+  override type Fixture = TestFixture
+
+  class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
+    private val trace = Trace[TestFixture]
+    override def nextId(): TID = Foo.identifying.safeNextId
+
+    override val module: AggregateRootModule = FooAggregateRoot.module
+
+    val rootType: AggregateRootType = module.rootType
+
+    type SlugIndex = DomainModel.AggregateIndex[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID]
+    def slugIndex: SlugIndex = {
+      model.aggregateIndexFor[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID]( rootType, 'slug ).toOption.get
+    }
+
+    override def rootTypes: Set[AggregateRootType] = Set( rootType )
+  }
+
 
   object ADD extends Tag( "add" )
   object UPDATE extends Tag( "update" )
@@ -193,8 +199,9 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       import fixture._
 
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
-        aggregateIdTag = Foo.fooIdentifying.idTag,
+        aggregateIdTag = Foo.identifying.idTag,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
+        environment = LocalAggregate,
         _indexes = FooAggregateRoot.myIndexes,
         idLens = Foo.idLens,
         nameLens = Foo.nameLens,
@@ -280,7 +287,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
     }
 
-    "disable aggregate" taggedAs WIP in { fixture: Fixture =>
+    "disable aggregate" in { fixture: Fixture =>
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
@@ -328,7 +335,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       }
     }
 
-    "recorded in slug index" in { fixture: Fixture =>
+    "recorded in slug index" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
       val tid = Module.nextId.toOption.get
@@ -372,7 +379,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       slugIndex.get( "f1" ) mustBe Some(id)
 
       import akka.pattern.ask
-      implicit val timeout = akka.util.Timeout( 1.second )
+//      implicit val timeout = akka.util.Timeout( 1.second )
       val bevt = ( f ? Protocol.Bar( tid, 17 ) ).mapTo[Protocol.Barred]
       whenReady( bevt ) { e => e.b mustBe 17 }
     }
@@ -415,202 +422,5 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       trace( s"""index:f1 = ${slugIndex.get("f1")}""" )
       slugIndex.get( "f1" ) mustBe Some(id)
     }
-
-
-  //   "not respond before added" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-  //     system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     post !! ChangeBody( id, "dummy content" )
-  //     post !! Publish( id )
-  //     bus.expectNoMsg( 200.millis.dilated )
-  //   }
-
-  //   "not respond to incomplete content" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-  //     system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     post !! AddPost( id, PostContent( author = "Damon", title = "", body = "no title" ) )
-  //     bus.expectNoMsg( 200.millis.dilated )
-  //     post !! AddPost( id, PostContent( author = "", title = "Incomplete Content", body = "no author" ) )
-  //     bus.expectNoMsg( 200.millis.dilated )
-  //   }
-
-  //   "have empty contents before use" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     post.send( GetContent( id ) )( author.ref )
-  //     author.expectMsgPF( max = 200.millis.dilated, hint = "empty contents" ){
-  //       case Envelope( payload: PostContent, h ) => {
-  //         payload mustBe PostContent( "", "", "" )
-  //         h.messageNumber mustBe MessageNumber( 2 )
-  //         h.workId must not be WorkId.unknown
-
-  //       }
-  //     }
-  //   }
-
-  //   "have contents after posting" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-
-  //     val clientProbe = TestProbe()
-  //     post !! AddPost( id, content )
-  //     post.send( GetContent( id ))( clientProbe.ref )
-  //     clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "initial contents" ){
-  //       case Envelope( payload: PostContent, h ) if payload == content => true
-  //     }
-  //   }
-
-  //   "have changed contents after change" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-  //     val updated = "updated contents"
-
-  //     system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-  //     system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-
-  //     val clientProbe = TestProbe()
-  //     post !! AddPost( id, content )
-  //     bus.expectMsgPF( hint = "PostAdded" ) {
-  //       case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-  //     }
-
-  //     post !! ChangeBody( id, updated )
-  //     bus.expectMsgPF( hint = "BodyChanged" ) {
-  //       case Envelope( payload: BodyChanged, _ ) => payload.body mustBe updated
-  //     }
-
-  //     post.send( GetContent( id ) )( clientProbe.ref )
-  //     clientProbe.expectMsgPF( max = 200.millis.dilated, hint = "changed contents" ){
-  //       case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-  //     }
-  //   }
-
-  //   "have changed contents after change and published" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-  //     val updated = "updated contents"
-
-  //     val clientProbe = TestProbe()
-  //     post !! AddPost( id, content )
-  //     post !! ChangeBody( id, updated )
-  //     post !! Publish( id )
-  //     post.send( GetContent( id ) )( clientProbe.ref )
-  //     clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
-  //       case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-  //     }
-  //   }
-
-  //   "dont change contents after published" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val post = PostModule aggregateOf id
-  //     val content = PostContent( author = "Damon", title = "Contents", body = "initial contents" )
-  //     val updated = "updated contents"
-
-  //     val clientProbe = TestProbe()
-  //     post !! AddPost( id, content )
-  //     post !! ChangeBody( id, updated )
-  //     post !! Publish( id )
-  //     post !! ChangeBody( id, "BAD CONTENT" )
-  //     post.send( GetContent( id ) )( clientProbe.ref )
-  //     clientProbe.expectMsgPF( max = 400.millis.dilated, hint = "changed contents" ){
-  //       case Envelope( payload: PostContent, h ) => payload mustBe content.copy( body = updated )
-  //     }
-  //   }
-
-  //   "follow happy path" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val id = PostModule.nextId
-  //     val content = PostContent( author = "Damon", title = "Test Add", body = "testing happy path" )
-
-  //     system.eventStream.subscribe( bus.ref, classOf[ReliableMessage] )
-  //     system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-
-  //     PostModule.aggregateOf( id ) !! AddPost( id, content )
-  //     PostModule.aggregateOf( id ) !! ChangeBody( id, "new content" )
-  //     PostModule.aggregateOf( id ) !! Publish( id )
-
-  //     bus.expectMsgPF( hint = "post-added" ) {
-  //       case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-  //     }
-
-  //     bus.expectMsgPF( hint = "body-changed" ) {
-  //       case Envelope( payload: BodyChanged, _ ) => payload.body mustBe "new content"
-  //     }
-
-  //     bus.expectMsgPF( hint = "post-published local" ) {
-  //       case Envelope( PostPublished( pid, _, title ), _ ) => {
-  //         pid mustBe id
-  //         title mustBe "Test Add"
-  //       }
-  //     }
-
-  //     author.expectMsgPF( hint = "post-published reliable" ) {
-  //       case ReliableMessage( 1, Envelope( PostPublished( pid, _, title ), _) ) => {
-  //         pid mustBe id
-  //         title mustBe "Test Add"
-  //       }
-  //     }
-  //   }
-
-  //   "recorded in title register after post added via event stream" in { fixture: Fixture =>
-  //     import fixture._
-
-  //     val rt = PostModule.aggregateRootType
-  //     val ar = model.aggregateRegisterFor( rt, 'title )
-  //     ar.isRight mustBe true
-  //     for {
-  //       register <- ar 
-  //     } {
-  //       val p = TestProbe()
-
-  //       val id = PostModule.nextId
-  //       val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
-  //       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
-  //       system.eventStream.subscribe( p.ref, classOf[Envelope] )
-
-  //       val post = PostModule.aggregateOf( id )
-  //       post !! AddPost( id, content )
-
-  //       bus.expectMsgPF( hint = "post-added" ) {
-  //         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-  //       }
-
-  //       p.expectMsgPF( hint = "post-added stream" ) {
-  //         case Envelope( payload: PostAdded, _ ) => payload.content mustBe content
-  //       }
-
-  //       val countDown = new CountDownFunction[String]
-
-  //       countDown await 200.millis.dilated
-  //       whenReady( register.futureGet( "Test Add" ) ) { result => result mustBe Some(id) }
-
-  // //      countDown await 75.millis.dilated
-  //       register.get( "Test Add" ) mustBe Some(id)
-  //     }
-  //   }
   }
 }

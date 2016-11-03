@@ -23,12 +23,5 @@
   envelope capability at each point otherwise the meta envelope will not follow the unit of work.
  */
 package object demesne {
-  val FactoryKey: Symbol = 'factory
-  val ModelKey: Symbol = 'model
-  val SystemKey: Symbol = 'system
-
-  case object SaveSnapshot
-
-
   trait DemesneError
 }

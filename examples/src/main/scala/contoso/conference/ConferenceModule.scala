@@ -1,10 +1,11 @@
 package contoso.conference
 
+import akka.Done
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.reflect._
 import scala.util.{Failure, Success}
-import scala.concurrent.Future
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 
@@ -18,6 +19,8 @@ import peds.akka.publish._
 import peds.commons.identifier._
 import peds.commons.log.Trace
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 
 
 object ConferenceProtocol extends AggregateProtocol[ShortUUID] {
@@ -66,47 +69,54 @@ object ConferenceModule extends AggregateRootModule { module =>
   val trace = Trace[ConferenceModule.type]
 
   override type ID = ShortUUID
-  override def nextId: TryV[TID] = implicitly[Identifying[ConferenceState]].nextIdAs[TID]
+  override def nextId: TryV[TID] = conferenceIdentifying.nextIdAs[TID]
 
-  var conferenceContext: ActorRef = _
 
-  override def initializer( 
-    rootType: AggregateRootType, 
-    model: DomainModel, 
-    props: Map[Symbol, Any] 
-  )( 
-    implicit ec: ExecutionContext
-  ) : Valid[Future[Unit]] = {
-    checkConferenceContext( props ) map { cc => 
-      Future successful {
-        conferenceContext = cc
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
+  }
+
+  class Repository( model: DomainModel )
+  extends EnvelopingAggregateRootRepository( model, ConferenceType ) with ClusteredAggregateContext {
+    import demesne.repository.{ StartProtocol => SP }
+    var conferenceContext: ActorRef = model.system.deadLetters
+
+    override def aggregateProps: Props = Conference.props( model, rootType, conferenceContext )
+
+    override def doLoad(): SP.Loaded = {
+      logger.info( "loading" )
+      SP.Loaded( rootType, dependencies = Set(ConferenceContext.ResourceKey) )
+    }
+
+    override def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = {
+      checkConferenceContext( resources ) map { confCtx =>
+        logger.info( "initializing conference context:[{}]", confCtx.path.name )
+        conferenceContext = confCtx
+        Done
       }
     }
 
-    super.initializer( rootType, model, props )
+    private def checkConferenceContext( resources: Map[Symbol, Any] ): Valid[ActorRef] = {
+      val result = for {
+        cc <- resources get ConferenceContext.ResourceKey
+        r <- scala.util.Try[ActorRef]{ cc.asInstanceOf[ActorRef] }.toOption
+      } yield r.successNel[Throwable]
+
+      result getOrElse Validation.failureNel( UnspecifiedConferenceContextError('ConferenceContext) )
+    }
   }
-
-  private def checkConferenceContext( props: Map[Symbol, Any] ): Valid[ActorRef] = {
-    val result = for {
-      cc <- props get 'ConferenceContext
-      r <- scala.util.Try[ActorRef]{ cc.asInstanceOf[ActorRef] }.toOption
-    } yield r.successNel[Throwable]
-
-    result getOrElse Validation.failureNel( UnspecifiedConferenceContextError('ConferenceContext) )
-  }
-
 
   override val aggregateIdTag: Symbol = 'conference
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override val name: String = module.shardName
+  object ConferenceType extends AggregateRootType {
+    override val name: String = module.shardName
 
-      override def aggregateRootProps( implicit model: DomainModel ): Props = {
-        Conference.props( model, this, conferenceContext )
-      }
-    }
+    override lazy val identifying: Identifying[_] = conferenceIdentifying
+
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
+
+  override val rootType: AggregateRootType = ConferenceType
 
 
   case class ConferenceState(
@@ -166,11 +176,11 @@ object ConferenceModule extends AggregateRootModule { module =>
     override val model: DomainModel,
     override val rootType: AggregateRootType,
     conferenceContext: ActorRef
-  ) extends AggregateRoot[ConferenceState, ShortUUID] { outer: EventPublisher =>
+  ) extends AggregateRoot[ConferenceState, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import ConferenceProtocol._
     import contoso.conference.ConferenceModule.Conference._
 
-    override val trace = Trace( "Conference", log )
+    private val trace = Trace( "Conference", log )
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[ConferenceState]]
@@ -178,6 +188,7 @@ object ConferenceModule extends AggregateRootModule { module =>
     }
 
     override var state: ConferenceState = _
+    override val evState: ClassTag[ConferenceState] = ClassTag( classOf[ConferenceState] )
 
     override val acceptance: Acceptance = {
       case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
@@ -228,22 +239,10 @@ object ConferenceModule extends AggregateRootModule { module =>
 
 
     def draft: Receive = LoggingReceive {
-      case UpdateConference( _, conference ) => {
-        persist( ConferenceCreated( state.id, conference ) ) { event => acceptAndPublish( event ) }
-      }
-
-      case CreateSeat( _, seat ) => {
-        persist( SeatCreated( state.id, seat ) ) { event => acceptAndPublish( event ) }
-      }
-
-      case UpdateSeat( _, seat ) => {
-        persist( SeatUpdated( state.id, seat ) ) { event => acceptAndPublish( event ) }
-      }
-
-      case DeleteSeat( _, seatId ) => {
-        persist( SeatDeleted( state.id, seatId ) ) { event => acceptAndPublish( event ) }
-      }
-
+      case UpdateConference( _, conference ) => persist( ConferenceCreated( state.id, conference ) ) { acceptAndPublish }
+      case CreateSeat( _, seat ) => persist( SeatCreated( state.id, seat ) ) { acceptAndPublish }
+      case UpdateSeat( _, seat ) => persist( SeatUpdated( state.id, seat ) ) { acceptAndPublish }
+      case DeleteSeat( _, seatId ) => persist( SeatDeleted( state.id, seatId ) ) { acceptAndPublish }
       case Publish => {
         persist( ConferencePublished( state.id ) ) { event => 
           acceptAndPublish( event ) 

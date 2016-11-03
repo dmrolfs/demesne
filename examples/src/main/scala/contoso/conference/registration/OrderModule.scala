@@ -13,6 +13,8 @@ import com.typesafe.config.ConfigFactory
 import contoso.conference.ConferenceModule
 import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 import peds.akka.publish.EventPublisher
 import peds.commons.TryV
 import peds.commons.identifier._
@@ -150,24 +152,32 @@ object OrderModule extends AggregateRootModule { module =>
     config.getDuration( "reservation-auto-expiration", TU.MILLISECONDS ).toInt
   )
 
-  override val trace = Trace[OrderModule.type]
+  private val trace = Trace[OrderModule.type]
 
 
   override type ID = ShortUUID
   override def nextId: TryV[TID] = implicitly[Identifying[OrderState]].nextIdAs[TID]
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override val name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = {
-        Order.props(
-          model,
-          this,
-          ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
-        )
-      }
-    }
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
   }
+
+  class Repository( model: DomainModel )
+  extends EnvelopingAggregateRootRepository( model, OrderType ) with ClusteredAggregateContext {
+    override def aggregateProps: Props = {
+      val pricingRetriever = ClusterSharding( model.system ).shardRegion( PricingRetriever.shardName )
+      Order.props( model, rootType, pricingRetriever )
+    }
+
+  }
+
+  object OrderType extends AggregateRootType {
+    override val name: String = module.shardName
+    override lazy val identifying: Identifying[_] = orderIdentifying
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
+  }
+
+  override val rootType: AggregateRootType = OrderType
 
 
 
@@ -205,10 +215,10 @@ object OrderModule extends AggregateRootModule { module =>
     override val model: DomainModel,
     override val rootType: AggregateRootType,
     pricingRetriever: ActorRef
-  ) extends AggregateRoot[OrderState, ShortUUID] { outer: EventPublisher =>
+  ) extends AggregateRoot[OrderState, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import OrderProtocol._
 
-    override val trace = Trace( "Order", log )
+    private val trace = Trace( "Order", log )
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[OrderState]]
@@ -216,6 +226,8 @@ object OrderModule extends AggregateRootModule { module =>
     }
 
     override var state: OrderState = _
+    override val evState: ClassTag[OrderState] = ClassTag( classOf[OrderState] )
+
     var expirationMessager: Cancellable = _
 
     override def acceptance: Acceptance = {
@@ -264,7 +276,7 @@ object OrderModule extends AggregateRootModule { module =>
           reservationExpiration = expiration,
           seats = reserved
         )
-        persist( completed ) { event => acceptAndPublish( event ) }
+        persist( completed ) { acceptAndPublish }
       }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[39]
@@ -293,7 +305,7 @@ object OrderModule extends AggregateRootModule { module =>
       // Conference/Registration/Handlers/OrderCommandHandler.cs[73]
       // Conference/Registration/Order.cs[145]
       case AssignRegistrantDetails( orderId, firstName, lastName, email ) => {
-        persist( OrderRegistrantAssigned( orderId, firstName, lastName, email ) ) { e => acceptAndPublish( e ) }
+        persist( OrderRegistrantAssigned( orderId, firstName, lastName, email ) ) { acceptAndPublish }
       }
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[80]
@@ -318,7 +330,7 @@ object OrderModule extends AggregateRootModule { module =>
           isFreeOfCharge = ( total == 0D )
         )
 
-        persist( totalCalculated ) { e => acceptAndPublish( e ) }
+        persist( totalCalculated ) { acceptAndPublish }
       }
     }
 

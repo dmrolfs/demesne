@@ -11,6 +11,8 @@ import contoso.conference.ConferenceModule
 import contoso.conference.payments.PaymentSourceModule
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.TryV
@@ -36,22 +38,31 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   override def nextId: TryV[TID] = implicitly[Identifying[RegistrationSagaState]].nextIdAs[TID]
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {
-      override def name: String = module.shardName
 
-      override def aggregateRootProps( implicit model: DomainModel ): Props = {
-        RegistrationSaga.props(
-          rootType = this,
-          model = model,
-          orderType = OrderModule.rootType,
-          availabilityType = SeatsAvailabilityModule.rootType
-        )
-      }
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
+  }
 
-      // override val toString: String = shardName + "AggregateRootType"
+  class Repository( model: DomainModel )
+  extends EnvelopingAggregateRootRepository( model, rootType ) with ClusteredAggregateContext {
+    override def aggregateProps: Props = {
+      RegistrationSaga.props(
+        rootType = RegistrationSagaType,
+        model = model,
+        orderType = OrderModule.rootType,
+        availabilityType = SeatAssignmentsModule.rootType
+      )
     }
   }
+
+
+  object RegistrationSagaType extends AggregateRootType {
+    override def name: String = module.shardName
+    override lazy val identifying: Identifying[_] = registrationSagaIdentifying
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
+  }
+
+  override val rootType: AggregateRootType = RegistrationSagaType
 
 
   sealed trait ProcessState
@@ -61,7 +72,6 @@ object RegistrationSagaModule extends SagaModule { module =>
   case object PaymentConfirmationReceived extends ProcessState
   case object FullyConfirmed extends ProcessState
   case object OrderExpired extends ProcessState
-
 
   // Conference/Registration/RegistrationProcessManager.cs [41 - 88]
   case class RegistrationSagaState(
@@ -105,13 +115,13 @@ object RegistrationSagaModule extends SagaModule { module =>
     override val model: DomainModel,
     orderType: AggregateRootType,
     seatsAvailabilityType: AggregateRootType
-  ) extends Saga[RegistrationSagaState, ShortUUID] { outer: EventPublisher =>
+  ) extends Saga[RegistrationSagaState, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import contoso.conference.registration.{ RegistrationSagaProtocol => RS }
     import contoso.conference.registration.{ OrderProtocol => O }
     import contoso.conference.registration.{ SeatsAvailabilityProtocol => SA }
     import contoso.conference.payments.{ PaymentSourceProtocol => P }
 
-    override val trace = Trace( "RegistrationSaga", log )
+    private val trace = Trace( "RegistrationSaga", log )
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[RegistrationSagaState]]
@@ -119,6 +129,7 @@ object RegistrationSagaModule extends SagaModule { module =>
     }
 
     override var state: RegistrationSagaState = _
+    override val evState: ClassTag[RegistrationSagaState] = ClassTag( classOf[RegistrationSagaState] )
 
     import context.dispatcher
     var expirationMessager: Cancellable = _

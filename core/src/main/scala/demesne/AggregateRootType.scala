@@ -1,14 +1,16 @@
 package demesne
 
+import akka.Done
 import scala.concurrent.duration._
-import akka.actor.{Props, SupervisorStrategy}
+import akka.actor.{ActorSystem, Props}
 import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.Passivate
 import com.typesafe.scalalogging.LazyLogging
+import demesne.index.IndexSpecification
 import shapeless.TypeCase
 import peds.akka.envelope.Envelope
 import peds.akka.publish.ReliablePublisher.ReliableMessage
-import peds.commons.identifier.TaggedID
+import peds.commons.identifier.{Identifying, TaggedID}
 
 
 object AggregateRootType {
@@ -17,23 +19,27 @@ object AggregateRootType {
   }
 }
 
-trait AggregateRootType extends LazyLogging {
+abstract class AggregateRootType extends LazyLogging {
   def name: String
-  def repositoryName: String = name+"Repository"
+  def repositoryName: String = org.atteo.evo.inflector.English.plural( name )
 
-  def aggregateRootProps( implicit model: DomainModel ): Props
+  def startTask( system: ActorSystem ): StartTask = StartTask.empty( name )
 
-  val tagType = TypeCase[TaggedID[_]]
+  def repositoryProps( implicit model: DomainModel ): Props
+
+  val identifying: Identifying[_]
+  val TaggedIdType: TypeCase[TaggedID[_]] = TypeCase[TaggedID[_]]
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {
     case cmd: CommandLike => ( cmd.targetId.id.toString, cmd )
-    case stop @ PassivationSpecification.StopAggregateRoot( tagType(tid) ) => {
-      logger.debug( "aggregateIdFor(tagged-stop) = [{}]", (tid.id.toString, stop) )
+    case event: EventLike => ( event.sourceId.id.toString, event )
+    case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
+      logger.debug( "tagged aggregateIdFor(stop) = [{}]", (tid.id.toString, stop) )
       ( tid.id.toString, stop )
     }
     case stop @ PassivationSpecification.StopAggregateRoot( id ) => {
-      logger.debug( "aggregateIdFor(stop) = [{}]", (id.toString, stop) )
+      logger.debug( "untagged aggregateIdFor(stop) = [{}]", (id.toString, stop) )
       ( id.toString, stop )
     }
     case e: EntityEnvelope => ( e.id.toString, e )
@@ -53,13 +59,14 @@ trait AggregateRootType extends LazyLogging {
   def numberOfShards: Int = 10 * maximumNrClusterNodes
 
   def shardIdFor: ShardRegion.ExtractShardId = {
-    case cmd: CommandLike => ( math.abs( cmd.targetId.## ) % numberOfShards ).toString
-    case stop @ PassivationSpecification.StopAggregateRoot( tagType(tid) ) => {
-      logger.debug( "shardIdFor(tagged-stop) = [{}]", ( math.abs( tid.id.## ) % numberOfShards ).toString )
+    case cmd: CommandLike => ( math.abs( cmd.targetId.id.## ) % numberOfShards ).toString
+    case event: EventLike => ( math.abs( event.sourceId.id.## ) % numberOfShards ).toString
+    case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
+      logger.debug( "tagged shardIdFor(stop) = [{}]", ( math.abs( tid.id.## ) % numberOfShards ).toString )
       ( math.abs( tid.id.## ) % numberOfShards ).toString
     }
     case stop @ PassivationSpecification.StopAggregateRoot( id ) => {
-      logger.debug( "shardIdFor(stop) = [{}]", ( math.abs( id.## ) % numberOfShards ).toString )
+      logger.debug( "untagged shardIdFor(stop) = [{}]", ( math.abs( id.## ) % numberOfShards ).toString )
       ( math.abs( id.## ) % numberOfShards ).toString
     }
     case e: EntityEnvelope => ( math.abs( e.id.## ) % numberOfShards ).toString
@@ -76,15 +83,17 @@ trait AggregateRootType extends LazyLogging {
     override val inactivityTimeout: Duration = passivateTimeout
   }
 
-  def snapshotPeriod: FiniteDuration = 15.minutes
-  def snapshot: SnapshotSpecification = new SnapshotSpecification {
-    override val snapshotInitialDelay: FiniteDuration = snapshotPeriod
-    override val snapshotInterval: FiniteDuration = snapshotPeriod
+  def snapshotPeriod: Option[FiniteDuration] = Some( 15.minutes )
+  def snapshot: Option[SnapshotSpecification] = {
+    snapshotPeriod map { period =>
+      new SnapshotSpecification {
+        override val snapshotInitialDelay: FiniteDuration = period
+        override val snapshotInterval: FiniteDuration = period
+      }
+    }
   }
 
-  def indexes: Seq[DomainModel.AggregateIndexSpecLike] = Seq.empty[DomainModel.AggregateIndexSpecLike]
-
-  def repositorySupervisionStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
+  def indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification]
 
   override def toString: String = name + "AggregateRootType"
 }

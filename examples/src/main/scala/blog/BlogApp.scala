@@ -1,10 +1,10 @@
 package sample.blog
 
-import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scalaz._, Scalaz._
+import scalaz._
+import Scalaz._
 import akka.actor._
-import akka.cluster.sharding.ClusterSharding
 import akka.pattern.ask
 import akka.persistence.journal.leveldb.{SharedLeveldbJournal, SharedLeveldbStore}
 import akka.util.Timeout
@@ -17,16 +17,16 @@ import sample.blog.post.PostModule
 
 object BlogApp extends StrictLogging {
   def main( args: Array[String] ): Unit = {
+    import ExecutionContext.Implicits.global
+    implicit val timeout = Timeout( 5.seconds )
     if ( args.isEmpty ) startup( Seq( 2551, 2552, 0 ) )
     else startup( args map { _.toInt } )
   }
 
-  // object registry extends AuthorListingModule with PostModule with ClusteredAggregateModuleExtension
-
-  def startup( ports: Seq[Int] ): Unit = {
+  def startup( ports: Seq[Int] )( implicit ec: ExecutionContext, timeout: Timeout ): Unit = {
     ports foreach { port =>
       val config = ConfigFactory.parseString( "akka.remote.netty.tcp.port=" + port ).withFallback( ConfigFactory.load() )
-      val clusterSystem = ActorSystem( "ClusterSystem", config )
+      implicit val clusterSystem = ActorSystem( "ClusterSystem", config )
 
       startSharedJournal(
         clusterSystem,
@@ -34,36 +34,19 @@ object BlogApp extends StrictLogging {
         path = ActorPath.fromString( "akka.tcp://ClusterSystem@127.0.0.1:2551/user/store" )
       )
 
-      val makeAuthorListing: () => ActorRef = () => {
-        logger debug s"##### clusterSystem = $clusterSystem"
-        val cs = ClusterSharding(clusterSystem)
-        logger debug s"##### cluster sharding = $cs"
-        logger debug s"##### author listing shard name = ${AuthorListingModule.shardName}"
-        val result = cs.shardRegion(AuthorListingModule.shardName)
-        logger debug s"makeAuthorListing() = $result"
-        result
-      }
-
-      DomainModel.register( "blog" )( clusterSystem ) map { dm =>
-        val model = Await.result( dm, 1.second )
-        logger.info( s"model [blog] registered [$model]" )
-
-        val context: Map[Symbol, Any] = Map(
-          demesne.SystemKey -> clusterSystem,
-          demesne.ModelKey -> model,
-          demesne.FactoryKey -> demesne.factory.clusteredFactory,
-          'authorListing -> makeAuthorListing
+      for {
+        zero <- BoundedContext.make(
+          key = 'blog,
+          configuration = config,
+          rootTypes = Set(PostModule.rootType),
+          userResources = AuthorListingModule.resources(clusterSystem)
         )
-
-        import scala.concurrent.ExecutionContext.Implicits.global
-        implicit val timeout = Timeout( 5.seconds )
-
-        InitializeAggregateActorType( context )( AuthorListingModule, PostModule ) foreach { init =>
-          Await.ready( init, 1.second )
-          logger.info( s"aggregate types [AuthorListingModule, PostModule] registered" )
-
-          if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
-        }
+        built = zero.withStartFunction( "starting Author Listing Module" )( AuthorListingModule startTask clusterSystem )
+        started <- built.start()
+        model <- started.futureModel
+      } {
+        logger.info( s"bounded context [{}] started: [{}]", started.name, started )
+        if ( port != 2551 && port != 2552 ) clusterSystem.actorOf( Bot.props( model ), "bot" )
       }
     }
 

@@ -1,29 +1,31 @@
 package sample.blog.author
 
-import scala.concurrent.{ ExecutionContext, Future }
-import scalaz._, Scalaz._
-import peds.commons.Valid
-import akka.actor.{ Actor, ActorLogging, ActorSystem, PoisonPill, Props, ReceiveTimeout }
-import akka.cluster.sharding.{ ClusterShardingSettings, ClusterSharding, ShardRegion }
+import scala.collection.immutable
+import scala.concurrent.duration._
+import akka.Done
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, PoisonPill, Props, ReceiveTimeout}
+import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.event.LoggingReceive
-import akka.util.Timeout
+
+import scalaz._
+import Scalaz._
+import scalaz.concurrent.Task
 import com.typesafe.scalalogging.LazyLogging
+import demesne.BoundedContext
 import peds.akka.envelope.EnvelopingActor
 import peds.akka.publish.ReliableReceiver
 import peds.commons.log.Trace
 import sample.blog.post.PostPrototol.PostPublished
-import demesne.InitializeAggregateActorType
-import scala.collection.immutable
-import scala.concurrent.duration._
 
 
-object AuthorListingModule extends InitializeAggregateActorType with LazyLogging {
+object AuthorListingModule extends LazyLogging {
   val trace = Trace[AuthorListingModule.type]
 
-  override def initialize( props: Map[Symbol, Any] )( implicit ec: ExecutionContext, to: Timeout ): Valid[Future[Unit]] = trace.block( "initialize" ) {
-    Future.successful[Unit] { 
-      implicit lazy val system: ActorSystem = props get 'system map { _.asInstanceOf[ActorSystem] } getOrElse ActorSystem()
-      trace( "starting shard for: AuthorListingModule" )
+  val ResourceKey = 'AuthorListing
+
+  def resources( system: ActorSystem ): Map[Symbol, Any] = Map(ResourceKey -> makeAuthorListing(system))
+
+  def startTask( system: ActorSystem ): BoundedContext => Done = { bc: BoundedContext =>
       ClusterSharding( system ).start(
         typeName = AuthorListingModule.shardName,
         entityProps = AuthorListing.props,
@@ -31,7 +33,12 @@ object AuthorListingModule extends InitializeAggregateActorType with LazyLogging
         extractEntityId = AuthorListing.idExtractor,
         extractShardId = AuthorListing.shardResolver
       )
-    }.successNel
+
+      Done
+  }
+
+  def makeAuthorListing( implicit system: ActorSystem ): () => ActorRef = () => {
+    ClusterSharding( system ) shardRegion AuthorListingModule.shardName
   }
 
 

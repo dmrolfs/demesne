@@ -2,7 +2,7 @@ package example
 
 import scala.reflect.ClassTag
 import org.scalatest._
-import org.scalatest.matchers.ShouldMatchers
+import org.scalatest.Matchers
 import shapeless._
 
 import com.github.harveywi.builder._

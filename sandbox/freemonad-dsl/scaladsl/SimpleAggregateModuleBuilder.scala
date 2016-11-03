@@ -6,15 +6,14 @@ import scalaz.Free._
 import peds.commons.identifier._
 import demesne.{ AggregateRoot, AggregateRootModule }
 import demesne.module.AggregateRootProps
-import demesne.register.AggregateIndexSpec
 
 
 trait SimpleAggregateModuleBuilder[A] extends AggregateModuleBuilder[A] {
   import SimpleAggregateModuleBuilder._
 
-  def setIndexes( indexes: List[AggregateIndexSpec[_, _]] ): ModuleBuilderOp[Unit] = liftF( SetIndexes( indexes, () ) )
+  def setIndexes( indexes: List[IndexSpecification] ): ModuleBuilderOp[Unit] = liftF( SetIndexes( indexes, () ) )
 
-  def addIndex( index: AggregateIndexSpec[_, _] ): ModuleBuilderOp[Unit] = liftF( AddIndex( index, () ) )
+  def addIndex( index: IndexSpecification ): ModuleBuilderOp[Unit] = liftF( AddIndex( index, () ) )
 }
 
 object SimpleAggregateModuleBuilder {

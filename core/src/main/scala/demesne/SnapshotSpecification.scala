@@ -1,9 +1,9 @@
 package demesne
 
-import akka.actor.{ActorRef, ActorSystem, Cancellable}
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import akka.actor.{ActorRef, ActorSystem, Cancellable}
+import peds.commons.identifier.TaggedID
 
 
 object SnapshotSpecification {
@@ -13,21 +13,17 @@ object SnapshotSpecification {
   }
 }
 
-trait SnapshotSpecification {
+abstract class SnapshotSpecification { outer =>
+  def saveSnapshotCommand[ID]( tid: TaggedID[ID] ): Any = SaveSnapshot( targetId = tid )
   def snapshotInitialDelay: FiniteDuration
   def snapshotInterval: FiniteDuration
 
-  private[this] var cancellable: Option[Cancellable] = None
-
-  final def schedule(
-    system: ActorSystem,
-    target: ActorRef,
-    saveSnapshotCommand: Any = SaveSnapshot
-  )(
-    implicit executor: ExecutionContext
-  ): Unit = {
-    cancellable = Option( system.scheduler.schedule( snapshotInitialDelay, snapshotInterval, target, saveSnapshotCommand ) )
+  def schedule[ID]( system: ActorSystem, target: ActorRef, tid: TaggedID[ID] )( implicit ec: ExecutionContext ): Cancellable = {
+    system.scheduler.schedule( snapshotInitialDelay, snapshotInterval, target, saveSnapshotCommand(tid) )
   }
+}
 
-  final def cancel: Unit = cancellable foreach { _.cancel() }
+
+case class SaveSnapshot( override val targetId: TaggedID[Any] ) extends CommandLike {
+  override type ID = Any
 }

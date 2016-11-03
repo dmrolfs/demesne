@@ -11,7 +11,6 @@ import peds.commons.log.Trace
 import peds.commons.util._
 import demesne.{ AggregateRoot, AggregateRootModule }
 import demesne.module.{ AggregateRootProps, DemesneModuleError, SimpleAggregateModule }
-import demesne.register.AggregateIndexSpec
 
 
 object SimpleAggregateModuleBuilderInterpreter {
@@ -21,12 +20,12 @@ object SimpleAggregateModuleBuilderInterpreter {
 class SimpleAggregateModuleBuilderInterpreter[S: ClassTag]() extends AggregateModuleBuilderInterpreter[S] {
   
   trait SimpleModule extends BuilderModule {
-    def indexesLens: Lens[SimpleModule, Seq[AggregateIndexSpec[_, _]]]
+    def indexesLens: Lens[SimpleModule, Seq[IndexSpecification]]
   }
 
   case class SimpleModuleImpl private[scaladsl](
     override val idTagO: Option[Symbol] = None,
-    override val indexes: Seq[AggregateIndexSpec[_, _]] = Seq(),
+    override val indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification],
     override val propsO: Option[AggregateRootProps] = None
   ) extends SimpleModule {
     override def trace: Trace[_] = Trace[SimpleModuleImpl]
@@ -49,10 +48,10 @@ class SimpleAggregateModuleBuilderInterpreter[S: ClassTag]() extends AggregateMo
       }
     }
 
-    override val indexesLens: Lens[SimpleModule, Seq[AggregateIndexSpec[_, _]]] = {
-      new Lens[SimpleModule, Seq[AggregateIndexSpec[_, _]]] {
-        override def get( s: SimpleModule ): Seq[AggregateIndexSpec[_, _]] = s.indexes
-        override def set( s: SimpleModule )( a: Seq[AggregateIndexSpec[_, _]] ): SimpleModule = {
+    override val indexesLens: Lens[SimpleModule, Seq[IndexSpecification]] = {
+      new Lens[SimpleModule, Seq[IndexSpecification]] {
+        override def get( s: SimpleModule ): Seq[IndexSpecification] = s.indexes
+        override def set( s: SimpleModule )( a: Seq[IndexSpecification] ): SimpleModule = {
           SimpleModuleImpl( idTagO = s.idTagO, indexes = a, propsO = s.propsO )
         }
       }

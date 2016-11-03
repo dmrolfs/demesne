@@ -1,42 +1,41 @@
-package demesne.register
+package demesne.index
 
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import akka.actor._
 import akka.event.LoggingReceive
 import akka.pattern.{ask, pipe}
 import akka.util.Timeout
 import com.typesafe.scalalogging.StrictLogging
-import demesne.{register, AggregateRootType}
-import demesne.register.RegisterSupervisor.ConstituencyProvider
+import demesne.{index, AggregateRootType}
+import demesne.index.IndexSupervisor.ConstituencyProvider
 import peds.akka.envelope.Envelope
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import peds.commons.log.Trace
 import peds.commons.util._
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-
 
 /**
  * Created by damonrolfs on 11/6/14.
  */
-class RegisterSupervisor( bus: RegisterBus )
+class IndexSupervisor(bus: IndexBus )
   extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLogging {
   outer: ConstituencyProvider =>
 
-  import demesne.register.RegisterSupervisor._
+  import demesne.index.IndexSupervisor._
 
-  val trace = Trace( "RegisterSupervisor", log )
+  val trace = Trace( "IndexSupervisor", log )
 
   override def childStarter(): Unit = { }
 
   override def receive: Receive = super.receive orElse register
 
   val register: Receive = LoggingReceive {
-    case RegisterIndex( rootType, spec ) => trace.block( s"register:RegisterIndex($rootType, $spec)" ) {
+    case RegisterIndex( rootType, spec ) => trace.block( s"index:RegisterIndex($rootType, $spec)" ) {
       val subscription: SubscriptionClassifier = spec.relaySubscription match {
         case ContextChannelSubscription( channel ) => Left( (context, channel) )
-        case RegisterBusSubscription => Right( (bus, spec.relayClassifier(rootType) ) )
+        case IndexBusSubscription => Right( (bus, spec.relayClassifier( rootType ) ) )
       }
 
       context.actorOf(
@@ -53,57 +52,57 @@ class RegisterSupervisor( bus: RegisterBus )
   }
 }
 
-object RegisterSupervisor extends StrictLogging {
-  val trace = Trace( "RegisterSupervisor", logger )
+object IndexSupervisor extends StrictLogging {
+  val trace = Trace( "IndexSupervisor", logger )
 
-  def props( bus: RegisterBus ): Props = Props( new RegisterSupervisor( bus ) with ConstituencyProvider )
+  def props( bus: IndexBus ): Props = Props( new IndexSupervisor( bus ) with ConstituencyProvider )
 
   import scala.language.existentials
   sealed trait Message
-  case class RegisterIndex( rootType: AggregateRootType, spec: AggregateIndexSpec[_, _] ) extends Message
-  case class IndexRegistered( agentRef: ActorRef, rootType: AggregateRootType, spec: AggregateIndexSpec[_, _] ) extends Message
+  case class RegisterIndex( rootType: AggregateRootType, spec: IndexSpecification ) extends Message
+  case class IndexRegistered( agentRef: ActorRef, rootType: AggregateRootType, spec: IndexSpecification ) extends Message
 
 
   type ContextClassifier = (ActorContext, Class[_])
-  type BusClassifier = (RegisterBus, String)
+  type BusClassifier = (IndexBus, String)
   type SubscriptionClassifier = Either[ContextClassifier, BusClassifier]
 
 
-  sealed trait RegisterConstituent {
+  sealed trait IndexConstituent {
     def category: Symbol
     def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = true
   }
 
-  case object Agent extends RegisterConstituent {
-    override val category: Symbol = 'RegisterAgent
+  case object Agent extends IndexConstituent {
+    override val category: Symbol = 'IndexAgent
   }
 
-  case object Relay extends RegisterConstituent {
-    override val category: Symbol = 'RegisterRelay
+  case object Relay extends IndexConstituent {
+    override val category: Symbol = 'IndexRelay
 
     override def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = {
       subscription.fold(
         classifier => {
           val (ctx, clazz) = classifier
-          logger.debug( "Relay[{}] register with Akka EventStream for class={}", constituent, clazz )
+          logger.debug( "Relay[{}] index with Akka EventStream for class={}", constituent, clazz )
           ctx.system.eventStream.subscribe( constituent, clazz )
           ctx.system.eventStream.subscribe( constituent, classOf[Envelope] )
         },
         classifier => {
           val (bus, name) = classifier
-          logger.debug( "Relay[{}] register with bus[{}] for name={}", constituent, bus, name )
+          logger.debug( "Relay[{}] index with bus[{}] for name={}", constituent, bus, name )
           bus.subscribe( constituent, name )
         }
       )
     }
   }
 
-  case object Aggregate extends RegisterConstituent {
-    override val category: Symbol = 'RegisterAggregate
+  case object Aggregate extends IndexConstituent {
+    override val category: Symbol = 'IndexAggregate
   }
 
 
-  case class RegisterConstituentRef( constituent: RegisterConstituent, path: ActorPath, props: Props ) {
+  case class RegisterConstituentRef( constituent: IndexConstituent, path: ActorPath, props: Props ) {
     def name: String = path.name
     override def toString: String = s"${getClass.safeSimpleName}(${constituent}, ${path})"
   }
@@ -112,14 +111,14 @@ object RegisterSupervisor extends StrictLogging {
   trait ConstituencyProvider { outer: Actor =>
     def pathFor(
       registrantType: AggregateRootType,
-      spec: AggregateIndexSpec[_,_]
+      spec: IndexSpecification
     )(
-      constituent: RegisterConstituent
+      constituent: IndexConstituent
     ): ActorPath = {
       ActorPath.fromString( self.path + "/" + constituent.category.name + "-" + spec.topic(registrantType) )
     }
 
-    def constituencyFor( registrantType: AggregateRootType, spec: AggregateIndexSpec[_, _] ): List[RegisterConstituentRef] = {
+    def constituencyFor( registrantType: AggregateRootType, spec: IndexSpecification ): List[RegisterConstituentRef] = {
       val p = pathFor( registrantType, spec ) _
       val aggregatePath = p( Aggregate )
 
@@ -137,7 +136,7 @@ object RegisterSupervisor extends StrictLogging {
       supervisor: ActorRef,
       constituency: List[RegisterConstituentRef],
       subscription: SubscriptionClassifier,
-      spec: AggregateIndexSpec[_, _],
+      spec: IndexSpecification,
       registrant: ActorRef,
       registrantType: AggregateRootType
     ): Props = Props( new IndexRegistration( supervisor, constituency, subscription, spec, registrant, registrantType ) )
@@ -147,7 +146,7 @@ object RegisterSupervisor extends StrictLogging {
     supervisor: ActorRef,
     constituency: List[RegisterConstituentRef],
     subscription: SubscriptionClassifier,
-    spec: AggregateIndexSpec[_, _],
+    spec: IndexSpecification,
     registrant: ActorRef,
     registrantType: AggregateRootType
   ) extends Actor with ActorLogging {
@@ -171,7 +170,7 @@ object RegisterSupervisor extends StrictLogging {
     self ! Survey( toFind = constituency, toStart = List() )
     constituency foreach { c => context.actorSelection( c.path ) ! Identify( c.name ) }
 
-    var constituentRefs: Map[RegisterConstituent, ActorRef] = Map()
+    var constituentRefs: Map[IndexConstituent, ActorRef] = Map( )
 
     override def receive: Receive = survey
 
@@ -204,15 +203,15 @@ object RegisterSupervisor extends StrictLogging {
 //ref akka concurrency for controlled startup pattern
       case Startup( Nil ) => {
         constituentRefs.values foreach { cref =>
-          log.debug( "sending WaitingForStart to {}" , cref )
-          cref ! register.WaitingForStart
+          log.debug( "sending WaitForStart to {}" , cref )
+          cref ! index.WaitingForStart
         }
         context become verify( constituentRefs )
       }
 
       case Startup( pieces ) => {
         val p = pieces.head
-        log.info( "starting for spec[{}]: {}", spec, p.name )
+        log.debug( "starting for spec[{}]: {}", spec, p.name )
         val createPiece = StartChild( props = p.props, name = p.name )
         supervisor ? createPiece map {
           case ChildStarted( child ) => {
@@ -221,27 +220,27 @@ object RegisterSupervisor extends StrictLogging {
             Startup( pieces.tail )
           }
 
-          case m => log.error( "failed to create register piece: [{}]", p )  //todo consider retry state via ctx.become
+          case m => log.error( "failed to create index piece: [{}]", p )  //todo consider retry state via ctx.become
         } pipeTo self
       }
     }
 
-    def verify( toCheck: Map[RegisterConstituent, ActorRef] ): Receive = LoggingReceive {
-      case register.Started => {
+    def verify( toCheck: Map[IndexConstituent, ActorRef] ): Receive = LoggingReceive {
+      case index.Started => {
         val c = sender()
         val verified = toCheck find {
           _._2 == c
         } getOrElse {
-          throw new IllegalStateException(s"failed to recognize register constituent[$c] in toCheck[${toCheck}}]")
+          throw new IllegalStateException(s"failed to recognize index constituent[$c] in toCheck[${toCheck}}]")
         }
 
-        log.info( "verified constituent: {}", verified )
+        log.debug( "verified constituent: {}", verified )
         val next = toCheck - verified._1
         handleNext(toCheck - verified._1)
       }
     }
 
-    def handleNext( next: Map[RegisterConstituent, ActorRef] ): Unit = {
+    def handleNext( next: Map[IndexConstituent, ActorRef] ): Unit = {
       if ( !next.isEmpty ) context become verify( next )
       else {
         val msg = IndexRegistered( constituentRefs( Agent ), registrantType, spec )

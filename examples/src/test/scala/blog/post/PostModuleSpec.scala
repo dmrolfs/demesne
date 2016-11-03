@@ -1,6 +1,8 @@
 package sample.blog.post
 
+import akka.actor.{ActorSystem, Props}
 import akka.testkit._
+import com.typesafe.config.Config
 import demesne._
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
@@ -11,9 +13,8 @@ import peds.commons.log.Trace
 
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
-import com.typesafe.scalalogging.LazyLogging
+import sample.blog.author.AuthorListingModule
 import sample.blog.post.{PostPrototol => P}
-
 import scalaz.{-\/, \/-}
 
 
@@ -29,9 +30,14 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
   override type Protocol = PostPrototol.type
   override val protocol: Protocol = PostPrototol
 
+
+  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+    new PostFixture( config, system, slug )
+  }
+
   override type Fixture = PostFixture
 
-  class PostFixture extends AggregateFixture {
+  class PostFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[PostFixture]
 
     override val module: AggregateRootModule = PostModule
@@ -48,17 +54,28 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    // override val module: AggregateRootModule = new PostModule with AggregateModuleInitializationExtension { }
-    def moduleCompanions: List[AggregateRootModule] = List( PostModule )
-
-    override def context: Map[Symbol, Any] = trace.block( "context" ) {
-      val result = super.context
-      val makeAuthorListing = () => trace.block( "makeAuthorList" ){ author.ref }
-      result + ( 'authorListing -> makeAuthorListing )
+    object TestPostRootType extends PostModule.PostType {
+      override def repositoryProps( implicit model: DomainModel ): Props = PostModule.Repository.localProps( model )
     }
+
+    override val rootTypes: Set[AggregateRootType] = Set( TestPostRootType )
+//    override def resources: Map[Symbol, Any] = AuthorListingModule resources system
+    override def resources: Map[Symbol, Any] = {
+      val makeAuthorListing = () => trace.briefBlock( "TEST:makeAuthorList" ){ author.ref }
+      Map( AuthorListingModule.ResourceKey -> makeAuthorListing )
+    }
+//    override def startTasks( system: ActorSystem ): Set[StartTask] = {
+////      Set( StartTask( AuthorListingModule.startTask(system), "AuthorListing" ) )
+//    }
+
+
+//    override def context: Map[Symbol, Any] = trace.block( "context" ) {
+//      val result = super.context
+//      val makeAuthorListing = () => trace.block( "makeAuthorList" ){ author.ref }
+//      result + ( 'authorListing -> makeAuthorListing )
+//    }
   }
 
-  override def createAkkaFixture( test: OneArgTest ): Fixture = new PostFixture
 
   object GOOD extends Tag( "good" )
 
@@ -78,8 +95,9 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       val id = PostModule.nextId.toOption.get
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
+      logger.debug( "TEST: ADD CONTENT to post:[{}]", post )
       post !+ P.AddPost( id, content )
-      bus.expectMsgPF( max = 800.millis.dilated, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
+      bus.expectMsgPF( max = 3000.millis.dilated, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: P.PostAdded => payload.content mustBe content
       }
     }
@@ -206,7 +224,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "follow happy path" taggedAs (WIP) in { fixture: Fixture =>
+    "follow happy path" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId.toOption.get
@@ -242,17 +260,17 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "recorded in author register after post added via bus" in { fixture: Fixture =>
+    "recorded in author index after post added via bus" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.rootType
-      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
+      val ar = model.aggregateIndexFor[String, PostModule.TID, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
       for {
         register <- ar 
       } {
         val id = PostModule.nextId.toOption.get
-        val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+        val content = PostContent( author="Damon", title="Test Add", body="testing author index add" )
         system.eventStream.subscribe( bus.ref, classOf[P.Event] )
 
         val post = PostModule.aggregateOf( id )
@@ -265,16 +283,16 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         countDown await 200.millis.dilated
 
         whenReady( register.futureGet( "Damon" ) ) { result => result mustBe Some(id) }
-        trace( s"""register:Damon = ${register.get("Damon")}""" )
+        trace( s"""index:Damon = ${register.get("Damon")}""" )
         register.get( "Damon" ) mustBe Some(id)
       }
     }
 
-    "recorded in title register after post added via event stream" in { fixture: Fixture =>
+    "recorded in title index after post added via event stream" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.rootType
-      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
+      val ar = model.aggregateIndexFor[String, PostModule.TID, PostModule.TID]( rt, 'title )
       ar.isRight mustBe true
       for {
         register <- ar 
@@ -282,7 +300,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         val p = TestProbe()
 
         val id = PostModule.nextId.toOption.get
-        val content = PostContent( author="Damon", title="Test Add", body="testing author register add" )
+        val content = PostContent( author="Damon", title="Test Add", body="testing author index add" )
         system.eventStream.subscribe( bus.ref, classOf[P.Event] )
         system.eventStream.subscribe( p.ref, classOf[P.Event] )
 
@@ -307,13 +325,13 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "withdrawn title in register after post delete via event stream" in { fixture: Fixture =>
+    "withdrawn title in index after post delete via event stream" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.rootType
-      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
+      val ar = model.aggregateIndexFor[String, PostModule.TID, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
-      val tr = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
+      val tr = model.aggregateIndexFor[String, PostModule.TID, PostModule.TID]( rt, 'title )
       tr.isRight mustBe true
       for {
         authorRegister <- ar
@@ -323,7 +341,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
         val id = PostModule.nextId.toOption.get
 
-        val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
+        val content = PostContent( author="Damon", title="Test Add", body="testing index add" )
         system.eventStream.subscribe( bus.ref, classOf[P.Event] )
         system.eventStream.subscribe( p.ref, classOf[P.Event] )
 
@@ -371,13 +389,13 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "revised title in register after post title change via event stream" in { fixture: Fixture =>
+    "revised title in index after post title change via event stream" in { fixture: Fixture =>
       import fixture._
 
       val rt = PostModule.rootType
-      val ar = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'author )
+      val ar = model.aggregateIndexFor[String, PostModule.TID, PostModule.TID]( rt, 'author )
       ar.isRight mustBe true
-      val tr = model.aggregateRegisterFor[String, PostModule.TID]( rt, 'title )
+      val tr = model.aggregateIndexFor[String, PostModule.TID, PostModule.TID]( rt, 'title )
       tr.isRight mustBe true
       for {
         authorRegister <- ar
@@ -386,7 +404,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
         val p = TestProbe()
 
         val id = PostModule.nextId.toOption.get
-        val content = PostContent( author="Damon", title="Test Add", body="testing register add" )
+        val content = PostContent( author="Damon", title="Test Add", body="testing index add" )
         system.eventStream.subscribe( bus.ref, classOf[P.Event] )
         system.eventStream.subscribe( p.ref, classOf[P.Event] )
 

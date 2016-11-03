@@ -1,6 +1,5 @@
 package demesne.module
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect._
 import akka.actor.Props
 import scalaz._
@@ -10,15 +9,13 @@ import peds.commons.identifier.Identifying
 import peds.commons.builder._
 import peds.commons.util._
 import peds.commons.log.Trace
-import peds.commons.{TryV, Valid}
+import peds.commons.TryV
 import demesne._
-import demesne.register.AggregateIndexSpec
+import demesne.index.IndexSpecification
+import demesne.repository.{AggregateRootProps, CommonClusteredRepository, CommonLocalRepository}
 
 
-abstract class SimpleAggregateModule[S: ClassTag : Identifying]
-extends AggregateRootModule
-with InitializeAggregateRootClusterSharding { module =>
-
+abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends AggregateRootModule { module =>
   override def nextId: TryV[TID] = {
     import scala.reflect._
     val tidTag = classTag[TID]
@@ -30,25 +27,38 @@ with InitializeAggregateRootClusterSharding { module =>
     }
   }
 
-  def indexes: Seq[AggregateIndexSpec[_, _]] = Seq.empty[AggregateIndexSpec[_, _]]
+  def indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification]
 
   def aggregateRootPropsOp: AggregateRootProps
-  def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
+//todo why is this here?  def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
 
   val evState: ClassTag[S] = implicitly[ClassTag[S]]
   val identifying: Identifying[S] = implicitly[Identifying[S]]
 
 
-  trait SimpleAggregateRootType extends AggregateRootType {
+  def environment: AggregateEnvironment
+
+  class SimpleAggregateRootType(
+    override val name: String,
+    override val indexes: Seq[IndexSpecification],
+    environment: AggregateEnvironment
+  ) extends AggregateRootType {
+
+    override lazy val identifying: Identifying[_] = module.identifying
+
+    override def repositoryProps( implicit model: DomainModel ): Props = {
+      environment match {
+        case ClusteredAggregate => CommonClusteredRepository.props( model, this, module.aggregateRootPropsOp )
+        case LocalAggregate => CommonLocalRepository.props( model, this, module.aggregateRootPropsOp )
+      }
+    }
+
     override def toString: String = name + "SimpleAggregateRootType"
   }
 
+
   override def rootType: AggregateRootType = {
-    new SimpleAggregateRootType {
-      override def name: String = module.shardName
-      override def indexes: Seq[AggregateIndexSpec[_, _]] = module.indexes
-      override def aggregateRootProps( implicit model: DomainModel ): Props = module.aggregateRootPropsOp( model, this )
-    }
+    new SimpleAggregateRootType( name = module.shardName, indexes = module.indexes, environment )
   }
 }
 
@@ -64,15 +74,17 @@ object SimpleAggregateModule {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[S]].runtimeClass )
         object Props extends Param[AggregateRootProps]
-        object Indexes extends OptParam[Seq[AggregateIndexSpec[_,_]]]( Seq.empty[AggregateIndexSpec[_,_]] )
+        object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
+        object Indexes extends OptParam[Seq[IndexSpecification]]( Seq.empty[IndexSpecification] )
       }
 
       override val gen = Generic[CC]
-      override val fieldsContainer = createFieldsContainer( 
-        P.Tag :: 
-        P.Props :: 
+      override val fieldsContainer = createFieldsContainer(
+        P.Tag ::
+        P.Props ::
+        P.Environment ::
         P.Indexes ::
-        HNil 
+        HNil
       )
     }
   }
@@ -81,9 +93,10 @@ object SimpleAggregateModule {
   final case class SimpleAggregateModuleImpl[S: ClassTag : Identifying](
     override val aggregateIdTag: Symbol,
     override val aggregateRootPropsOp: AggregateRootProps,
-    override val indexes: Seq[AggregateIndexSpec[_,_]]
-  ) extends SimpleAggregateModule[S] with Equals {
-    override val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
+    override val environment: AggregateEnvironment,
+    override val indexes: Seq[IndexSpecification]
+  ) extends SimpleAggregateModule[S] with Equals { module =>
+    private val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
 
     def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {
       val lhs = implicitly[ClassTag[I]]
@@ -96,18 +109,6 @@ object SimpleAggregateModule {
 
     override type ID = identifying.ID
     override def nextId: TryV[TID] = identifying.nextId
-
-    var _props: Map[Symbol, Any] = Map()
-    override def moduleProperties: Map[Symbol, Any] = _props
-
-    override def initializer( 
-      rootType: AggregateRootType, 
-      model: DomainModel, 
-      props: Map[Symbol, Any] 
-    )( 
-      implicit ec: ExecutionContext
-    ) : Valid[Future[Unit]] = trace.block( "initializer" ) { Future.successful{ _props = props }.successNel }
-
 
     override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]
 

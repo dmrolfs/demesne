@@ -31,7 +31,7 @@ package object testkit {
       |}
       |
       |akka {
-      |  loggers = ["akka.event.slf4j.Slf4jLogger"]
+      |  loggers = ["akka.testkit.TestEventListener"]  # "akka.event.slf4j.Slf4jLogger",
       |  logging-filter = "akka.event.DefaultLoggingFilter"
       |  loglevel = DEBUG
       |  stdout-loglevel = DEBUG
@@ -85,7 +85,49 @@ package object testkit {
       |  router-misconfiguration = on
       |}
       |
-      |demesne.register-dispatcher {
+      |akka {
+      |  extensions = ["com.romix.akka.serialization.kryo.KryoSerializationExtension$"]
+      |  actor {
+      |    kryo  {
+      |      type = "graph"
+      |      idstrategy = "incremental"
+      |      buffer-size = 4096
+      |      max-buffer-size = -1
+      |      use-manifests = false
+      |      use-unsafe = false
+      |      post-serialization-transformations = "lz4,aes"
+      |      encryption {
+      |        aes {
+      |          mode = "AES/CBC/PKCS5Padding"
+      |          key = "8fjF%F4d$w!ZPUfu"
+      |          IV-length = 16
+      |        }
+      |      }
+      |      implicit-registration-logging = true
+      |      kryo-trace = false
+      |      resolve-subclasses = false
+      |      //      mappings {
+      |      //        "package1.name1.className1" = 20,
+      |      //        "package2.name2.className2" = 21
+      |      //      }
+      |      classes = [
+      |        "demesne.EventLike"
+      |      ]
+      |    }
+      |
+      |    serializers {
+      |      java = "akka.serialization.JavaSerializer"
+      |      kyro = "com.romix.akka.serialization.kryo.KryoSerializer"
+      |    }
+      |
+      |    serialization-bindings {
+      |      "demesne.EventLike" = kyro
+      |      "scala.Option" = kyro
+      |    }
+      |  }
+      |}
+      |
+      |demesne.index-dispatcher {
       |  type = Dispatcher
       |  executor = "fork-join-executor"
       |  fork-join-executor {

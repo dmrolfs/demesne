@@ -9,6 +9,8 @@ import Scalaz._
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
+import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
+import demesne.repository.EnvelopingAggregateRootRepository
 import peds.commons.TryV
 import peds.commons.identifier._
 import peds.akka.publish.EventPublisher
@@ -84,7 +86,7 @@ object SeatsAvailabilityProtocol extends AggregateProtocol[ShortUUID] {
 /**
  * Manages the availability of conference seats. Currently there is one SeatsAvailability instance per conference.
  *
- * Some of the instances of SeatsAvailability are highly contentious, as there could be several users trying to register
+ * Some of the instances of SeatsAvailability are highly contentious, as there could be several users trying to index
  * for the same conference at the same time.
  */
 object SeatsAvailabilityModule extends AggregateRootModule { module =>
@@ -95,12 +97,24 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
     new IllegalStateException( "SeatsAvailability supports corresponding Conference so does not have independent ID" ).left
   }
 
-  override val rootType: AggregateRootType = {
-    new AggregateRootType {// def actorFactory: ActorFactory
-      override def name: String = module.shardName
-      override def aggregateRootProps( implicit model: DomainModel ): Props = SeatsAvailability.props( model, this )
-    }
+
+  object Repository {
+    def props( model: DomainModel ): Props = Props( new Repository( model ) )
   }
+
+  class Repository( model: DomainModel )
+    extends EnvelopingAggregateRootRepository( model, SeatsAvailabilityType ) with ClusteredAggregateContext {
+    override def aggregateProps: Props = SeatsAvailability.props( model, rootType )
+  }
+
+
+  object SeatsAvailabilityType extends AggregateRootType {
+    override def name: String = module.shardName
+    override lazy val identifying: Identifying[_] = seatsAvailabilityIdentifying
+    override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
+  }
+
+  override val rootType: AggregateRootType = SeatsAvailabilityType
 
 
   implicit val seatsAvailabilityIdentifying: Identifying[SeatsAvailabilityState] = {
@@ -145,13 +159,12 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
   class SeatsAvailability(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SeatsAvailabilityState, ShortUUID] { outer: EventPublisher =>
-
+  ) extends AggregateRoot[SeatsAvailabilityState, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
     import SeatsAvailabilityProtocol._
 
-    override val trace = Trace( "SeatsAvailability", log )
+    private val trace = Trace( "SeatsAvailability", log )
 
-    // override val registerBus: RegisterBus = model.registerBus
+    // override val indexBus: IndexBus = model.indexBus
 
     override def parseId( idstr: String ): TID = {
       val identifying = implicitly[Identifying[SeatsAvailabilityState]]
@@ -159,6 +172,7 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
     }
 
     override var state: SeatsAvailabilityState = _
+    override val evState: ClassTag[SeatsAvailabilityState] = ClassTag( classOf[SeatsAvailabilityState] )
 
     override def acceptance: Acceptance = {
       // Conference/Registration/SeatsAvailability.cs[185-198]
@@ -195,37 +209,33 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [60-68]
         // Conference/Registration/SeatsAvailability.cs [85-88]
         case AddSeats( _, seatTypeId, quantity ) => {
-          persist( makeAvailableSeatsChangedEvent(seatTypeId, quantity) ) { event => state = acceptAndPublish( event ) }
+          persist( makeAvailableSeatsChangedEvent(seatTypeId, quantity) ) { acceptAndPublish }
         }
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [70-78]
         // Conference/Registration/SeatsAvailability.cs [90-93]
         case RemoveSeats( conferenceId, seatTypeId, quantity ) => {
-          persist( makeAvailableSeatsChangedEvent(seatTypeId, -1 * quantity) ) { e => state = acceptAndPublish( e ) }
+          persist( makeAvailableSeatsChangedEvent(seatTypeId, -1 * quantity) ) { acceptAndPublish }
         }
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [37-42]
         // Conference/Registration/SeatsAvailability.cs [95-135]
         case c @ MakeSeatReservation( conferenceId, reservationId, seats )
         if seats forall { s => state.remainingSeats.contains( s.seatTypeId ) } => {
-          persist( makeSeatsReservedEvent( reservationId, calculateDifference( reservationId, seats ) ) ) { event =>
-            state = acceptAndPublish( event )
-          }
+          persist( makeSeatsReservedEvent( reservationId, calculateDifference( reservationId, seats ) ) ) { acceptAndPublish }
         }
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [44-49]
         // Conference/Registration/SeatsAvailability.cs [137-148]
         case CancelSeatReservation( conferenceId, reservationId ) => {
           val reservation = state.pendingReservations.getOrElse( reservationId, Seq() )
-          persist( SeatsReservationCancelled( conferenceId, reservationId, reservation.toSet ) ) { event =>
-            state = acceptAndPublish( event )
-          }
+          persist( SeatsReservationCancelled( conferenceId, reservationId, reservation.toSet ) ) { acceptAndPublish }
         }
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [51-56]
         // Conference/Registration/SeatsAvailability.cs [150-156]
         case CommitSeatReservation( conferenceId, reservationId ) => {
-          persist( SeatsReservationCommitted( conferenceId, reservationId ) ) { e => state = acceptAndPublish( e ) }
+          persist( SeatsReservationCommitted( conferenceId, reservationId ) ) { acceptAndPublish }
         }
       }
     }

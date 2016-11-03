@@ -1,23 +1,22 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import scala.concurrent.duration._
 import scala.reflect.ClassTag
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import akka.actor.ActorRef
+import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit._
 
 import scalaz._
 import Scalaz._
 import com.typesafe.config.Config
-import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
-import org.scalatest.mock.MockitoSugar
+import org.scalatest.mockito.MockitoSugar
 import peds.commons.identifier.TaggedID
 import peds.commons.log.Trace
-import demesne.{AggregateProtocol, AggregateRootModule, DomainModel}
+import demesne._
+import demesne.repository.StartProtocol
 
 
 object AggregateRootSpec {
@@ -41,68 +40,61 @@ with BeforeAndAfterAll
   type Protocol <: AggregateProtocol[ID]
   val protocol: Protocol
 
-  abstract class AggregateFixture(
-    id: Int = AggregateRootSpec.sysId.incrementAndGet(),
-    config: Config = demesne.testkit.config
-  ) extends AkkaFixture( id, config ) { fixture =>
-    logger.info( "FIXTURE ID = [{}]", id.toString )
+  abstract class AggregateFixture( _config: Config, _system: ActorSystem, _slug: String )
+  extends AkkaFixture( _config, _system, _slug ) { fixture =>
     private val trace = Trace[AggregateFixture]
 
     val module: AggregateRootModule
 
     import akka.util.Timeout
-    implicit val timeout = Timeout( 5.seconds )
+    implicit val actorTimeout = Timeout( 5.seconds )
 
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
-      for { 
-        init <- moduleCompanions.map{ _ initialize context }.sequence
-      } {
-        Await.ready( Future sequence { init }, 5.seconds )
-      }
+    override def before( test: OneArgTest ): Unit = trace.block( "before" ) {
+      import akka.pattern.AskableActorSelection
+      val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
+
+      Await.ready( ( supervisorSel ? StartProtocol.WaitForStart ), 5.seconds )
+      logger.debug(
+        "model from started BoundedContext = [{}] with root-types=[{}]",
+        boundedContext.unsafeModel,
+        boundedContext.unsafeModel.rootTypes.mkString(", ")
+      )
     }
-
-    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
 
     val bus = TestProbe()
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
 
-    def moduleCompanions: List[AggregateRootModule]
+    def rootTypes: Set[AggregateRootType]
+    def resources: Map[Symbol, Any] = Map.empty[Symbol, Any]
+    def startTasks( system: ActorSystem ): Set[StartTask] = Set.empty[StartTask]
 
     def nextId(): TID
     lazy val tid: TID = nextId()
 
     lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
 
-    //todo need to figure out how to prevent x-test clobbering of DM across suites
-    implicit lazy val model: DomainModel = {
-      val result = DomainModel.register( s"DomainModel-Isolated-${id}" )( system ) map { Await.result( _, 1.second ) }
-      result.toOption.get
+    lazy val boundedContext: BoundedContext = trace.block(s"FIXTURE: boundedContext($slug)") {
+      val key = Symbol( s"BoundedContext-${slug}" )
+
+      val bc = for {
+        made <- BoundedContext.make( key, config, userResources = resources, startTasks = startTasks(system) )
+        filled = rootTypes.foldLeft( made ){ (acc, rt) =>
+          logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc )
+          acc :+ rt
+        }
+        _ <- filled.futureModel map { m => logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") ); m }
+        started <- filled.start()
+      } yield started
+
+      val result = Await.result( bc, 5.seconds )
+      logger.debug( "Bounded Context root-type:[{}]", result.unsafeModel.rootTypes.mkString(", ") )
+      result
     }
 
-    def context: Map[Symbol, Any] = trace.block( "context()" ) {
-      Map(
-        demesne.ModelKey -> model,
-        demesne.SystemKey -> system,
-        demesne.FactoryKey -> demesne.factory.contextFactory
-      )
-    }
+    implicit lazy val model: DomainModel = trace.block("model") { Await.result( boundedContext.futureModel, 6.seconds ) }
   }
 
   override type Fixture <: AggregateFixture
-
-  override def withFixture( test: OneArgTest ): Outcome = {
-    val fixture = createAkkaFixture( test )
-
-    try {
-      fixture before test
-      test( fixture )
-    } finally {
-      fixture after test
-      fixture.system.terminate()
-    }
-  }
-
-
 
 
   object WIP extends Tag( "wip" )

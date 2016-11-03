@@ -1,4 +1,4 @@
-package demesne.register
+package demesne.index
 
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
@@ -10,7 +10,7 @@ import scalaz._, Scalaz._
 import demesne._
 // import demesne.module.
 import demesne.scaladsl._
-import demesne.register.local.RegisterLocalAgent
+import demesne.index.local.RegisterLocalAgent
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
@@ -348,16 +348,16 @@ class RegisterAcceptanceSpecB extends AggregateRootSpec[RegisterAcceptanceSpecB]
         countDown await 200.millis.dilated
 
         whenReady( busRegister.futureGet( "Test Foo" ) ) { result => result mustBe Some(id) }
-        trace( s"""bus-register:Test Foo = ${busRegister.get("Test Foo")}""" )
+        trace( s"""bus-index:Test Foo = ${busRegister.get("Test Foo")}""" )
         busRegister.get( "Test Foo" ) mustBe Some(id)
 
         whenReady( streamRegister.futureGet( 17 ) ) { result => result mustBe Some(id) }
-        trace( s"stream-register:17 = ${streamRegister.get(17)}" )
+        trace( s"stream-index:17 = ${streamRegister.get(17)}" )
         streamRegister.get( 17 ) mustBe Some(id)
       }
     }
 
-    "withdrawn from register after delete" in { fixture: Fixture =>
+    "withdrawn from index after delete" in { fixture: Fixture =>
       import fixture._
 
       val rt = TestAggregate.module.aggregateRootType
@@ -429,7 +429,7 @@ class RegisterAcceptanceSpecB extends AggregateRootSpec[RegisterAcceptanceSpecB]
       }
     }
 
-    "revised in register after change" taggedAs(WIP) in { fixture: Fixture =>
+    "revised in index after change" taggedAs(WIP) in { fixture: Fixture =>
       import fixture._
 
       val rt = TestAggregate.module.aggregateRootType

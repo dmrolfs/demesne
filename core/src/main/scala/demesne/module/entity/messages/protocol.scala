@@ -1,32 +1,11 @@
 package demesne.module.entity.messages
 
-import demesne.{AggregateProtocol, AggregateRootModule}
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
-import peds.commons.identifier.Identifying
+import demesne.AggregateRootModule
 
 
 sealed trait EntityMessage
 abstract class EntityCommand extends AggregateRootModule.Command[Any] with EntityMessage
 abstract class EntityEvent extends AggregateRootModule.Event[Any] with EntityMessage
-
-abstract class EntityProtocol[E <: Entity : Identifying] extends AggregateProtocol[E#ID] {
-  type EntityMessage = demesne.module.entity.messages.EntityMessage
-
-  object EntityMessage {
-    type Add = demesne.module.entity.messages.Add
-    type Rename = demesne.module.entity.messages.Rename
-    type Reslug = demesne.module.entity.messages.Reslug
-    type Disable = demesne.module.entity.messages.Disable
-    type Enable = demesne.module.entity.messages.Enable
-
-    type Added = demesne.module.entity.messages.Added
-    type Renamed = demesne.module.entity.messages.Renamed
-    type Reslugged = demesne.module.entity.messages.Reslugged
-    type Disabled = demesne.module.entity.messages.Disabled
-    type Enabled = demesne.module.entity.messages.Enabled
-  }
-}
-
 
 case class Add( override val targetId: Add#TID, info: Option[Any] = None ) extends EntityCommand
 case class Rename( override val targetId: Rename#TID, name: String ) extends EntityCommand

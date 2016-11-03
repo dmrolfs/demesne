@@ -3,16 +3,12 @@ package demesne
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
 import peds.commons.TryV
-import peds.commons.identifier.TaggedID
-import peds.commons.log.Trace
+import peds.commons.identifier.{Identifying, TaggedID}
 import peds.commons.util._
 
 
-abstract class AggregateRootModule
-extends AggregateRootType.Provider
-with CommonInitializeAggregateActorType
-with LazyLogging { module =>
-  def trace: Trace[_]
+abstract class AggregateRootModule extends AggregateRootType.Provider with LazyLogging { module =>
+//  val identifying: Identifying[_]
 
   type ID
 
@@ -22,7 +18,7 @@ with LazyLogging { module =>
   def aggregateIdTag: Symbol = _aggregateIdTag
   def shardName: String = _shardName
 
-  def aggregateOf( id: TID )( implicit model: DomainModel ): ActorRef = model.aggregateOf( rootType = module.rootType, id )
+  def aggregateOf( id: Any  )( implicit model: DomainModel ): ActorRef = model( rootType = module.rootType, id )
 
   implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
 
@@ -50,13 +46,14 @@ object AggregateRootModule {
   val PersistentActor = """(\w+)PersistentActor""".r
 
   def tagify( clazz: Class[_] ): Symbol = {
-    val name = clazz.safeSimpleName match {
+    val tag = clazz.safeSimpleName match {
       case Module(n) => n
       case Actor(n) => n
       case PersistentActor(n) => n
       case n => n
     }
 
-    Symbol( name(0).toLower + name.drop(1) )
-  } 
+//    Symbol( tag(0).toLower + tag.drop(1) )
+    Symbol( tag )
+  }
 }
