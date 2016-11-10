@@ -1,18 +1,17 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scalaz.{-\/, \/, \/-}
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import org.scalatest.{MustMatchers, Outcome, ParallelTestExecution, fixture}
 import peds.commons.log.Trace
+import peds.commons.util._
 import demesne.{AggregateRootType, BoundedContext, DomainModel}
-
-import scalaz.{-\/, \/, \/-}
 
 
 object ParallelAkkaSpec {
@@ -48,7 +47,7 @@ abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with 
   }
 
 
-  def testSlug( test: OneArgTest ): String = "Parallel-" + ParallelAkkaSpec.testPosition.incrementAndGet()
+  def testSlug( test: OneArgTest ): String = s"Par-${getClass.safeSimpleName}-${ParallelAkkaSpec.testPosition.incrementAndGet()}"
   def testConfiguration( test: OneArgTest, slug: String ): Config = demesne.testkit.config
   def testSystem( test: OneArgTest, config: Config, slug: String ): ActorSystem = ActorSystem( name = slug, config )
   def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture

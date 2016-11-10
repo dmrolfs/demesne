@@ -10,6 +10,7 @@ import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import org.scalatest.{MustMatchers, Outcome, fixture}
 import peds.commons.log.Trace
+import peds.commons.util._
 
 
 object SequentialAkkaSpecWithIsolatedFixture {
@@ -33,7 +34,10 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
   }
 
 
-  def testSlug( test: OneArgTest ): String = "Sequential-" + SequentialAkkaSpecWithIsolatedFixture.testPosition.incrementAndGet()
+  def testSlug( test: OneArgTest ): String = {
+    s"Seq-${getClass.safeSimpleName}-${SequentialAkkaSpecWithIsolatedFixture.testPosition.incrementAndGet()}"
+  }
+
   def testConfiguration( test: OneArgTest, slug: String ): Config = demesne.testkit.config
   def testSystem( test: OneArgTest, config: Config, slug: String ): ActorSystem = ActorSystem( name = slug, config )
   def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture
