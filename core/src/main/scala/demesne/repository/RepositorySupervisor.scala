@@ -279,7 +279,7 @@ class RepositorySupervisor(
     )
 
     val collected = userResources ++ repository.collectDependenciesFrom( state.availableResources )
-    log.debug( "collected resources: [{}]", collected.mkString(", ") )
+    log.debug( "collected resources: [{}]", collected.keySet )
     collected
   }
 }

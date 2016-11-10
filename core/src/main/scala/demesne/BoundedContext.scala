@@ -23,9 +23,11 @@ import demesne.index.{IndexBus, IndexSupervisor}
   */
 abstract class BoundedContext {
   def name: String
+  def system: ActorSystem
   def unsafeModel: DomainModel
   def futureModel: Future[DomainModel]
   def resources: Map[Symbol, Any]
+  def configuration: Config
   def :+( rootType: AggregateRootType ): BoundedContext
   def +:( rootType: AggregateRootType ): BoundedContext = this :+ rootType
   def withResources( rs: Map[Symbol, Any] ): BoundedContext
@@ -180,6 +182,7 @@ object BoundedContext extends StrictLogging { outer =>
     }
 
     override val name: String = key.name
+    override def system: ActorSystem = unsafeCell.system
     override def unsafeModel: DomainModel = unsafeCell.unsafeModel
     override def futureModel: Future[DomainModel] = {
       implicit val ec = contextsExecutionPool
@@ -187,6 +190,8 @@ object BoundedContext extends StrictLogging { outer =>
     }
 
     override def resources: Map[Symbol, Any] = unsafeCell.resources
+
+    override def configuration: Config = unsafeCell.configuration
 
     override def :+( rootType: AggregateRootType ): BoundedContext = {
       outer.alterContextCell( key ){ cell =>
@@ -260,9 +265,9 @@ object BoundedContext extends StrictLogging { outer =>
 
   final case class BoundedContextCell private[BoundedContext](
     key: Symbol,
-    system: ActorSystem,
+    override val system: ActorSystem,
     modelCell: DomainModelCell,
-    configuration: Config,
+    override val configuration: Config,
     userResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
     startTasks: Seq[StartTask] = Seq.empty[StartTask],
     supervisors: Option[Supervisors] = None

@@ -77,8 +77,8 @@ object DomainModel {
 
     override def name: String = key.name
 
-    override def get( rootName: String, id: Any ): Option[ActorRef] = trace.block(s"get($rootName, $id)") {
-      logger.debug( "TEST: aggregateRefs=[{}]", aggregateRefs.mkString(", ") )
+    override def get( rootName: String, id: Any ): Option[ActorRef] = trace.briefBlock(s"get($rootName, $id)") {
+      // logger.debug( "TEST: aggregateRefs=[{}]", aggregateRefs.mkString(", ") )
       aggregateRefs.get( rootName ) map { _.repositoryRef }
     }
 

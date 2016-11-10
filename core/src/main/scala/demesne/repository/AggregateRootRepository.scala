@@ -48,7 +48,7 @@ object AggregateRootRepository {
   }
 
   trait LocalAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
-    override def aggregateFor( command: Any ): ActorRef = trace.block( s"aggregateFor(${command})" ) {
+    override def aggregateFor( command: Any ): ActorRef = trace.briefBlock( s"aggregateFor(${command})" ) {
       if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
         log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
       }
@@ -76,7 +76,7 @@ object AggregateRootRepository {
       }
     }
 
-    override def aggregateFor( command: Any ): ActorRef = trace.block( s"aggregateFor(${command})" ) {
+    override def aggregateFor( command: Any ): ActorRef = trace.briefBlock( s"aggregateFor(${command})" ) {
       if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
         log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
       }
