@@ -1,6 +1,8 @@
 package demesne
 
 import akka.Done
+import com.typesafe.scalalogging.StrictLogging
+
 import scalaz.concurrent.Task
 
 
@@ -12,7 +14,7 @@ sealed abstract class StartTask {
   def description: String
 }
 
-object StartTask {
+object StartTask extends StrictLogging {
   def withFunction( description: String )( fn: BoundedContext => Done ): StartTask = DelayedDefinitionStartTask( fn, description )
 
   def withUnitTask( description: String )( t: Task[Done] ): StartTask = {
@@ -27,17 +29,32 @@ object StartTask {
   def empty( description: String ): StartTask = withBoundTask( s"${description} (empty start task)" ){ _ => Task now Done }
 
 
+  sealed abstract class WrappingStartTask extends StartTask {
+    def wrap( task: Task[Done] ): Task[Done] = {
+      Task
+      .now { logger.info( "starting: {} ...", description ); Done }
+      .flatMap { _ => task }
+      .onFinish { ex =>
+        ex match {
+          case None => logger.info( "finished: {}", description )
+          case Some( ex ) => logger.error( s"StartTask:[${description}] failed", ex )
+        }
+        Task now { () }
+      }
+    }
+  }
+
   final case class BoundedStartTask private[StartTask](
     makeTask: BoundedContext => Task[Done],
     description: String
-  ) extends StartTask {
-    override def task( bc: BoundedContext ): Task[Done] = makeTask( bc )
+  ) extends WrappingStartTask {
+    override def task( bc: BoundedContext ): Task[Done] = wrap( makeTask(bc) )
   }
 
   final case class DelayedDefinitionStartTask private[StartTask](
     fn: BoundedContext => Done,
     override val description: String
-  ) extends StartTask {
-    override def task( bc: BoundedContext ): Task[Done] = Task { fn(bc) }
+  ) extends WrappingStartTask {
+    override def task( bc: BoundedContext ): Task[Done] = wrap( Task { fn(bc) } )
   }
 }

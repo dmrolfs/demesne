@@ -129,10 +129,10 @@ with ActorLogging {
         val eventState = (event, s)
         if ( acceptance.isDefinedAt( eventState ) ) {
           val newState = acceptance( eventState )
-          log.debug( "newState = {}", newState )
-          log.debug( "BEFORE state = {}", state )
+          // log.debug( "newState = {}", newState )
+          // log.debug( "BEFORE state = {}", state )
           state = newState
-          log.debug( "AFTER state = {}", state )
+          // log.debug( "AFTER state = {}", state )
           newState
         } else {
           log.debug( "{} does not accept event {}", Option(s).map{_.getClass.safeSimpleName}, event.getClass.safeSimpleName )
@@ -173,25 +173,25 @@ with ActorLogging {
     case offer: SnapshotOffer => { state = acceptSnapshot( offer ) }
 
     case _: RecoveryCompleted => {
-      log.info( "RecoveryCompleted from journal for aggregate root actor:[{}] state:[{}]", self.path, state )
+      log.debug( "RecoveryCompleted from journal for aggregate root actor:[{}] state:[{}]", self.path, state )
     }
 
     case event => {
       val before = state
       state = accept( event )
-      log.info( "[{}] recovered event:[{}] state-before:[{}], state-after", self.path, event, before, state )
+      log.debug( "[{}] recovered event:[{}] state-before:[{}], state-after", self.path, event, before, state )
     }
   }
 
   override def unhandled( message: Any ): Unit = {
     message match {
       case m: ReceiveTimeout => {
-        log.info( "[{}] id:[{}] Passivating per receive-timeout", self.path, aggregateId )
+        log.debug( "[{}] id:[{}] Passivating per receive-timeout", self.path, aggregateId )
         context.parent ! rootType.passivation.passivationMessage( PassivationSpecification.StopAggregateRoot[TID](aggregateId) )
       }
 
       case stop @ PassivationSpecification.StopAggregateRoot(id) if id == aggregateId => {
-        log.info( "[{}] id:[{}] Stopping AggregateRoot after passivation", self.path, aggregateId )
+        log.debug( "[{}] id:[{}] Stopping AggregateRoot after passivation", self.path, aggregateId )
         context stop self
       }
 

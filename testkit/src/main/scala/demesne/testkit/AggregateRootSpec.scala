@@ -66,7 +66,14 @@ with BeforeAndAfterAll
 
     def rootTypes: Set[AggregateRootType]
     def resources: Map[Symbol, Any] = Map.empty[Symbol, Any]
-    def startTasks( system: ActorSystem ): Set[StartTask] = Set.empty[StartTask]
+    def startTasks( system: ActorSystem ): Set[StartTask] = {
+      Set(
+        StartTask.withFunction( "test-start-task" ){ bc =>
+          logger.info("test-start-task: bounded context:[{}]", bc.name)
+          akka.Done
+        }
+      )
+    }
 
     def nextId(): TID
     lazy val tid: TID = nextId()
