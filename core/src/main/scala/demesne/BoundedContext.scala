@@ -296,10 +296,11 @@ object BoundedContext extends StrictLogging { outer =>
     override def withResources( rs: Map[Symbol, Any] ): BoundedContext = this.copy( userResources = userResources ++ rs )
 
     override def withStartTask( startTask: StartTask ): BoundedContext = {
-      if ( supervisors.isDefined ) {
-        Task { startTask.task( this ) }
+      if ( started ) {
+        startTask
+        .task( this )
         .unsafePerformAsync {
-          case scalaz.\/-( done )=> logger.debug( "start task completed with result")
+          case scalaz.\/-( done )=> logger.debug( "start task completed with result" )
           case scalaz.-\/( ex ) => {
             logger.error( "start task failed", ex )
             throw ex
@@ -311,6 +312,8 @@ object BoundedContext extends StrictLogging { outer =>
         this.copy( startTasks = startTasks :+ startTask )
       }
     }
+
+    def started: Boolean = supervisors.isDefined
 
     override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = trace.block("start") {
       def debugBoundedContext( label: String, bc: BoundedContextCell ): Unit = {
