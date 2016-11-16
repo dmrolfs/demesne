@@ -8,6 +8,7 @@ import akka.agent.Agent
 import akka.pattern.{AskableActorSelection, ask}
 import akka.util.Timeout
 
+import scalaz._, Scalaz._
 import scalaz.concurrent.Task
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
@@ -332,12 +333,11 @@ object BoundedContext extends StrictLogging { outer =>
 
 
       debugBoundedContext( "START", this )
-      val tasks = Task gatherUnordered gatherAllTasks()
 
       import peds.commons.concurrent._
 
       for {
-        _ <- tasks.unsafeToFuture
+        _ <- gatherAllTasks().unsafeToFuture
       _ = logger.debug( "TEST: after tasks run" )
       _ = debugBoundedContext( "BC-CELL", this )
         supervisors <- setupSupervisors()
@@ -355,10 +355,22 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    private def gatherAllTasks(): Seq[Task[Done]] = {
+    private def gatherAllTasks(): Task[Done] = {
       val rootTasks = modelCell.rootTypes.toSeq map { _.startTask( system ).task( this ) }
       val userTasks = startTasks map { _ task this }
-      rootTasks ++ userTasks
+      val all = ( rootTasks ++ userTasks )
+
+      Task
+      .gatherUnordered( all )
+      .map { _.headOption getOrElse Done }
+      .onFinish { ex =>
+        ex match {
+          case None => logger.info( "BoundedContext[{}]: all {} start tasks completed", name, all.size.toString )
+          case Some( ex ) => logger.error( s"BoundedContext[${name}]: at least one start task failed", ex )
+        }
+
+        Task now { () }
+      }
     }
 
     override def shutdown(): Future[Terminated] = system.terminate()
