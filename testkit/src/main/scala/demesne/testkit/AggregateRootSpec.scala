@@ -65,13 +65,18 @@ with BeforeAndAfterAll
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
 
     def rootTypes: Set[AggregateRootType]
-    def resources: Map[Symbol, Any] = Map.empty[Symbol, Any]
+    def resources: Map[Symbol, Any] = Map( Symbol("dummy-user-resource") -> 3.14159 )
     def startTasks( system: ActorSystem ): Set[StartTask] = {
       Set(
-        StartTask.withFunction( "test-start-task" ){ bc =>
-          logger.info("test-start-task: bounded context:[{}]", bc.name)
-          akka.Done
-        }
+        StartTask.withFunction( "start-task-1" ){ bc =>
+          logger.info("test-start-task1: bounded context:[{}]", bc.name)
+          Map( Symbol("from-start-task-1") -> "resource sourced from start task 1" )
+        },
+        StartTask.withFunction( "start-task-2" ){ bc =>
+          logger.info("test-start-task2: bounded context:[{}]", bc.name)
+          Map( Symbol("from-start-task-2") -> "resource sourced from start task 2" )
+        },
+        StartTask.withUnitFunction( "unit-start-task-3" ){ bc => akka.Done }
       )
     }
 

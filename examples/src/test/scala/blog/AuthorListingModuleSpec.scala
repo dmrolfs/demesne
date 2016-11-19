@@ -67,7 +67,7 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
       val result = {
         for {
           made <- BoundedContext.make( Symbol(slug), config, userResources = AuthorListingModule.resources(system) )
-          ready = made.withStartFunction( "start Author Listing Module" )( AuthorListingModule startTask system )
+          ready = made.withStartTask( AuthorListingModule.startTask )
           started <- ready.start()( global, Timeout(5.seconds) )
         } yield started
       }

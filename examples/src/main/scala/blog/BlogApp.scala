@@ -38,10 +38,10 @@ object BlogApp extends StrictLogging {
         zero <- BoundedContext.make(
           key = 'blog,
           configuration = config,
-          rootTypes = Set(PostModule.rootType),
-          userResources = AuthorListingModule.resources(clusterSystem)
+          rootTypes = Set(PostModule.rootType) //,
+//          userResources = AuthorListingModule.resources(clusterSystem)
         )
-        built = zero.withStartFunction( "starting Author Listing Module" )( AuthorListingModule startTask clusterSystem )
+        built = zero.withStartTask( AuthorListingModule.startTask )
         started <- built.start()
         model <- started.futureModel
       } {
