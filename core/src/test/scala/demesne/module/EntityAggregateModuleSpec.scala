@@ -201,6 +201,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
         aggregateIdTag = Foo.identifying.idTag,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
+        startTask = StartTask.empty( "expected" ),
         environment = LocalAggregate,
         _indexes = FooAggregateRoot.myIndexes,
         idLens = Foo.idLens,

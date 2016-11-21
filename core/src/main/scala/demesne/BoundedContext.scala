@@ -370,7 +370,7 @@ object BoundedContext extends StrictLogging { outer =>
     }
 
     private def gatherAllTasks(): Task[Resources] = {
-      val rootTasks = modelCell.rootTypes.toSeq map { _.startTask( system ).task( this ) }
+      val rootTasks = modelCell.rootTypes.toSeq map { _.startTask.task( this ) }
       val userTasks = startTasks map { _ task this }
       val all = ( rootTasks ++ userTasks )
 
