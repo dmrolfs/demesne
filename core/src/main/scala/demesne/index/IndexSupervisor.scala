@@ -19,7 +19,7 @@ import peds.commons.util._
 /**
  * Created by damonrolfs on 11/6/14.
  */
-class IndexSupervisor(bus: IndexBus )
+class IndexSupervisor( bus: IndexBus )
   extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLogging {
   outer: ConstituencyProvider =>
 

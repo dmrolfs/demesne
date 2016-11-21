@@ -27,18 +27,18 @@ abstract class BoundedContext {
   def system: ActorSystem
   def unsafeModel: DomainModel
   def futureModel: Future[DomainModel]
-  def resources: Map[Symbol, Any]
+  def resources: BoundedContext.Resources
   def configuration: Config
   def :+( rootType: AggregateRootType ): BoundedContext
   def +:( rootType: AggregateRootType ): BoundedContext = this :+ rootType
-  def withResources( rs: Map[Symbol, Any] ): BoundedContext
+  def withResources( rs: BoundedContext.Resources ): BoundedContext
   def withStartTask( task: StartTask ): BoundedContext
-  def withStartTask( description: String )( task: Task[Done] ): BoundedContext = {
-    withStartTask( StartTask.withUnitTask( description )( task ) )
-  }
-  def withStartFunction( description: String )( task: BoundedContext => Done ): BoundedContext = {
-    withStartTask( StartTask.withFunction( description )( task ) )
-  }
+//  def withStartTask( description: String )( task: Task[Done] ): BoundedContext = {
+//    withStartTask( StartTask.withUnitTask( description )( task ) )
+//  }
+//  def withStartFunction( description: String )( task: BoundedContext => Done ): BoundedContext = {
+//    withStartTask( StartTask.withFunction( description )( task ) )
+//  }
   def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext]
   def shutdown(): Future[Terminated]
 }
@@ -70,7 +70,7 @@ object BoundedContext extends StrictLogging { outer =>
     key: Symbol,
     configuration: Config,
     rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType],
-    userResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
+    userResources: Resources = Map.empty[Symbol, Any],
     startTasks: Set[StartTask] = Set.empty[StartTask]
   )(
     implicit system: ActorSystem,
@@ -101,6 +101,8 @@ object BoundedContext extends StrictLogging { outer =>
 
   def unapply( bc: BoundedContext ): Option[(String, DomainModel)] = Some( (bc.name, bc.unsafeModel) )
 
+
+  type Resources = Map[Symbol, Any]
 
   // bounded context resource keys
   object ResourceKeys {
@@ -190,7 +192,7 @@ object BoundedContext extends StrictLogging { outer =>
       futureCell flatMap { _.futureModel }
     }
 
-    override def resources: Map[Symbol, Any] = unsafeCell.resources
+    override def resources: Resources = unsafeCell.resources
 
     override def configuration: Config = unsafeCell.configuration
 
@@ -203,7 +205,7 @@ object BoundedContext extends StrictLogging { outer =>
       this
     }
 
-    override def withResources( rs: Map[Symbol, Any] ): BoundedContext = {
+    override def withResources( rs: Resources ): BoundedContext = {
       sendContextCell( key ){ _.withResources(rs).asInstanceOf[BoundedContextCell] }
       this
     }
@@ -269,7 +271,7 @@ object BoundedContext extends StrictLogging { outer =>
     override val system: ActorSystem,
     modelCell: DomainModelCell,
     override val configuration: Config,
-    userResources: Map[Symbol, Any] = Map.empty[Symbol, Any],
+    userResources: Resources = Map.empty[Symbol, Any],
     startTasks: Seq[StartTask] = Seq.empty[StartTask],
     supervisors: Option[Supervisors] = None
   ) extends BoundedContext {
@@ -279,7 +281,7 @@ object BoundedContext extends StrictLogging { outer =>
     override val unsafeModel: DomainModel = DomainModelRef( key, system )
     override def futureModel: Future[DomainModel] = Future successful unsafeModel
 
-    override lazy val resources: Map[Symbol, Any] = {
+    override lazy val resources: Resources = {
       userResources ++ Map(
         ResourceKeys.Model -> DomainModelRef( key, system ),
         ResourceKeys.System -> system,
@@ -294,7 +296,7 @@ object BoundedContext extends StrictLogging { outer =>
       this.copy( modelCell = newModel )
     }
 
-    override def withResources( rs: Map[Symbol, Any] ): BoundedContext = this.copy( userResources = userResources ++ rs )
+    override def withResources( rs: Resources ): BoundedContext = this.copy( userResources = userResources ++ rs )
 
     override def withStartTask( startTask: StartTask ): BoundedContext = {
       if ( started ) {
@@ -337,7 +339,7 @@ object BoundedContext extends StrictLogging { outer =>
       import peds.commons.concurrent._
 
       for {
-        _ <- gatherAllTasks().unsafeToFuture
+        taskResources <- gatherAllTasks().unsafeToFuture
       _ = logger.debug( "TEST: after tasks run" )
       _ = debugBoundedContext( "BC-CELL", this )
         supervisors <- setupSupervisors()
@@ -349,26 +351,54 @@ object BoundedContext extends StrictLogging { outer =>
       _ = logger.debug( "startedModelCell:[{}]", startedModelCell )
       } yield {
         logger.info( "started BoundedContext:[{}] model:[{}]", (name, system.name), startedModelCell )
-        val result = this.copy( modelCell = startedModelCell, supervisors = Some( supervisors ), startTasks = Seq.empty[StartTask] )
+        val dups = taskResources.keySet intersect userResources.keySet
+        if ( dups.nonEmpty ) {
+          logger.warn( "duplicate resources resulting from start tasks replacing user provided: [{}]", dups.mkString(", ") )
+        }
+
+        val allResources = userResources ++ taskResources
+        val result = this.copy(
+          modelCell = startedModelCell,
+          supervisors = Some(supervisors),
+          startTasks = Seq.empty[StartTask],
+          userResources = allResources
+        )
+
         debugBoundedContext( "DONE", result )
         result
       }
     }
 
-    private def gatherAllTasks(): Task[Done] = {
-      val rootTasks = modelCell.rootTypes.toSeq map { _.startTask( system ).task( this ) }
+    private def gatherAllTasks(): Task[Resources] = {
+      val rootTasks = modelCell.rootTypes.toSeq map { _.startTask.task( this ) }
       val userTasks = startTasks map { _ task this }
       val all = ( rootTasks ++ userTasks )
 
+//todo consider reducer and reduceUnordered
+//      val reducer = new Reducer[]
+//      Task.reduceUnordered( all, true )( )
       Task
       .gatherUnordered( all )
-      .map { _.headOption getOrElse Done }
-      .onFinish { ex =>
-        ex match {
-          case None => logger.info( "BoundedContext[{}]: all {} start tasks completed", name, all.size.toString )
-          case Some( ex ) => logger.error( s"BoundedContext[${name}]: at least one start task failed", ex )
+      .map { resources =>
+        val allResources = resources.foldLeft( Map.empty[Symbol, Any] ){ (acc, rs) =>
+          val dups = rs.keySet intersect acc.keySet
+          if ( dups.nonEmpty ) {
+            logger.warn( "duplicate resources resulting from start tasks - selection undefined: [{}]", dups.mkString(", ") )
+          }
+          acc ++ rs
         }
 
+        logger.info(
+          "BoundedContext[{}]: {} Start tasks completed with resources: [{}]",
+          name,
+          all.size.toString,
+          allResources.mkString(", ")
+        )
+
+        allResources
+      }
+      .onFinish { ex =>
+        ex foreach { x => logger.error( s"BoundedContext[${name}]: at least one start task failed", x ) }
         Task now { () }
       }
     }

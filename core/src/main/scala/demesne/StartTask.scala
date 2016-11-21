@@ -1,60 +1,84 @@
 package demesne
 
 import akka.Done
-import com.typesafe.scalalogging.StrictLogging
-
 import scalaz.concurrent.Task
+import com.typesafe.scalalogging.StrictLogging
 
 
 /**
   * Created by rolfsd on 10/28/16.
   */
 sealed abstract class StartTask {
-  def task( bc: BoundedContext ): Task[Done]
+  def task( bc: BoundedContext ): Task[Map[Symbol, Any]]
   def description: String
 }
 
 object StartTask extends StrictLogging {
-  def withFunction( description: String )( fn: BoundedContext => Done ): StartTask = DelayedDefinitionStartTask( fn, description )
+  type Resources = BoundedContext.Resources
 
-  def withUnitTask( description: String )( t: Task[Done] ): StartTask = {
-    val make = (_: BoundedContext) => { t }
-    BoundedStartTask( make, description )
+  def withFunction( description: String )( fn: BoundedContext => Resources ): StartTask = {
+    FunctionStartTask( fn, description )
   }
 
-  def withBoundTask( description: String )( makeTask: BoundedContext => Task[Done] ): StartTask = {
-    BoundedStartTask( makeTask, description )
+  def withBoundTask( description: String )( fn: BoundedContext => Task[Resources] ): StartTask = {
+    BoundedStartTask( fn, description )
   }
 
-  def empty( description: String ): StartTask = withBoundTask( s"${description} (empty start task)" ){ _ => Task now Done }
+  def withTask( description: String )( t: Task[Resources] ): StartTask = {
+    val bind = (_: BoundedContext) => { t }
+    BoundedStartTask( bind, description )
+  }
+
+  def withUnitTask( description: String )(t: Task[Done] ): StartTask = {
+    val bind = (_: BoundedContext) => { t }
+    BoundedStartTask( bind andThen toEmptyTask, description )
+  }
+
+  def withUnitFunction( description: String )(fn: BoundedContext => Done ): StartTask = {
+    FunctionStartTask( toEmptyResources compose fn, description )
+  }
+
+  def withBoundUnitTask( description: String )(makeTask: BoundedContext => Task[Done] ): StartTask = {
+    BoundedStartTask( makeTask andThen toEmptyTask, description )
+  }
+
+  def empty( description: String ): StartTask = {
+    withBoundTask( s"${description} (empty start task)" ){ _ => Task now Map.empty[Symbol, Any] }
+  }
+
+  val toEmptyResources: Done => Resources = (d: Done) => Map.empty[Symbol, Any]
+  val toEmptyTask: Task[Done] => Task[Resources] = (t: Task[Done]) => t map { toEmptyResources }
 
 
   sealed abstract class WrappingStartTask extends StartTask {
-    def wrap( task: Task[Done] ): Task[Done] = {
+    def wrap( task: Task[Resources] ): Task[Resources] = {
       Task
-      .now { logger.info( "starting: {} ...", description ); Done }
+      .now { logger.info( "starting: {} ...", description ) }
       .flatMap { _ => task }
+      .flatMap { resources =>
+        logger.info( "finished: {} with resources:[{}]", description, resources.mkString( ", " ) )
+        Task now resources
+      }
       .onFinish { ex =>
-        ex match {
-          case None => logger.info( "finished: {}", description )
-          case Some( ex ) => logger.error( s"StartTask:[${description}] failed", ex )
-        }
+        ex foreach { x => logger.error( s"StartTask:[${description}] failed", x ) }
         Task now { () }
       }
     }
   }
 
+
   final case class BoundedStartTask private[StartTask](
-    makeTask: BoundedContext => Task[Done],
+    makeTask: BoundedContext => Task[Resources],
     description: String
   ) extends WrappingStartTask {
-    override def task( bc: BoundedContext ): Task[Done] = wrap( makeTask(bc) )
+    override def task( bc: BoundedContext ): Task[Resources] = wrap( makeTask(bc) )
   }
 
-  final case class DelayedDefinitionStartTask private[StartTask](
-    fn: BoundedContext => Done,
+
+  final case class FunctionStartTask private[StartTask](
+    fn: BoundedContext => Resources,
     override val description: String
   ) extends WrappingStartTask {
-    override def task( bc: BoundedContext ): Task[Done] = wrap( Task { fn(bc) } )
+    override def task( bc: BoundedContext ): Task[Resources] = wrap( Task { fn(bc) } )
   }
 }

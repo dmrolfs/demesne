@@ -23,7 +23,7 @@ abstract class AggregateRootType extends LazyLogging {
   def name: String
   def repositoryName: String = org.atteo.evo.inflector.English.plural( name )
 
-  def startTask( system: ActorSystem ): StartTask = StartTask.empty( name )
+  def startTask: StartTask = StartTask.empty( name )
 
   def repositoryProps( implicit model: DomainModel ): Props
 
