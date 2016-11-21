@@ -101,7 +101,11 @@ object DomainModel {
     }
 
     def addAggregateType( rootType: AggregateRootType ): DomainModelCell = {
-      supervisors foreach { _.repository ! StartChild( rootType.repositoryProps(this), rootType.repositoryName ) }
+      implicit val timeout = Timeout( 5.seconds ) //todo consider better wait timeout
+      supervisors foreach { supervisor =>
+        val ref = ( supervisor.repository ? StartChild(rootType.repositoryProps(this), rootType.repositoryName) )
+        scala.concurrent.Await.ready( ref, timeout.duration )
+      }
       this.copy( rootTypes = rootTypes + rootType )
     }
 

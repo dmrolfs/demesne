@@ -2,6 +2,7 @@ package demesne.module
 
 import scala.reflect._
 import akka.actor.Props
+
 import scalaz._
 import Scalaz._
 import shapeless._
@@ -35,6 +36,7 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
   val evState: ClassTag[S] = implicitly[ClassTag[S]]
   val identifying: Identifying[S] = implicitly[Identifying[S]]
 
+  def startTask: demesne.StartTask = StartTask.empty( evState.runtimeClass.getCanonicalName )
 
   def environment: AggregateEnvironment
 
@@ -43,6 +45,8 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
     override val indexes: Seq[IndexSpecification],
     environment: AggregateEnvironment
   ) extends AggregateRootType {
+
+    override def startTask: StartTask = module.startTask
 
     override lazy val identifying: Identifying[_] = module.identifying
 
@@ -74,6 +78,9 @@ object SimpleAggregateModule {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[S]].runtimeClass )
         object Props extends Param[AggregateRootProps]
+        object StartTask extends OptParam[demesne.StartTask](
+          demesne.StartTask.empty( s"start ${implicitly[ClassTag[S]].runtimeClass.getCanonicalName}" )
+        )
         object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
         object Indexes extends OptParam[Seq[IndexSpecification]]( Seq.empty[IndexSpecification] )
       }
@@ -82,6 +89,7 @@ object SimpleAggregateModule {
       override val fieldsContainer = createFieldsContainer(
         P.Tag ::
         P.Props ::
+        P.StartTask ::
         P.Environment ::
         P.Indexes ::
         HNil
@@ -93,6 +101,7 @@ object SimpleAggregateModule {
   final case class SimpleAggregateModuleImpl[S: ClassTag : Identifying](
     override val aggregateIdTag: Symbol,
     override val aggregateRootPropsOp: AggregateRootProps,
+    override val startTask: demesne.StartTask,
     override val environment: AggregateEnvironment,
     override val indexes: Seq[IndexSpecification]
   ) extends SimpleAggregateModule[S] with Equals { module =>

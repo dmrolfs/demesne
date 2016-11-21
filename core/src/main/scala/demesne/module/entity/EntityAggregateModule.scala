@@ -93,6 +93,9 @@ object EntityAggregateModule extends LazyLogging {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
         object Props extends Param[AggregateRootProps]
+        object StartTask extends OptParam[demesne.StartTask](
+          demesne.StartTask.empty( s"start ${implicitly[ClassTag[E]].runtimeClass.getCanonicalName}" )
+        )
         object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
         object Indexes extends OptParam[MakeIndexSpec]( makeEmptyIndexSpec )
         object IdLens extends Param[Lens[E, E#TID]]
@@ -107,6 +110,7 @@ object EntityAggregateModule extends LazyLogging {
       override val fieldsContainer = createFieldsContainer( 
         Tag :: 
         PProps ::
+        P.StartTask ::
         Environment ::
         Indexes :: 
         IdLens :: 
@@ -123,6 +127,7 @@ object EntityAggregateModule extends LazyLogging {
     case class EntityAggregateModuleImpl(
       override val aggregateIdTag: Symbol,
       override val aggregateRootPropsOp: AggregateRootProps,
+      override val startTask: demesne.StartTask,
       override val environment: AggregateEnvironment,
       _indexes: MakeIndexSpec,
       override val idLens: Lens[E, E#TID],
