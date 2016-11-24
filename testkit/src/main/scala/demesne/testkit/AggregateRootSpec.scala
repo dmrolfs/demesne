@@ -76,7 +76,7 @@ with BeforeAndAfterAll
           logger.info("test-start-task2: bounded context:[{}]", bc.name)
           Map( Symbol("from-start-task-2") -> "resource sourced from start task 2" )
         },
-        StartTask.withUnitFunction( "unit-start-task-3" ){ bc => akka.Done }
+        StartTask.withFunction( "unit-start-task-3" ){ bc => akka.Done }
       )
     }
 
@@ -90,10 +90,7 @@ with BeforeAndAfterAll
 
       val bc = for {
         made <- BoundedContext.make( key, config, userResources = resources, startTasks = startTasks(system) )
-        filled = rootTypes.foldLeft( made ){ (acc, rt) =>
-          logger.debug( "TEST: adding [{}] to bounded context:[{}]", rt.name, acc )
-          acc :+ rt
-        }
+        filled <- made addAggregateTypes rootTypes
         _ <- filled.futureModel map { m => logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") ); m }
         started <- filled.start()
       } yield started

@@ -202,16 +202,13 @@ class RepositorySupervisor(
 
     case m @ SP.Loaded( rootType, resources, dependencies ) => {
       val starting = startingStateFor( sender() )
-      log.debug( "TEST: LOADED BEFORE state:[{}]", state )
       val waitingState = {
         state
         .addResources( resources )
         .withStartingRepositoryState( starting.copy( state = WaitingToInitialize, dependencies = dependencies ) )
       }
-      log.debug( "TEST: LOADED AFTER waiting state:[{}]", waitingState )
 
       val newState = dispatchAllInitializingResources( waitingState )
-      log.debug( "TEST: LOADED AFTER newState:[{}]", waitingState )
       context become LoggingReceive { start(newState) }
     }
 
@@ -266,7 +263,6 @@ class RepositorySupervisor(
       }
     }
 
-    log.debug( "TEST: dispatched to Initializing repositories: [{}]", initializing.flatten.map{ _.name }.mkString(", ") )
     initializing.flatten.foldLeft( state ) { _ withStartingRepositoryState _ }
   }
 

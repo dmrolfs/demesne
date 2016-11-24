@@ -9,55 +9,55 @@ import com.typesafe.scalalogging.StrictLogging
   * Created by rolfsd on 10/28/16.
   */
 sealed abstract class StartTask {
-  def task( bc: BoundedContext ): Task[Map[Symbol, Any]]
+  def task( bc: BoundedContext ): Task[StartTask.Result]
   def description: String
 }
 
 object StartTask extends StrictLogging {
-  type Resources = BoundedContext.Resources
+  case class Result(
+    resources: Map[Symbol, Any] = Map.empty[Symbol, Any],
+    rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
+  ) {
+    override def toString: String = {
+      s"""StartTask.Result( resources:[${resources.mkString(", ")}] rootTypes:[${rootTypes.mkString(", ")}] )"""
+    }
+  }
 
-  def withFunction( description: String )( fn: BoundedContext => Resources ): StartTask = {
+  implicit def resultFromResources( resources: Map[Symbol, Any] ): Result = Result( resources = resources )
+  implicit def resultFromRootTypes( rootTypes: Set[AggregateRootType] ): Result = Result( rootTypes = rootTypes )
+  implicit def resultFromDone( done: Done ): Result = Result()
+  implicit def resultTaskfromDone( done: Task[Done] ): Task[Result] = done map { _ => Result() }
+
+
+  def withFunction( description: String )( fn: BoundedContext => StartTask.Result ): StartTask = {
     FunctionStartTask( fn, description )
   }
 
-  def withBoundTask( description: String )( fn: BoundedContext => Task[Resources] ): StartTask = {
+  def withBoundTask( description: String )( fn: BoundedContext => Task[StartTask.Result] ): StartTask = {
     BoundedStartTask( fn, description )
   }
 
-  def withTask( description: String )( t: Task[Resources] ): StartTask = {
+  def withTask( description: String )( t: Task[StartTask.Result] ): StartTask = {
     val bind = (_: BoundedContext) => { t }
     BoundedStartTask( bind, description )
   }
 
-  def withUnitTask( description: String )(t: Task[Done] ): StartTask = {
-    val bind = (_: BoundedContext) => { t }
-    BoundedStartTask( bind andThen toEmptyTask, description )
-  }
-
-  def withUnitFunction( description: String )(fn: BoundedContext => Done ): StartTask = {
-    FunctionStartTask( toEmptyResources compose fn, description )
-  }
-
-  def withBoundUnitTask( description: String )(makeTask: BoundedContext => Task[Done] ): StartTask = {
-    BoundedStartTask( makeTask andThen toEmptyTask, description )
-  }
-
-  def empty( description: String ): StartTask = {
-    withBoundTask( s"${description} (empty start task)" ){ _ => Task now Map.empty[Symbol, Any] }
-  }
-
-  val toEmptyResources: Done => Resources = (d: Done) => Map.empty[Symbol, Any]
-  val toEmptyTask: Task[Done] => Task[Resources] = (t: Task[Done]) => t map { toEmptyResources }
+  def empty( description: String ): StartTask = withTask( s"${description} (empty start task)" ){ Task now Done }
 
 
   sealed abstract class WrappingStartTask extends StartTask {
-    def wrap( task: Task[Resources] ): Task[Resources] = {
+    def wrap( task: Task[Result] ): Task[Result] = {
       Task
       .now { logger.info( "starting: {} ...", description ) }
       .flatMap { _ => task }
-      .flatMap { resources =>
-        logger.info( "finished: {} with resources:[{}]", description, resources.mkString( ", " ) )
-        Task now resources
+      .flatMap { r =>
+        logger.info(
+          "finished: {} with resources:[{}] and rootTypes:[{}]",
+          description,
+          r.resources.mkString(", "),
+          r.rootTypes.mkString(", ")
+        )
+        Task now r
       }
       .onFinish { ex =>
         ex foreach { x => logger.error( s"StartTask:[${description}] failed", x ) }
@@ -66,19 +66,18 @@ object StartTask extends StrictLogging {
     }
   }
 
-
   final case class BoundedStartTask private[StartTask](
-    makeTask: BoundedContext => Task[Resources],
+    makeTask: BoundedContext => Task[Result],
     description: String
   ) extends WrappingStartTask {
-    override def task( bc: BoundedContext ): Task[Resources] = wrap( makeTask(bc) )
+    override def task( bc: BoundedContext ): Task[Result] = wrap( makeTask(bc) )
   }
 
 
   final case class FunctionStartTask private[StartTask](
-    fn: BoundedContext => Resources,
+    fn: BoundedContext => Result,
     override val description: String
   ) extends WrappingStartTask {
-    override def task( bc: BoundedContext ): Task[Resources] = wrap( Task { fn(bc) } )
+    override def task( bc: BoundedContext ): Task[Result] = wrap( Task { fn(bc) } )
   }
 }

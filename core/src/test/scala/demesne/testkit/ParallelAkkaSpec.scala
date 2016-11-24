@@ -1,6 +1,7 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scalaz.{-\/, \/, \/-}
@@ -11,7 +12,7 @@ import com.typesafe.scalalogging.StrictLogging
 import org.scalatest.{MustMatchers, Outcome, ParallelTestExecution, fixture}
 import peds.commons.log.Trace
 import peds.commons.util._
-import demesne.{AggregateRootType, BoundedContext, DomainModel}
+import demesne.{AggregateRootType, BoundedContext, DomainModel, StartTask}
 
 
 object ParallelAkkaSpec {

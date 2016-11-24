@@ -61,7 +61,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
     override val rootTypes: Set[AggregateRootType] = Set( TestPostRootType )
 //    override def resources: Map[Symbol, Any] = AuthorListingModule resources system
     override def resources: Map[Symbol, Any] = {
-      val makeAuthorListing = () => trace.briefBlock( "TEST:makeAuthorList" ){ author.ref }
+      val makeAuthorListing = () => trace.briefBlock( "makeAuthorListing" ){ author.ref }
       Map( AuthorListingModule.ResourceKey -> makeAuthorListing )
     }
 //    override def startTasks( system: ActorSystem ): Set[StartTask] = {
@@ -95,7 +95,6 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       val id = PostModule.nextId.toOption.get
       val content = PostContent( author = "Damon", title = "Add Content", body = "add body content" )
       val post = PostModule aggregateOf id
-      logger.debug( "TEST: ADD CONTENT to post:[{}]", post )
       post !+ P.AddPost( id, content )
       bus.expectMsgPF( max = 3000.millis.dilated, hint = "post added" ) { //DMR: Is this sensitive to total num of tests executed?
         case payload: P.PostAdded => payload.content mustBe content
