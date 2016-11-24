@@ -17,7 +17,11 @@ object StartTask extends StrictLogging {
   case class Result(
     resources: Map[Symbol, Any] = Map.empty[Symbol, Any],
     rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
-  )
+  ) {
+    override def toString: String = {
+      s"""StartTask.Result( resources:[${resources.mkString(", ")}] rootTypes:[${rootTypes.mkString(", ")}] )"""
+    }
+  }
 
   implicit def resultFromResources( resources: Map[Symbol, Any] ): Result = Result( resources = resources )
   implicit def resultFromRootTypes( rootTypes: Set[AggregateRootType] ): Result = Result( rootTypes = rootTypes )

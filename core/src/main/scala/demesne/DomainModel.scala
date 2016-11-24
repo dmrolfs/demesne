@@ -78,20 +78,15 @@ object DomainModel {
     override def name: String = key.name
 
     override def get( rootName: String, id: Any ): Option[ActorRef] = trace.briefBlock(s"get($rootName, $id)") {
-      // logger.debug( "TEST: aggregateRefs=[{}]", aggregateRefs.mkString(", ") )
       aggregateRefs.get( rootName ) map { _.repositoryRef }
     }
 
-    override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = trace.block(s"aggregateIndexFor($rootName, $indexName)") {
+    override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
       val result = {
         for {
           RootTypeRef( _, rootType ) <- aggregateRefs get rootName
-        _ = logger.debug( "TEST: rootType=[{}]", rootType)
           spec <- rootType.indexes find { _.name == indexName }
-        _ = logger.debug( "TEST: spec=[{}]", spec)
-        _ = logger.debug( "TEST: specAgents = [{}]", specAgents.mkString(", ") )
           agent <- specAgents get spec
-        _ = logger.debug( "TEST: agent=[{}]", agent)
         } yield agent
       }
 
@@ -120,7 +115,6 @@ object DomainModel {
       supervisors
       .map { s =>
         val (indexBudget, agentBudget, repositoryBudget) = timeoutBudgets( timeout )
-        logger.debug( "TEST: Budgets: index:[{}] agent:[{}] child-supervision:[{}]", indexBudget, agentBudget, repositoryBudget )
 
         val indexes = rootTypes.toSeq map { rt => establishIndexes( rt, s.index, indexBudget, agentBudget )( ec ) }
         val aggregates = rootTypes map { rt => registerAggregate( rt, s.repository )( ec, repositoryBudget ) }
@@ -134,8 +128,7 @@ object DomainModel {
 
         result onComplete {
           case Success(cell) => {
-            logger.debug( "TEST: wip domain-cell:[{}]", cell)
-            logger.debug( "Registering root-types[{}]@[{}] <- Completed", rootTypes.map{_.name}.mkString(", "), name )
+            logger.debug( "Registering root-types[{}]@[{}] Completed", rootTypes.map{_.name}.mkString(", "), name )
           }
 
           case Failure( ex ) => logger error s"failed to start domain model: ${ex}"
@@ -164,9 +157,10 @@ object DomainModel {
       supervisor: ActorRef
     )(
       implicit ec: ExecutionContext,
-      tiemout: Timeout
+      timeout: Timeout
     ): Future[(String, RootTypeRef)] = {
-      aggregateRefs.get( rootType.name )
+      aggregateRefs
+      .get( rootType.name )
       .map { ref =>
         logger.debug( "aggregate ref found for root-type:[{}]", rootType.name )
         Future successful (rootType.name -> ref)
@@ -175,7 +169,7 @@ object DomainModel {
         retrieveAggregate( rootType, supervisor )
         .map { ref =>
           logger.debug( "Registering root-type[{}]@[{}] - aggregate registry established ", rootType.name, name )
-          rootType.name -> ref
+          ( rootType.name -> ref )
         }
       }
     }
@@ -191,13 +185,8 @@ object DomainModel {
       .get( rootType.name )
       .map { Future successful _ }
       .getOrElse {
-        logger.debug( "TEST; RETRIEVING AGGREGATE from supervisor:[{}]", supervisor.path.name )
-        ( supervisor ? StartChild(rootType.repositoryProps(this), rootType.repositoryName) )
-        .mapTo[ChildStarted]
-        .map { repoStarted =>
-          logger.debug( "TEST: RETRIEVED AGGREGATE from supervisor:[{}]  child:[{}]", supervisor.path.name, repoStarted.child )
-          RootTypeRef( repoStarted.child, rootType )
-        }
+        ( supervisor ? StartChild(rootType.repositoryProps(this), rootType.repositoryName) ).mapTo[ChildStarted]
+        .map { repoStarted => RootTypeRef( repoStarted.child, rootType ) }
       }
     }
 
@@ -212,25 +201,19 @@ object DomainModel {
       logger.debug( "establishing indexes for rootType:[{}] with supervisor:[{}]", rootType, supervisor.path.name )
 
       val result = rootType.indexes map { spec =>
-        logger.debug( "TEST: establishing Index [{}] for rootTYpe:[{}]", spec.name, rootType )
-
         for {
           registration <- supervisor.ask( RegisterIndex(rootType, spec) )( indexBudget ).mapTo[IndexRegistered]
           ref = registration.agentRef
           envelope <- ref.ask( GetIndex )( agentBudget ).mapTo[IndexEnvelope]
         } yield {
           logger.debug(
-            "TEST: established Index:[{}] for rootType:[{}] spec:[{}] agent:[{}]",
-            spec.name, rootType, spec, envelope.payload.toString
-          )
-          logger.debug(
-            "Registering root-type:[{}] spec->index:[{}] -> [{}]",
+            "Registering root-type:[{}] name -> index:[{}] -> [{}]",
             rootType.name,
             spec.name,
             envelope.payload.toString
           )
 
-          (spec -> envelope)
+          ( spec -> envelope )
         }
       }
 
