@@ -117,17 +117,16 @@ object BoundedContext extends StrictLogging { outer =>
   private def sendContextCell( key: Symbol )( f: BoundedContextCell => BoundedContextCell ): Unit = {
     contexts
     .send { cells =>
-      logger.debug( "LOOKING for boundedContext: [{}]", key.name )
       cells
       .get( key )
       .map { c =>
         val newCell = f( c )
-        logger.debug( "SENDING key:[{}] to be BoundedContext:[{}]", key.name, newCell )
+        logger.debug( "Sending BoundedContext for key:[{}] to be [{}]", key.name, newCell )
         cells + ( key -> newCell )
       }
       .getOrElse {
         logger.error( "BoundedContext not found: [{}]", BoundedContextlNotRegisteredError(key) )
-        cells
+        cells //todo ? throw error instead of log and ignore?
       }
     }
   }
@@ -139,19 +138,13 @@ object BoundedContext extends StrictLogging { outer =>
   )(
     implicit ec: ExecutionContext = contextsExecutionPool
   ): Future[BoundedContextCell] = {
-    logger.info( "TEST: ALTERCONTEXTCELL EC: [{}]", ec )
-    logger.info( "TEST: ALTERCONTEXTCELL implicit EC: [{}]", implicitly[ExecutionContext] )
-    logger.info( "TEST: ALTERCONTEXTCELL contextsExecutionPool: [{}]", contextsExecutionPool )
-
-//    implicit val ec = contextsExecutionPool
     contexts
     .alterOff { cells =>
-      logger.debug( "LOOKING for boundedContext: [{}]", key.name )
       cells
       .get( key )
       .map { c =>
         val newCell = f( c )
-        logger.debug( "ALTERING key:[{}] to be BoundedContext:[{}]", key.name, newCell )
+        logger.debug( "Altering BoundedContext key:[{}] to be [{}]", key.name, newCell )
         cells + ( key -> newCell )
       }
       .getOrElse {
@@ -188,14 +181,16 @@ object BoundedContext extends StrictLogging { outer =>
 
     override def configuration: Config = unsafeCell.configuration
 
-
-    override def addAggregateTypes( rootTypes: Set[AggregateRootType] )( implicit ec: ExecutionContext ): Future[BoundedContext] = {
-//      implicit val ec = contextsExecutionPool
+    override def addAggregateTypes(
+      rootTypes: Set[AggregateRootType]
+    )(
+      implicit ec: ExecutionContext
+    ): Future[BoundedContext] = {
       alterContextCell( key ){ cell =>
-        logger.info( "TEST: BoundedContextRef: addAggregateTypes( {} )", rootTypes )
-        logger.info( "TEST: IN REF ADD TYPES EC:[{}]", implicitly[ExecutionContext] )
         Await.result( cell.addAggregateTypes(rootTypes).mapTo[BoundedContextCell], timeoutDuration )
-      } map { _ => this }
+      } map { _ =>
+        this
+      }
     }
 
     override def withResources( rs: Resources ): BoundedContext = {
@@ -211,8 +206,7 @@ object BoundedContext extends StrictLogging { outer =>
     override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = {
       for {
         cell <- alterContextCell( key ){ cell => Await.result(cell.start().mapTo[BoundedContextCell], timeout.duration) }
-        m <- cell.futureModel
-        _ = logger.info( "TEST: started BC[{}] root types:[{}]", key.name, m.rootTypes )
+//        m <- cell.futureModel
       } yield this
     }
 
@@ -268,7 +262,8 @@ object BoundedContext extends StrictLogging { outer =>
     override def futureModel: Future[DomainModel] = Future successful unsafeModel
 
     override lazy val resources: Resources = {
-      userResources ++ Map(
+      userResources ++
+      Map(
         ResourceKeys.Model -> DomainModelRef( key, system ),
         ResourceKeys.System -> system,
         ResourceKeys.RootTypes -> modelCell.rootTypes,
@@ -278,14 +273,19 @@ object BoundedContext extends StrictLogging { outer =>
 
     override def withResources( rs: Resources ): BoundedContext = this.copy( userResources = userResources ++ rs )
 
-    override def addAggregateTypes( rootTypes: Set[AggregateRootType] )( implicit ec: ExecutionContext ): Future[BoundedContext] = {
+    override def addAggregateTypes(
+      rootTypes: Set[AggregateRootType]
+    )(
+      implicit ec: ExecutionContext
+    ): Future[BoundedContext] = {
       Future successful {
-        logger.info( "TEST: CELL ADD TYPES EC: [{}]", implicitly[ExecutionContext] )
-        val newModel = rootTypes.foldLeft( modelCell ){ (m, rt) =>
-          logger.info( "TEST: BEFORE adding [{}] to model WIP:[{}]", rt, m.rootTypes )
-          m addAggregateType rt
-        }
-        logger.info( "TEST: BoundedContextCell: added rootTypes:[{}] to modelCell - new root-types=[{}]", rootTypes, newModel.rootTypes.mkString(", ") )
+        val newModel = rootTypes.foldLeft( modelCell ){ (m, rt) =>m addAggregateType rt }
+        logger.info(
+          "BoundedContextCell: added rootTypes:[{}] to modelCell - new root-types=[{}]",
+          rootTypes,
+          newModel.rootTypes.mkString(", ")
+        )
+
         this.copy( modelCell = newModel )
       }
     }
@@ -295,11 +295,8 @@ object BoundedContext extends StrictLogging { outer =>
         startTask
         .task( this )
         .unsafePerformAsync {
-          case scalaz.\/-( done )=> logger.debug( "start task completed with result" )
-          case scalaz.-\/( ex ) => {
-            logger.error( "start task failed", ex )
-            throw ex
-          }
+          case scalaz.\/-( result )=> logger.debug( "start task completed with result: [{}]", result )
+          case scalaz.-\/( ex ) => { logger.error( "start task failed", ex ); throw ex }
         }
 
         this
@@ -316,31 +313,34 @@ object BoundedContext extends StrictLogging { outer =>
 
       for {
         taskResults <- this.gatherAllTasks().unsafeToFuture
-        _ = logger.info( "START: start task results: [{}]", taskResults )
+        _ = logger.info( "BoundedContext start tasks results: [{}]", taskResults )
         supervisors <- setupSupervisors()
         _ <- ( supervisors.repository ? StartProtocol.WaitForStart ).mapTo[StartProtocol.Started.type]
-        dupRootTypes = taskResults.rootTypes intersect modelCell.rootTypes
-        _ = logger.info( "START: dup root types :[{}]", dupRootTypes.mkString(", ") )
-        newRootTypes = taskResults.rootTypes -- dupRootTypes
-        updatedRootTypes = modelCell.rootTypes ++ newRootTypes
-        newModelCell = modelCell.copy( supervisors = Some(supervisors), rootTypes = updatedRootTypes )
+        dupRoots = taskResults.rootTypes intersect modelCell.rootTypes
+        _ = if ( dupRoots.nonEmpty ) {
+          logger.info( "BoundedContext start task resulting in duplicate root types :[{}]", dupRoots.mkString(", ") )
+        }
+        freshRoots = taskResults.rootTypes -- dupRoots
+        updatedRoots = modelCell.rootTypes ++ freshRoots
+        newModelCell = modelCell.copy( supervisors = Some(supervisors), rootTypes = updatedRoots )
         startedModelCell <- newModelCell.start()
-        _ = logger.info( "START: startedModeCell root-types:[{}]", startedModelCell.rootTypes )
+        _ = logger.info( "BoundedContext started modeCell root types:[{}]", startedModelCell.rootTypes )
       } yield {
         logger.info( "started BoundedContext:[{}] model:[{}]", (name, system.name), startedModelCell )
-        val dups = taskResults.resources.keySet intersect userResources.keySet
-        if ( dups.nonEmpty ) {
-          logger.warn( "duplicate resources resulting from start tasks replacing user provided: [{}]", dups.mkString(", ") )
+        val dupResources = taskResults.resources.keySet intersect userResources.keySet
+        if ( dupResources.nonEmpty ) {
+          logger.warn(
+            "duplicate resources resulting from start tasks replacing user provided: [{}]",
+            dupResources.mkString(", ")
+          )
         }
 
-        val result = this.copy(
+        this.copy(
           modelCell = startedModelCell,
           supervisors = Some(supervisors),
           startTasks = Seq.empty[StartTask],
           userResources = userResources ++ taskResults.resources
         )
-
-        result
       }
     }
 
@@ -456,7 +456,7 @@ object BoundedContext extends StrictLogging { outer =>
         _ <- ( s ? StartProtocol.WaitForStart ).mapTo[StartProtocol.Started.type]
         status <- ( s ? StartProtocol.GetStatus ).mapTo[StartProtocol.StartStatus]
       } yield {
-        logger.debug( "TEST: Repository Supervisor [{}] started - has status: [{}]", repositorySupervisorName, status )
+        logger.debug( "Repository Supervisor [{}] started - has status: [{}]", repositorySupervisorName, status )
         s
       }
 
@@ -512,7 +512,6 @@ object BoundedContext extends StrictLogging { outer =>
     private def makeIndexSupervisor( indexSupervisorName: String ): Future[ActorRef] = {
       Future successful { system.actorOf( IndexSupervisor.props( modelCell.indexBus ), s"${modelCell.name}-indexes" ) }
     }
-
   }
 
 
