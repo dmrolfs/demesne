@@ -1,13 +1,7 @@
 package demesne
 
-import peds.commons.identifier.TaggedID
 
-
-trait CommandLike {
-  type ID
-  type TID = TaggedID[ID]
-  def targetId: TID
-}
+trait CommandLike extends AggregateMessage
 
 object CommandLike {
   def unapply( c: CommandLike ): Option[c.TID] = Some( c.targetId )

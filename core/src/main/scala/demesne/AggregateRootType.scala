@@ -34,6 +34,7 @@ abstract class AggregateRootType extends LazyLogging {
   def aggregateIdFor: ShardRegion.ExtractEntityId = {
     case cmd: CommandLike => ( cmd.targetId.id.toString, cmd )
     case event: EventLike => ( event.sourceId.id.toString, event )
+    case m: AggregateMessage => ( m.targetId.id.toString, m )
     case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
       logger.debug( "tagged aggregateIdFor(stop) = [{}]", (tid.id.toString, stop) )
       ( tid.id.toString, stop )
@@ -61,6 +62,7 @@ abstract class AggregateRootType extends LazyLogging {
   def shardIdFor: ShardRegion.ExtractShardId = {
     case cmd: CommandLike => ( math.abs( cmd.targetId.id.## ) % numberOfShards ).toString
     case event: EventLike => ( math.abs( event.sourceId.id.## ) % numberOfShards ).toString
+    case m: AggregateMessage => ( math.abs( m.targetId.id.## ) % numberOfShards ).toString
     case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
       logger.debug( "tagged shardIdFor(stop) = [{}]", ( math.abs( tid.id.## ) % numberOfShards ).toString )
       ( math.abs( tid.id.## ) % numberOfShards ).toString
