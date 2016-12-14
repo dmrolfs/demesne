@@ -2,6 +2,7 @@ package sample.blog
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.util.{Success, Failure}
 import scalaz._
 import Scalaz._
 import akka.actor._
@@ -56,16 +57,14 @@ object BlogApp extends StrictLogging {
       import system.dispatcher
       implicit val timeout = Timeout( 1.minute )
       val f = ( system.actorSelection( path ) ? Identify( None ) )
-      f.onSuccess {
-        case ActorIdentity( _, Some(ref) ) => SharedLeveldbJournal.setStore( ref, system )
-        case _ => {
-          system.log.error( s"Shared journal not started at $path" )
+      f onComplete {
+        case Success( ActorIdentity(_, Some(ref)) ) => SharedLeveldbJournal.setStore( ref, system )
+        case Success( x ) => {
+          system.log.error( "Shared journal not started after timeout at [{}]: [{}]", path, x.toString )
           system.terminate()
         }
-      }
-      f.onFailure {
-        case _ => {
-          system.log.error( s"Lookup of shared journal at ${path} timed out" )
+        case Failure( ex ) => {
+          system.log.error( ex, "Shared journal not started at [{}]", path )
           system.terminate()
         }
       }
