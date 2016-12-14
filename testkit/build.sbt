@@ -11,6 +11,5 @@ libraryDependencies ++= commonDependencies ++ Seq(
   qa.scalatest,
   qa.mockito.core,
   qa.persistence.inMemory,
-  qa.persistence.testkit,
   facility.inflector
 )

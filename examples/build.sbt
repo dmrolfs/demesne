@@ -7,6 +7,7 @@ description := "lorem ipsum."
 libraryDependencies ++= commonDependencies ++ Seq(
   akka.contrib,
   akka.kyro,
+  akka.leveldb,
   facility.squants,
   facility.accord
 )
