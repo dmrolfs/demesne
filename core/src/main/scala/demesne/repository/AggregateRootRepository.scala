@@ -11,7 +11,6 @@ import akka.pattern.pipe
 import scalaz._
 import Scalaz._
 import peds.akka.envelope._
-import peds.commons.log.Trace
 import peds.commons.Valid
 import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
@@ -36,8 +35,6 @@ abstract class EnvelopingAggregateRootRepository(
 
 
 object AggregateRootRepository {
-  val trace = Trace[AggregateRootRepository.type]
-
   trait AggregateContext {
     def model: DomainModel
     def rootType: AggregateRootType
@@ -48,7 +45,7 @@ object AggregateRootRepository {
   }
 
   trait LocalAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
-    override def aggregateFor( command: Any ): ActorRef = trace.briefBlock( s"aggregateFor(${command})" ) {
+    override def aggregateFor( command: Any ): ActorRef = {
       if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
         log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
       }
@@ -58,7 +55,7 @@ object AggregateRootRepository {
   }
 
   trait ClusteredAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
-    override def initializeContext( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[Done] = trace.block("initializeContext") {
+    override def initializeContext( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[Done] = {
       Future {
         val region = {
           ClusterSharding( model.system )
@@ -76,7 +73,7 @@ object AggregateRootRepository {
       }
     }
 
-    override def aggregateFor( command: Any ): ActorRef = trace.briefBlock( s"aggregateFor(${command})" ) {
+    override def aggregateFor( command: Any ): ActorRef = {
       if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
         log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
       }

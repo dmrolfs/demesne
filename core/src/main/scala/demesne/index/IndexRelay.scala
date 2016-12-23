@@ -7,8 +7,6 @@ import akka.contrib.pattern.ReliableProxy
 import akka.contrib.pattern.ReliableProxy.Connecting
 import akka.event.LoggingReceive
 import peds.akka.envelope.Envelope
-import peds.commons.log.Trace
-import peds.commons.util._
 
 
 object IndexRelay extends com.typesafe.scalalogging.LazyLogging {
@@ -23,8 +21,6 @@ object IndexRelay extends com.typesafe.scalalogging.LazyLogging {
 class IndexRelay( indexAggregatePath: ActorPath, extractor: KeyIdExtractor )
 extends Actor
 with ActorLogging {
-  val trace = Trace( getClass.safeSimpleName, log )
-
   val fullExtractor: KeyIdExtractor = {
     case m if extractor.isDefinedAt( m ) => extractor( m )
     case e @ Envelope( payload, _ ) if extractor.isDefinedAt( payload ) => extractor( payload )
@@ -72,7 +68,7 @@ with ActorLogging {
   }
 
   val active: Receive = LoggingReceive {
-    case event if fullExtractor.isDefinedAt( event ) => trace.block( s"receive:${event}" ) {
+    case event if fullExtractor.isDefinedAt( event ) => {
       val directive = fullExtractor( event )
       proxy ! directive
       log.debug( "relayed to aggregate index: {}", directive )

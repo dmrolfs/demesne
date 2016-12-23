@@ -10,7 +10,6 @@ import scalaz._
 import Scalaz._
 import com.typesafe.scalalogging.LazyLogging
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
-import peds.commons.log.Trace
 import peds.commons.TryV
 import demesne.index._
 import demesne.index.IndexSupervisor.{IndexRegistered, RegisterIndex}
@@ -68,8 +67,6 @@ object DomainModel {
     specAgents: Map[IndexSpecification, IndexEnvelope] = Map.empty[IndexSpecification, IndexEnvelope],
     supervisors: Option[Supervisors] = None
   ) extends DomainModel with LazyLogging {
-    private val trace = Trace[DomainModelCell]
-
     override def toString: String = {
       s"""DomainModelCell(name=${name}, system=${system}, root-types=[${rootTypes.mkString(", ")}], """ +
       s"""aggregate-refs=[${aggregateRefs.mkString(", ")}]), spec-agents=[${specAgents.mkString(", ")}]"""
@@ -77,9 +74,7 @@ object DomainModel {
 
     override def name: String = key.name
 
-    override def get( rootName: String, id: Any ): Option[ActorRef] = trace.briefBlock(s"get($rootName, $id)") {
-      aggregateRefs.get( rootName ) map { _.repositoryRef }
-    }
+    override def get( rootName: String, id: Any ): Option[ActorRef] = aggregateRefs.get( rootName ) map { _.repositoryRef }
 
     override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
       val result = {

@@ -12,7 +12,6 @@ import demesne.index.IndexSupervisor.ConstituencyProvider
 import peds.akka.envelope.Envelope
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
-import peds.commons.log.Trace
 import peds.commons.util._
 
 
@@ -25,14 +24,12 @@ class IndexSupervisor( bus: IndexBus )
 
   import demesne.index.IndexSupervisor._
 
-  val trace = Trace( "IndexSupervisor", log )
-
   override def childStarter(): Unit = { }
 
   override def receive: Receive = super.receive orElse register
 
   val register: Receive = LoggingReceive {
-    case RegisterIndex( rootType, spec ) => trace.block( s"index:RegisterIndex($rootType, $spec)" ) {
+    case RegisterIndex( rootType, spec ) => {
       val subscription: SubscriptionClassifier = spec.relaySubscription match {
         case ContextChannelSubscription( channel ) => Left( (context, channel) )
         case IndexBusSubscription => Right( (bus, spec.relayClassifier( rootType ) ) )
@@ -53,8 +50,6 @@ class IndexSupervisor( bus: IndexBus )
 }
 
 object IndexSupervisor extends StrictLogging {
-  val trace = Trace( "IndexSupervisor", logger )
-
   def props( bus: IndexBus ): Props = Props( new IndexSupervisor( bus ) with ConstituencyProvider )
 
   import scala.language.existentials
@@ -150,8 +145,6 @@ object IndexSupervisor extends StrictLogging {
     registrant: ActorRef,
     registrantType: AggregateRootType
   ) extends Actor with ActorLogging {
-
-    val trace = Trace( getClass.safeSimpleName, log )
 
     implicit val ec: ExecutionContext = context.dispatcher //okay to use actor's dispatcher
     implicit val askTimeout: Timeout = 3.seconds //todo move into configuration
