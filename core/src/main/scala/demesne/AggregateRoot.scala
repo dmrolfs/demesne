@@ -11,7 +11,6 @@ import peds.akka.envelope._
 import peds.akka.publish.EventPublisher
 import peds.commons.identifier.{Identifying, TaggedID}
 import peds.commons.{KOp, TryV}
-import peds.commons.log.Trace
 import peds.commons.util._
 
 
@@ -53,8 +52,6 @@ extends PersistentActor
 with EnvelopingActor
 with ActorLogging {
   outer: AggregateRoot.Provider with EventPublisher =>
-
-  private val trace = Trace( s"AggregateRoot", log )
 
   context.setReceiveTimeout( outer.rootType.passivation.inactivityTimeout )
   outer.rootType.snapshot foreach { s => s.schedule( context.system, self, aggregateId )( context.system.dispatcher ) }
@@ -124,32 +121,19 @@ with ActorLogging {
   }
 
   def acceptOp( event: Any ): StateOperation = kleisli[TryV, S, S] { s =>
-    trace.block( s"acceptOp($event, $s)" ) {
-      \/.fromTryCatchNonFatal[S] {
-        val eventState = (event, s)
-        if ( acceptance.isDefinedAt( eventState ) ) {
-          val newState = acceptance( eventState )
-          // log.debug( "newState = {}", newState )
-          // log.debug( "BEFORE state = {}", state )
-          state = newState
-          // log.debug( "AFTER state = {}", state )
-          newState
-        } else {
-          log.debug( "{} does not accept event {}", Option(s).map{_.getClass.safeSimpleName}, event.getClass.safeSimpleName )
-          s
-        }
-      }
-    }
-  }
-
-  def publishOp( event: Any ): StateOperation = kleisli[TryV, S, S] { s =>
-    trace.block( s"publishOp($event, $s)" ) {
-      \/.fromTryCatchNonFatal[S] { 
-        publish( event ) 
+    \/.fromTryCatchNonFatal[S] {
+      val eventState = (event, s)
+      if ( acceptance.isDefinedAt( eventState ) ) {
+        state = acceptance( eventState )
+        state
+      } else {
+        log.debug( "{} does not accept event {}", Option(s).map{_.getClass.safeSimpleName}, event.getClass.safeSimpleName )
         s
       }
     }
   }
+
+  def publishOp( event: Any ): StateOperation = kleisli[TryV, S, S] { s => \/.fromTryCatchNonFatal[S] { publish( event ); s } }
 
   def acceptAndPublishOp( event: Any ): StateOperation = acceptOp( event ) andThen publishOp( event )
 

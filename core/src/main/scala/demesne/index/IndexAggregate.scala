@@ -84,7 +84,7 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
   val mediator: ActorRef = DistributedPubSub( context.system ).mediator
 
   // persistenceId must include cluster role to support multiple masters
-  override lazy val persistenceId: String = trace.block( "persistenceId" ) {
+  override lazy val persistenceId: String = {
     topic +
     "/" +
     Cluster( context.system )
@@ -158,9 +158,7 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
     case e: P.Withdrawn => updateState( e )
     case e: P.KeyRevised => updateState( e )
     case e: P.ValueRevised => updateState( e )
-    case SnapshotOffer( _, snapshot ) => trace.block( s"receiveRecover:SnapshotOffer(_, ${snapshot})" ) {
-      state = snapshot.asInstanceOf[State]
-    }
+    case SnapshotOffer( _, snapshot ) => state = snapshot.asInstanceOf[State]
   }
 
   /**
