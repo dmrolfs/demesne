@@ -9,3 +9,9 @@ libraryDependencies ++= commonDependencies ++ Seq(
   scalaz.concurrent,
   facility.inflector
 )
+
+enablePlugins( BuildInfoPlugin )
+
+buildInfoKeys := Seq[BuildInfoKey]( name, version, scalaVersion, sbtVersion )
+
+buildInfoPackage := "demesne"
