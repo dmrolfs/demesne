@@ -174,7 +174,7 @@ with ActorLogging {
         context.parent ! rootType.passivation.passivationMessage( PassivationSpecification.StopAggregateRoot[TID](aggregateId) )
       }
 
-      case stop @ PassivationSpecification.StopAggregateRoot(id) if id == aggregateId => {
+      case PassivationSpecification.StopAggregateRoot( id ) if id == aggregateId => {
         log.debug( "[{}] id:[{}] Stopping AggregateRoot after passivation", self.path, aggregateId )
         context stop self
       }

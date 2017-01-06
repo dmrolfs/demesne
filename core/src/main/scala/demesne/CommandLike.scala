@@ -1,7 +1,7 @@
 package demesne
 
 
-trait CommandLike extends AggregateMessage
+trait CommandLike extends MessageLike
 
 object CommandLike {
   def unapply( c: CommandLike ): Option[c.TID] = Some( c.targetId )

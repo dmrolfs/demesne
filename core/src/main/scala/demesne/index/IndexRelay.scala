@@ -4,7 +4,7 @@ import scala.concurrent.duration._
 import akka.actor.FSM.{CurrentState, Transition}
 import akka.actor._
 import akka.contrib.pattern.ReliableProxy
-import akka.contrib.pattern.ReliableProxy.Connecting
+import akka.contrib.pattern.ReliableProxy.{Connecting, TargetChanged}
 import akka.event.LoggingReceive
 import peds.akka.envelope.Envelope
 
@@ -52,6 +52,10 @@ with ActorLogging {
       log.debug( "adding to relay's wait queue: {}", sender() )
       context become connecting( List( sender() ) )
     }
+
+    case _: CurrentState[_] => { }
+    case _: ActorIdentity => { }
+    case _: TargetChanged => { }
   }
 
   def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
@@ -65,6 +69,11 @@ with ActorLogging {
       log.debug( "adding to relay's wait queue: {}", sender() )
       context become starting( List( sender() ) )
     }
+
+    case _: Transition[_] => { }
+    case _: CurrentState[_] => { }
+    case _: ActorIdentity => { }
+    case _: TargetChanged => { }
   }
 
   val active: Receive = LoggingReceive {
@@ -78,14 +87,19 @@ with ActorLogging {
       log.debug( "received WaitForStart: sending Started to {}", sender() )
       sender() ! Started
     }
+
+    case _: Transition[_] => { }
+    case _: CurrentState[_] => { }
+    case _: ActorIdentity => { }
+    case _: TargetChanged => { }
   }
 
   override def unhandled( message: Any ): Unit = {
     message match {
-      case _: akka.actor.FSM.CurrentState[_] => ()
-      case _: akka.actor.FSM.Transition[_] => ()
-      case _: akka.contrib.pattern.ReliableProxy.TargetChanged => ()
-      case id: ActorIdentity => log.debug( "received ActorIdentity:[{}]", id )
+//      case _: akka.actor.FSM.CurrentState[_] => ()
+//      case _: akka.actor.FSM.Transition[_] => ()
+//      case _: akka.contrib.pattern.ReliableProxy.TargetChanged => ()
+//      case id: ActorIdentity => log.debug( "received ActorIdentity:[{}]", id )
       case m => log.warning( "RELAY_UNHANDLED [{}]; extractor-defined-at={}", message, fullExtractor.isDefinedAt(message) )
     }
   }
