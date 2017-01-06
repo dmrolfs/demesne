@@ -13,7 +13,6 @@ import scalaz.concurrent.Task
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import peds.commons.TryV
-import peds.commons.log.Trace
 import demesne.repository.{RepositorySupervisor, StartProtocol}
 import demesne.DomainModel.{AggregateIndex, DomainModelCell, Supervisors}
 import demesne.index.{IndexBus, IndexSupervisor}
@@ -41,8 +40,6 @@ object BoundedContext extends StrictLogging { outer =>
   import scala.concurrent.ExecutionContext.global
   val timeoutDuration = 10.seconds
 
-
-  private val trace = Trace( "BoundedContext", logger )
 
   def apply( key: Symbol ): BoundedContext = {
     contexts()

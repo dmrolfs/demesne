@@ -2,14 +2,11 @@ package demesne.module
 
 import scala.reflect._
 import akka.actor.Props
-
 import scalaz._
 import Scalaz._
 import shapeless._
 import peds.commons.identifier.Identifying
 import peds.commons.builder._
-import peds.commons.util._
-import peds.commons.log.Trace
 import peds.commons.TryV
 import demesne._
 import demesne.index.IndexSpecification
@@ -105,8 +102,6 @@ object SimpleAggregateModule {
     override val environment: AggregateEnvironment,
     override val indexes: Seq[IndexSpecification]
   ) extends SimpleAggregateModule[S] with Equals { module =>
-    private val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
-
     def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {
       val lhs = implicitly[ClassTag[I]]
       val rhs = identifying.evID

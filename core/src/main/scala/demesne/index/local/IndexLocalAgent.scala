@@ -11,7 +11,6 @@ import com.typesafe.scalalogging.LazyLogging
 import demesne.AggregateRootType
 import demesne.index.{IndexAggregateProtocol => P, _}
 import peds.commons.identifier.TaggedID
-import peds.commons.log.Trace
 import peds.commons.util._
 
 
@@ -65,8 +64,6 @@ object IndexLocalAgent {
 class IndexLocalAgent[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) extends Actor with ActorLogging {
   import akka.cluster.pubsub.DistributedPubSubMediator.{ Subscribe, SubscribeAck }
   import demesne.index.local.IndexLocalAgent._
-
-  val trace = Trace( getClass.safeSimpleName, log )
 
   val tid: TaggedID[IndexIdentifier] = IndexIdentifier.make[K, I, V]( topic )
   val KeyType: ClassTag[K] = implicitly[ClassTag[K]]
