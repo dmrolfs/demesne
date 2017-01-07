@@ -30,7 +30,7 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
     override val targetId: RegisterToConference#TID,
     conferenceId: ConferenceModule.TID,
     seats: Seq[SeatQuantity]
-  ) extends CommandMessage
+  ) extends Command
 
   object RegisterToConference {
     implicit val SeatQuantityValidator = validator[SeatQuantity] { sq =>
@@ -53,10 +53,10 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
     override val targetId: MarkSeatsAsReserved#TID,
     seats: Seq[SeatQuantity],
     expiration: Option[joda.DateTime]
-  ) extends CommandMessage
+  ) extends Command
 
   // Conference/Registration/Commands/RejectOrder.cs
-  case class RejectOrder( override val targetId: RejectOrder#TID ) extends CommandMessage
+  case class RejectOrder( override val targetId: RejectOrder#TID ) extends Command
 
   // Conference/Registration/Commands/AssignRegistrantDetails.cs
   case class AssignRegistrantDetails(
@@ -64,7 +64,7 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
     firstName: String,    //DMR: better to model as PersonName archetype
     lastName: String,
     email: String
-  ) extends CommandMessage
+  ) extends Command
 
   object AssignRegistrantDetails {
     implicit val assignRegistrantDetailsValidator = validator[AssignRegistrantDetails] { ard =>
@@ -76,7 +76,7 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
   }
 
   // Conference/Registration/Commands/ConfirmOrder.cs
-  case class ConfirmOrder( override val targetId: ConfirmOrder#TID ) extends CommandMessage
+  case class ConfirmOrder( override val targetId: ConfirmOrder#TID ) extends Command
 
 
   // Registration.Contracts/Events/OrderPlaced.cs
@@ -86,13 +86,13 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
     seats: Seq[SeatQuantity],
     reservationAutoExpiration: Option[joda.DateTime],
     accessCode: String
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/OrderUpdated.cs
   case class OrderUpdated(
     override val sourceId: OrderUpdated#TID,
     seats: Seq[SeatQuantity]
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/OrderTotalsCalculated.cs
   case class OrderTotalsCalculated(
@@ -100,24 +100,24 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
     total: Money,  //DMR: Money?
     lines: Seq[OrderLine],
     isFreeOfCharge: Boolean
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/OrderPartiallyReserved.cs
   case class OrderPartiallyReserved(
     override val sourceId: OrderPartiallyReserved#TID,
     reservationExpiration: Option[joda.DateTime],
     seats: Seq[SeatQuantity]
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/OrderReservationCompleted.cs
   case class OrderReservationCompleted(
     override val sourceId: OrderReservationCompleted#TID,
     reservationExpiration: Option[joda.DateTime],
     seats: Seq[SeatQuantity]
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/OrderExpired.cs
-  case class OrderExpired( override val sourceId: OrderExpired#TID ) extends EventMessage
+  case class OrderExpired( override val sourceId: OrderExpired#TID ) extends Event
 
   // Registration.Contracts/Events/OrderRegistrantAssigned.cs
   case class OrderRegistrantAssigned(
@@ -125,13 +125,13 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
     firstName: String,    //DMR: better to model as PersonName archetype
     lastName: String,
     email: String
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/OrderConfirmed.cs
-  case class OrderConfirmed( override val sourceId: OrderConfirmed#TID ) extends EventMessage
+  case class OrderConfirmed( override val sourceId: OrderConfirmed#TID ) extends Event
 
   //DMR: Need to determine how to handle migrate of deprecated events into new; e.g., Mapper / Migrations
-  case class OrderPaymentConfirmed( override val sourceId: OrderPaymentConfirmed#TID ) extends EventMessage
+  case class OrderPaymentConfirmed( override val sourceId: OrderPaymentConfirmed#TID ) extends Event
 
   object OrderPaymentConfirmed {
     implicit def migrate( e: OrderPaymentConfirmed ): OrderConfirmed = OrderConfirmed( e.sourceId )

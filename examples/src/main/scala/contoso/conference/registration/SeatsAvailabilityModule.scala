@@ -26,53 +26,53 @@ object SeatsAvailabilityProtocol extends AggregateProtocol[ShortUUID] {
     override val targetId: MakeSeatReservation#TID,
     reservationId: OrderModule.TID,
     seats: Seq[SeatQuantity]
-  ) extends CommandMessage
+  ) extends Command
 
   // Conference/Registration/Commands/CancelSeatReservation.cs
   case class CancelSeatReservation(
     override val targetId: CancelSeatReservation#TID,
     reservationId: OrderModule.TID
-  ) extends CommandMessage
+  ) extends Command
 
   // Conference/Registration/Commands/CommitSeatReservation.cs
   case class CommitSeatReservation(
     override val targetId: CommitSeatReservation#TID,
     reservationId: OrderModule.TID
-  ) extends CommandMessage
+  ) extends Command
 
   // Conference/Registration/Commands/AddSeats.cs
   case class AddSeats(
     override val targetId: AddSeats#TID,
     seatTypeId: SeatType.TID,
     quantity: Dimensionless
-  ) extends CommandMessage
+  ) extends Command
 
   // Conference/Registration/Commands/RemoveSeats.cs
   case class RemoveSeats(
     override val targetId: RemoveSeats#TID,
     seatTypeId: SeatType.TID,
     quantity: Dimensionless
-  ) extends CommandMessage
+  ) extends Command
 
 
   // Conference/Registration/Events/AvailableSeatsChanged.cs
   case class AvailableSeatsChanged(
     override val sourceId: AvailableSeatsChanged#TID,
     seats: Set[SeatQuantity] // DMR: orig is Enumerable / Iterable; Set okay or keep Seq?
-  ) extends EventMessage
+  ) extends Event
 
   // Conference/Registration/Events/SeatsReservationCancelled.cs
   case class SeatsReservationCancelled(
     override val sourceId: SeatsReservationCancelled#TID,
     reservationId: OrderModule.TID,
     availableSeatsChanged: Set[SeatQuantity]
-  ) extends EventMessage
+  ) extends Event
 
   // Conference/Registration/Events/SeatsReservationCommitted.cs
   case class SeatsReservationCommitted(
     override val sourceId: SeatsReservationCommitted#TID,
     reservationId: OrderModule.TID
-  ) extends EventMessage
+  ) extends Event
 
   // Conference/Registration/Events/SeatsReserved.cs
   case class SeatsReserved(
@@ -80,7 +80,7 @@ object SeatsAvailabilityProtocol extends AggregateProtocol[ShortUUID] {
     reservationId: OrderModule.TID,
     reservationDetails: Set[SeatQuantity],
     availableSeatsChanged: Set[SeatQuantity]
-  ) extends EventMessage
+  ) extends Event
 }
 
 /**
