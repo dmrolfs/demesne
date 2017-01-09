@@ -1,4 +1,4 @@
-package demesne.module.entity.messages
+package demesne.module.entity
 
 import demesne.{AggregateProtocol, AggregateRootModule}
 

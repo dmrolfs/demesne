@@ -21,8 +21,7 @@ import demesne._
 import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
-import demesne.module.entity.EntityAggregateModule
-import demesne.module.entity.messages.EntityProtocol
+import demesne.module.entity.{ EntityAggregateModule, EntityProtocol }
 
 
 object EntityAggregateModuleSpec extends LazyLogging {

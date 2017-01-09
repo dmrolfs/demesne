@@ -1,8 +1,7 @@
 package demesne.module.entity
 
-import scala.reflect.ClassTag
+import scala.reflect._
 import akka.event.LoggingReceive
-
 import scalaz.{-\/, \/, \/-}
 import shapeless._
 import com.typesafe.scalalogging.LazyLogging
@@ -13,7 +12,6 @@ import peds.commons.TryV
 import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType}
 import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent
-import demesne.module.entity.messages.EntityProtocol
 import demesne.module.{AggregateEnvironment, LocalAggregate, SimpleAggregateModule}
 import demesne.repository.AggregateRootProps
 
@@ -30,13 +28,10 @@ object EntityAggregateModule extends LazyLogging {
   ): IndexSpecification = {
     def label( entity: E ): String = slugLens map { _.get( entity ) } getOrElse { idLens.get( entity ).get.toString }
 
-    import demesne.module.entity.messages.EntityProtocol
-
-    import scala.reflect._
-    val AddedType: ClassTag[EntityProtocol[E#ID]#Added] = classTag[EntityProtocol[E#ID]#Added]
-    val ResluggedType: ClassTag[EntityProtocol[E#ID]#Reslugged] = classTag[EntityProtocol[E#ID]#Reslugged]
-    val DisabledType: ClassTag[EntityProtocol[E#ID]#Disabled] = classTag[EntityProtocol[E#ID]#Disabled]
-    val EnabledType: ClassTag[EntityProtocol[E#ID]#Enabled] = classTag[EntityProtocol[E#ID]#Enabled]
+    val AddedType = classTag[EntityProtocol[E#ID]#Added]
+    val ResluggedType = classTag[EntityProtocol[E#ID]#Reslugged]
+    val DisabledType = classTag[EntityProtocol[E#ID]#Disabled]
+    val EnabledType = classTag[EntityProtocol[E#ID]#Enabled]
 
     IndexLocalAgent.spec[String, E#ID, E#ID]( 'slug ) { // or 'activeSlug
       case AddedType(event) => {
