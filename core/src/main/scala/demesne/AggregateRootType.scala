@@ -19,7 +19,7 @@ object AggregateRootType {
   }
 }
 
-abstract class AggregateRootType extends LazyLogging {
+abstract class AggregateRootType extends Equals with LazyLogging {
   def name: String
   def repositoryName: String = org.atteo.evo.inflector.English.plural( name )
 
@@ -96,6 +96,28 @@ abstract class AggregateRootType extends LazyLogging {
   }
 
   def indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification]
+
+
+  // far from ideal practice, but aggregate roots can create their own anonymous root types.
+  override def canEqual( that: Any ): Boolean = that.isInstanceOf[AggregateRootType]
+
+  override def equals( rhs: Any ): Boolean = {
+    rhs match {
+      case that: AggregateRootType => {
+        if ( this eq that ) true
+        else {
+          ( that.## == this.## ) &&
+          ( that canEqual this ) &&
+          ( this.name == that.name ) &&
+          ( this.identifying == that.identifying )
+        }
+      }
+
+      case _ => false
+    }
+  }
+
+  override def hashCode(): Int = 41 * ( 41 + name.## ) + identifying.##
 
   override def toString: String = name + "AggregateRootType"
 }

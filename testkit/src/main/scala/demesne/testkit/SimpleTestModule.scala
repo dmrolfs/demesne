@@ -26,7 +26,6 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule { mo
     new AggregateRootType {
       override val name: String = module.name
 
-
       override lazy val identifying: Identifying[_] = implicitly[Identifying[T]]
 
       override def repositoryProps( implicit model: DomainModel ): Props = {

@@ -54,11 +54,13 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
       }
     }
 
+    override def canEqual( that: Any ): Boolean = that.isInstanceOf[SimpleAggregateRootType]
+
     override def toString: String = name + "SimpleAggregateRootType"
   }
 
 
-  override def rootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new SimpleAggregateRootType( name = module.shardName, indexes = module.indexes, environment )
   }
 }

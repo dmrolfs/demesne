@@ -222,10 +222,11 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     indexes: Seq[IndexSpecification],
     environment: AggregateEnvironment
   ) extends SimpleAggregateRootType( name, indexes, environment ) {
+    override def canEqual( that: Any ): Boolean = that.isInstanceOf[EntityAggregateRootType]
     override def toString: String = name + "EntityAggregateRootType"
   }
 
-  override def rootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new EntityAggregateRootType( name = module.shardName, indexes = module.indexes, environment )
   }
 
