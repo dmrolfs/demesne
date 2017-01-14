@@ -35,18 +35,18 @@ abstract class AggregateRootType extends Equals with LazyLogging {
     case cmd: CommandLike => ( cmd.targetId.id.toString, cmd )
     case event: EventLike => ( event.sourceId.id.toString, event )
     case msg: MessageLike => ( msg.targetId.id.toString, msg )
-    case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
-      logger.debug( "tagged aggregateIdFor(stop) = [{}]", (tid.id.toString, stop) )
-      ( tid.id.toString, stop )
-    }
-    case stop @ PassivationSpecification.StopAggregateRoot( id ) => {
-      logger.debug( "untagged aggregateIdFor(stop) = [{}]", (id.toString, stop) )
-      ( id.toString, stop )
-    }
     case e: EntityEnvelope => ( e.id.toString, e )
     case e @ Envelope( payload, _ ) if aggregateIdFor.isDefinedAt( payload ) => ( aggregateIdFor(payload)._1, e ) // want MatchError on payload if not found
     case r @ ReliableMessage( _, msg ) if aggregateIdFor.isDefinedAt( msg ) => ( aggregateIdFor(msg)._1, r )  // want MatchError on msg if not found
     case p @ Passivate( stop ) if aggregateIdFor.isDefinedAt( stop ) => ( aggregateIdFor(stop)._1, p )
+    // case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
+    //   logger.debug( "tagged aggregateIdFor(stop) = [{}]", (tid.id.toString, stop) )
+    //   ( tid.id.toString, stop )
+    // }
+    // case stop @ PassivationSpecification.StopAggregateRoot( id ) => {
+    //   logger.debug( "untagged aggregateIdFor(stop) = [{}]", (id.toString, stop) )
+    //   ( id.toString, stop )
+    // }
   }
 
   /**
@@ -63,18 +63,18 @@ abstract class AggregateRootType extends Equals with LazyLogging {
     case cmd: CommandLike => ( math.abs( cmd.targetId.id.## ) % numberOfShards ).toString
     case event: EventLike => ( math.abs( event.sourceId.id.## ) % numberOfShards ).toString
     case msg: MessageLike => ( math.abs( msg.targetId.id.## ) % numberOfShards ).toString
-    case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
-      logger.debug( "tagged shardIdFor(stop) = [{}]", ( math.abs( tid.id.## ) % numberOfShards ).toString )
-      ( math.abs( tid.id.## ) % numberOfShards ).toString
-    }
-    case stop @ PassivationSpecification.StopAggregateRoot( id ) => {
-      logger.debug( "untagged shardIdFor(stop) = [{}]", ( math.abs( id.## ) % numberOfShards ).toString )
-      ( math.abs( id.## ) % numberOfShards ).toString
-    }
     case e: EntityEnvelope => ( math.abs( e.id.## ) % numberOfShards ).toString
     case Envelope( payload, _ ) => shardIdFor( payload )
     case ReliableMessage( _, msg ) => shardIdFor( msg )
     case Passivate( stop ) => shardIdFor( stop )
+    // case stop @ PassivationSpecification.StopAggregateRoot( TaggedIdType(tid) ) => {
+    //   logger.debug( "tagged shardIdFor(stop) = [{}]", ( math.abs( tid.id.## ) % numberOfShards ).toString )
+    //   ( math.abs( tid.id.## ) % numberOfShards ).toString
+    // }
+    // case stop @ PassivationSpecification.StopAggregateRoot( id ) => {
+    //   logger.debug( "untagged shardIdFor(stop) = [{}]", ( math.abs( id.## ) % numberOfShards ).toString )
+    //   ( math.abs( id.## ) % numberOfShards ).toString
+    // }
   }
 
   /**

@@ -9,7 +9,7 @@ object PassivationSpecification {
     override def inactivityTimeout: Duration = Duration.Undefined
   }
 
-  case class StopAggregateRoot[ID]( targetId: ID )
+  case class StopAggregateRoot[I0]( targetId: StopAggregateRoot[I0]#TID ) extends MessageLike { type ID = I0 }
 }
 
 trait PassivationSpecification {

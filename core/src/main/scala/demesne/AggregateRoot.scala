@@ -171,7 +171,7 @@ with ActorLogging {
     message match {
       case m: ReceiveTimeout => {
         log.debug( "[{}] id:[{}] Passivating per receive-timeout", self.path, aggregateId )
-        context.parent ! rootType.passivation.passivationMessage( PassivationSpecification.StopAggregateRoot[TID](aggregateId) )
+        context.parent ! rootType.passivation.passivationMessage( PassivationSpecification.StopAggregateRoot[ID](aggregateId) )
       }
 
       case PassivationSpecification.StopAggregateRoot( id ) if id == aggregateId => {
