@@ -51,6 +51,7 @@ object Dependencies {
 
   object facility {
     val uuid = "com.eaio.uuid" % "uuid" % "3.4"
+    val bloomFilter = "com.github.alexandrnikitin" %% "bloom-filter" % "0.7.0" withSources() withJavadoc()
     val config = "com.typesafe" % "config" % "1.3.1"
     val shapeless = "com.chuusai" %% "shapeless" % "2.3.2"
     val inflector = "org.atteo" % "evo-inflector" % "1.2.1"

@@ -1,16 +1,15 @@
 package contoso.conference
 
-import akka.Done
-
 import scala.concurrent._
 import scala.concurrent.duration._
+import scalaz.concurrent.Task
+import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
 import akka.pattern.pipe
 import akka.event.LoggingReceive
 import com.typesafe.config.ConfigFactory
+import bloomfilter.mutable.BloomFilter
 import demesne.BoundedContext
-
-import scalaz.concurrent.Task
 
 
 //DMR: implement as ClusterSingleton
@@ -70,12 +69,11 @@ object ConferenceContext {
 
 class ConferenceContext extends Actor with ActorLogging {
   import ConferenceContext._
-  import peds.commons.collection.BloomFilter
 
   implicit val ec: ExecutionContext = context.system.dispatchers.lookup( "conference-context-dispatcher" )
 
   // initialize with basic and upon start populate via PeristentView
-  var filter: BloomFilter[String] = BloomFilter()
+  val filter: BloomFilter[String] = BloomFilter[String]( 100, 0.05 )
 
   // use ScalaCache to front shared cache?
   var slugCache: Map[String, ConferenceModule.TID] = Map()  // temp in-memory rep; future should be shared cache server
@@ -96,7 +94,7 @@ class ConferenceContext extends Actor with ActorLogging {
     }
 
     case CCP.GetSlugStatus( slug ) => {
-      val result = if ( filter.has_?( slug ) ) {
+      val result = if ( filter.mightContain( slug ) ) {
         findSlug( slug ) map { fs => fs getOrElse CCP.SlugAvailable( slug ) }
       } else {
         Future successful { CCP.SlugAvailable( slug ) }
@@ -115,7 +113,7 @@ class ConferenceContext extends Actor with ActorLogging {
     } yield {
       status.fold[CCP.SlugStatus] {
         slugCache += ( slug -> conferenceId )
-        filter += slug
+        filter add slug
         CCP.SlugReserved( slug, conferenceId )
       } {
         _.toNotAvailable
