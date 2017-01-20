@@ -205,6 +205,8 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
         aggregateIdTag = Foo.identifying.idTag,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
+        passivateTimeout = AggregateRootType.DefaultPassivation,
+        snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
         protocol = Protocol,
         startTask = StartTask.empty( "expected" ),
         environment = LocalAggregate,

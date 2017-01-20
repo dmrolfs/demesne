@@ -17,6 +17,9 @@ object AggregateRootType {
   trait Provider {
     def rootType: AggregateRootType
   }
+
+  val DefaultPassivation: Duration = 15.minutes
+  val DefaultSnapshotPeriod: FiniteDuration = 15.minutes
 }
 
 abstract class AggregateRootType extends Equals with LazyLogging {
@@ -80,12 +83,12 @@ abstract class AggregateRootType extends Equals with LazyLogging {
   /**
     * specify the period of inactivity before the entity passivates
     */
-  def passivateTimeout: Duration = 15.minutes
+  def passivateTimeout: Duration = AggregateRootType.DefaultPassivation
   def passivation: PassivationSpecification = new PassivationSpecification {
     override val inactivityTimeout: Duration = passivateTimeout
   }
 
-  def snapshotPeriod: Option[FiniteDuration] = Some( 15.minutes )
+  def snapshotPeriod: Option[FiniteDuration] = Some( AggregateRootType.DefaultSnapshotPeriod )
   def snapshot: Option[SnapshotSpecification] = {
     snapshotPeriod map { period =>
       new SnapshotSpecification {

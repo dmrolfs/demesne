@@ -2,6 +2,7 @@ package demesne.module.entity
 
 import scala.reflect._
 import akka.event.LoggingReceive
+
 import scalaz.{-\/, \/, \/-}
 import shapeless._
 import com.typesafe.scalalogging.LazyLogging
@@ -14,6 +15,8 @@ import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent
 import demesne.module.{AggregateEnvironment, LocalAggregate, SimpleAggregateModule}
 import demesne.repository.AggregateRootProps
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 
 object EntityAggregateModule extends LazyLogging {
@@ -109,6 +112,8 @@ object EntityAggregateModule extends LazyLogging {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
         object Props extends Param[AggregateRootProps]
+        object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
+        object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
         object Protocol extends Param[EP]
         object StartTask extends OptParam[demesne.StartTask](
           demesne.StartTask.empty( s"start ${implicitly[ClassTag[E]].runtimeClass.getCanonicalName}" )
@@ -120,6 +125,7 @@ object EntityAggregateModule extends LazyLogging {
         object SlugLens extends OptParam[Option[Lens[E, String]]]( None )
         object IsActiveLens extends OptParam[Option[Lens[E, Boolean]]]( None )
       }
+
       import P.{ Props => PProps, _ }
 
       override val gen = Generic[CC]
@@ -127,6 +133,8 @@ object EntityAggregateModule extends LazyLogging {
       override val fieldsContainer = createFieldsContainer( 
         Tag :: 
         PProps ::
+        P.PassivateTimeout ::
+        P.SnapshotPeriod ::
         Protocol ::
         P.StartTask ::
         Environment ::
@@ -145,6 +153,8 @@ object EntityAggregateModule extends LazyLogging {
     case class EntityAggregateModuleImpl(
       override val aggregateIdTag: Symbol,
       override val aggregateRootPropsOp: AggregateRootProps,
+      override val passivateTimeout: Duration,
+      override val snapshotPeriod: Option[FiniteDuration],
       override val protocol: EP,
       override val startTask: demesne.StartTask,
       override val environment: AggregateEnvironment,
