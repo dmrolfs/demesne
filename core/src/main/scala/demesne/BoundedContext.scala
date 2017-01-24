@@ -234,7 +234,7 @@ object BoundedContext extends StrictLogging { outer =>
     override def rootTypes: Set[AggregateRootType] = unsafeCell.rootTypes
     override def get( rootName: String, id: Any ): Option[ActorRef] = {
       val aggregate = unsafeCell.get( rootName, id )
-      logger.debug( "aggregate get([{}], [{}]) = [{}]", rootName, id.toString, aggregate )
+      // logger.debug( "aggregate get([{}], [{}]) = [{}]", rootName, id.toString, aggregate )
       aggregate
     }
     override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
