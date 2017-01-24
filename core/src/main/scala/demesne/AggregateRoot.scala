@@ -1,6 +1,7 @@
 package demesne
 
 import scala.reflect._
+import scala.concurrent.duration.Duration
 import akka.actor.{ActorLogging, ActorPath, ActorRef, ReceiveTimeout}
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
@@ -60,7 +61,16 @@ with ActorLogging {
   val StopMessageType: ClassTag[_] = classTag[PassivationSpecification.StopAggregateRoot[ID]]
 
   context.setReceiveTimeout( outer.rootType.passivation.inactivityTimeout )
-  outer.rootType.snapshot foreach { s => s.schedule( context.system, self, aggregateId )( context.system.dispatcher ) }
+  val snapshotCancellable = outer.rootType.snapshot map { _.schedule( context.system, self, aggregateId )( context.system.dispatcher ) }
+
+  def passivate(): Unit = context stop self
+
+  override def postStop(): Unit = {
+    log.debug( "[{}] clearing receive inactivity and snapshot timer on actor stop", self.path )
+    context.setReceiveTimeout( Duration.Undefined )
+    snapshotCancellable foreach { _.cancel() }
+    super.postStop()
+  }
 
   override protected def onPersistRejected( cause: Throwable, event: Any, seqNr: Long ): Unit = {
     log.error(
@@ -111,13 +121,13 @@ with ActorLogging {
 
   override def around( r: Receive ): Receive = {
     case m: ReceiveTimeout => {
-      log.debug( "[{}] id:[{}] Passivating per receive-timeout", self.path, aggregateId )
+      log.debug( "[{}] id:[{}] sending aggregate stop message per receive timeout", self.path, aggregateId )
       context.parent ! rootType.passivation.passivationMessage( PassivationSpecification.StopAggregateRoot[ID](aggregateId) )
     }
 
     case StopMessageType( m ) if aggregateIdFor(m) == Option(aggregateId.id.toString) => {
-      log.debug( "[{}] id:[{}] Stopping AggregateRoot after passivation", self.path, aggregateId )
-      context stop self
+      log.debug( "[{}] id:[{}] received stop message and starting passivation and stop", self.path, aggregateId )
+      passivate()
     }
 
     case StopMessageType( m ) if !rootType.aggregateIdFor.isDefinedAt(m) => {
