@@ -3,7 +3,7 @@ import sbt._
 
 object Dependencies {
   object peds {
-    val version = "0.4.3"
+    val version = "0.4.4"
     def module( id: String ) = "com.github.dmrolfs" %% s"peds-$id" % version
 
     val commons = module( "commons" )
@@ -12,7 +12,7 @@ object Dependencies {
   }
 
   object akka {
-    val version = "2.4.14"
+    val version = "2.4.16"
     def module( id: String ) = "com.typesafe.akka" %% s"akka-$id" % version
 
     val actor = module( "actor" )
@@ -51,6 +51,7 @@ object Dependencies {
 
   object facility {
     val uuid = "com.eaio.uuid" % "uuid" % "3.4"
+    val bloomFilter = "com.github.alexandrnikitin" %% "bloom-filter" % "0.7.0" withSources() withJavadoc()
     val config = "com.typesafe" % "config" % "1.3.1"
     val shapeless = "com.chuusai" %% "shapeless" % "2.3.2"
     val inflector = "org.atteo" % "evo-inflector" % "1.2.1"

@@ -2,7 +2,7 @@ package demesne
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import akka.actor.{ActorRef, ActorSystem, Cancellable}
+import akka.actor.{ActorRef, ActorSystem, Cancellable, NotInfluenceReceiveTimeout}
 import peds.commons.identifier.TaggedID
 
 
@@ -24,6 +24,6 @@ abstract class SnapshotSpecification { outer =>
 }
 
 
-case class SaveSnapshot( override val targetId: TaggedID[Any] ) extends CommandLike {
+case class SaveSnapshot( override val targetId: TaggedID[Any] ) extends CommandLike with NotInfluenceReceiveTimeout {
   override type ID = Any
 }

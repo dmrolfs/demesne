@@ -1,9 +1,13 @@
 package demesne
 
-import scala.reflect.ClassTag
+import scala.reflect._
+import scala.concurrent.duration.Duration
 import akka.actor.{ActorLogging, ActorPath, ActorRef, ReceiveTimeout}
+import akka.cluster.sharding.ShardRegion
 import akka.persistence._
 import com.typesafe.scalalogging.LazyLogging
+import demesne.PassivationSpecification.StopAggregateRoot
+import peds.akka.ActorStack
 
 import scalaz._
 import scalaz.Kleisli._
@@ -49,12 +53,24 @@ object AggregateRoot extends LazyLogging {
 
 abstract class AggregateRoot[S, I]
 extends PersistentActor
+with ActorStack
 with EnvelopingActor
 with ActorLogging {
   outer: AggregateRoot.Provider with EventPublisher =>
 
+  val StopMessageType: ClassTag[_] = classTag[PassivationSpecification.StopAggregateRoot[ID]]
+
   context.setReceiveTimeout( outer.rootType.passivation.inactivityTimeout )
-  outer.rootType.snapshot foreach { s => s.schedule( context.system, self, aggregateId )( context.system.dispatcher ) }
+  val snapshotCancellable = outer.rootType.snapshot map { _.schedule( context.system, self, aggregateId )( context.system.dispatcher ) }
+
+  def passivate(): Unit = context stop self
+
+  override def postStop(): Unit = {
+    log.debug( "[{}] clearing receive inactivity and snapshot timer on actor stop", self.path )
+    context.setReceiveTimeout( Duration.Undefined )
+    snapshotCancellable foreach { _.cancel() }
+    super.postStop()
+  }
 
   override protected def onPersistRejected( cause: Throwable, event: Any, seqNr: Long ): Unit = {
     log.error(
@@ -98,7 +114,35 @@ with ActorLogging {
   def state_=( newState: S ): Unit
   val evState: ClassTag[S]
 
-  override def around( r: Receive ): Receive = { case msg => super.around( r orElse handleSaveSnapshot )( msg ) }
+
+  def aggregateIdFor( msg: Any ): Option[ShardRegion.EntityId] = {
+    if ( rootType.aggregateIdFor isDefinedAt msg ) Option( rootType.aggregateIdFor(msg)._1 ) else None
+  }
+
+  override def around( r: Receive ): Receive = {
+    case m: ReceiveTimeout => {
+      log.debug( "[{}] id:[{}] sending aggregate stop message per receive timeout", self.path, aggregateId )
+      context.parent ! rootType.passivation.passivationMessage( PassivationSpecification.StopAggregateRoot[ID](aggregateId) )
+    }
+
+    case StopMessageType( m ) if aggregateIdFor(m) == Option(aggregateId.id.toString) => {
+      log.debug( "[{}] id:[{}] received stop message and starting passivation and stop", self.path, aggregateId )
+      passivate()
+    }
+
+    case StopMessageType( m ) if !rootType.aggregateIdFor.isDefinedAt(m) => {
+      log.error( "[{}] root-type cannot find id for stop message[{}]", self.path, m )
+    }
+
+    case StopMessageType( m ) => {
+      log.error(
+        "[{}] unrecognized aggregate stop message with id:[{}] did not match aggregate-id:[{}]",
+        self.path, aggregateIdFor(m), aggregateId
+      )
+    }
+
+    case msg => super.around( r orElse handleSaveSnapshot )( msg )
+  }
 
   val handleSaveSnapshot: Receive = {
     case SaveSnapshot( evTID(tid) ) if tid == aggregateId => {
@@ -167,20 +211,16 @@ with ActorLogging {
     }
   }
 
+
   override def unhandled( message: Any ): Unit = {
     message match {
-      case m: ReceiveTimeout => {
-        log.debug( "[{}] id:[{}] Passivating per receive-timeout", self.path, aggregateId )
-        context.parent ! rootType.passivation.passivationMessage( PassivationSpecification.StopAggregateRoot[TID](aggregateId) )
-      }
-
-      case stop @ PassivationSpecification.StopAggregateRoot(id) if id == aggregateId => {
+      case StopMessageType( m ) if rootType.aggregateIdFor.isDefinedAt(m) && rootType.aggregateIdFor(m) == aggregateId => {
         log.debug( "[{}] id:[{}] Stopping AggregateRoot after passivation", self.path, aggregateId )
         context stop self
       }
 
       case m => {
-        log.debug( "aggregate root[{}] unhandled class[{}]: object:[{}]", aggregateId, m.getClass.getCanonicalName, m )
+        log.debug( "aggregate root[{}] unhandled class[{}]: object:[{}]", aggregateId, m.getClass.getName, m )
         super.unhandled( m )
       }
     }

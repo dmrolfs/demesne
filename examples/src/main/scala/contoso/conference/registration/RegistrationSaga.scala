@@ -21,8 +21,8 @@ import peds.commons.log.Trace
 
 
 object RegistrationSagaProtocol extends AggregateProtocol[ShortUUID] {
-  case class ExpireRegistrationProcess( override val targetId: ExpireRegistrationProcess#TID ) extends CommandMessage
-  case class RegistrationProcessExpired( override val sourceId: RegistrationProcessExpired#TID ) extends EventMessage
+  case class ExpireRegistrationProcess( override val targetId: ExpireRegistrationProcess#TID ) extends Command
+  case class RegistrationProcessExpired( override val sourceId: RegistrationProcessExpired#TID ) extends Event
 }
 
 /**

@@ -8,12 +8,12 @@ import Scalaz._
 import shapeless._
 import peds.commons.identifier.Identifying
 import peds.commons.builder._
-import peds.commons.util._
-import peds.commons.log.Trace
 import peds.commons.TryV
 import demesne._
 import demesne.index.IndexSpecification
 import demesne.repository.{AggregateRootProps, CommonClusteredRepository, CommonLocalRepository}
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 
 abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends AggregateRootModule { module =>
@@ -36,6 +36,9 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
   val evState: ClassTag[S] = implicitly[ClassTag[S]]
   val identifying: Identifying[S] = implicitly[Identifying[S]]
 
+  def passivateTimeout: Duration
+  def snapshotPeriod: Option[FiniteDuration]
+
   def startTask: demesne.StartTask = StartTask.empty( evState.runtimeClass.getCanonicalName )
 
   def environment: AggregateEnvironment
@@ -45,6 +48,8 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
     override val indexes: Seq[IndexSpecification],
     environment: AggregateEnvironment
   ) extends AggregateRootType {
+    override val passivateTimeout: Duration = module.passivateTimeout
+    override val snapshotPeriod: Option[FiniteDuration] = module.snapshotPeriod
 
     override def startTask: StartTask = module.startTask
 
@@ -57,11 +62,13 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
       }
     }
 
+    override def canEqual( that: Any ): Boolean = that.isInstanceOf[SimpleAggregateRootType]
+
     override def toString: String = name + "SimpleAggregateRootType"
   }
 
 
-  override def rootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new SimpleAggregateRootType( name = module.shardName, indexes = module.indexes, environment )
   }
 }
@@ -78,6 +85,8 @@ object SimpleAggregateModule {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[S]].runtimeClass )
         object Props extends Param[AggregateRootProps]
+        object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
+        object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
         object StartTask extends OptParam[demesne.StartTask](
           demesne.StartTask.empty( s"start ${implicitly[ClassTag[S]].runtimeClass.getCanonicalName}" )
         )
@@ -89,6 +98,8 @@ object SimpleAggregateModule {
       override val fieldsContainer = createFieldsContainer(
         P.Tag ::
         P.Props ::
+        P.PassivateTimeout ::
+        P.SnapshotPeriod ::
         P.StartTask ::
         P.Environment ::
         P.Indexes ::
@@ -101,12 +112,12 @@ object SimpleAggregateModule {
   final case class SimpleAggregateModuleImpl[S: ClassTag : Identifying](
     override val aggregateIdTag: Symbol,
     override val aggregateRootPropsOp: AggregateRootProps,
+    override val passivateTimeout: Duration,
+    override val snapshotPeriod: Option[FiniteDuration],
     override val startTask: demesne.StartTask,
     override val environment: AggregateEnvironment,
     override val indexes: Seq[IndexSpecification]
   ) extends SimpleAggregateModule[S] with Equals { module =>
-    private val trace: Trace[_] = Trace( s"SimpleAggregateModule[${implicitly[ClassTag[S]].runtimeClass.safeSimpleName}]" )
-
     def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {
       val lhs = implicitly[ClassTag[I]]
       val rhs = identifying.evID

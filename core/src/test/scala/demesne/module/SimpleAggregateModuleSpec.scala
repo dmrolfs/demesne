@@ -151,6 +151,8 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
       val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
         aggregateIdTag = 'fooTAG, 
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
+        passivateTimeout = AggregateRootType.DefaultPassivation,
+        snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
         startTask = StartTask.empty( "simple" ),
         environment = LocalAggregate,
         indexes = Seq.empty[IndexSpecification]
@@ -172,6 +174,8 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
       val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
         aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
+        passivateTimeout = AggregateRootType.DefaultPassivation,
+        snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
         startTask = StartTask.empty( "expected" ),
         environment = LocalAggregate,
         indexes = Seq.empty[IndexSpecification]

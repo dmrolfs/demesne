@@ -1,22 +1,22 @@
 package demesne.module.entity
 
-import scala.reflect.ClassTag
+import scala.reflect._
 import akka.event.LoggingReceive
+
 import scalaz.{-\/, \/, \/-}
 import shapeless._
 import com.typesafe.scalalogging.LazyLogging
 import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
 import peds.akka.publish.EventPublisher
 import peds.commons.builder.HasBuilder
-import peds.commons.log.Trace
-import peds.commons.util._
 import peds.commons.TryV
-import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType, DomainModel}
-import demesne.module.entity.{messages => EntityMessages}
+import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType}
 import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent
 import demesne.module.{AggregateEnvironment, LocalAggregate, SimpleAggregateModule}
 import demesne.repository.AggregateRootProps
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 
 object EntityAggregateModule extends LazyLogging {
@@ -31,20 +31,37 @@ object EntityAggregateModule extends LazyLogging {
   ): IndexSpecification = {
     def label( entity: E ): String = slugLens map { _.get( entity ) } getOrElse { idLens.get( entity ).get.toString }
 
+    val AddedType = classTag[EntityProtocol[E#ID]#Added]
+    val ResluggedType = classTag[EntityProtocol[E#ID]#Reslugged]
+    val DisabledType = classTag[EntityProtocol[E#ID]#Disabled]
+    val EnabledType = classTag[EntityProtocol[E#ID]#Enabled]
+
     IndexLocalAgent.spec[String, E#ID, E#ID]( 'slug ) { // or 'activeSlug
-      case EntityMessages.Added( sid, info ) => {
-        info
+      case AddedType(event) => {
+        logger.debug( "#TEST #SLUG: Index handling Added event: [{}]", event )
+        val sid = event.sourceId.id
+
+        event.info
         .map { i =>
           triedToEntity( i )( infoToEntity )
           .map { e => Directive.Record( label( e ), idLens.get( e ).id ) }
-          .getOrElse { Directive.Record( sid.id.toString, sid.id ) }
+          .getOrElse { Directive.Record( sid.toString, sid ) }
         }
         .getOrElse { Directive.Ignore }
       }
 
-      case EntityMessages.Reslugged( _, oldSlug, newSlug ) => Directive.ReviseKey( oldSlug, newSlug )
-      case EntityMessages.Disabled( tid, _ ) => Directive.Withdraw( tid.id )
-      case EntityMessages.Enabled( tid, slug ) => Directive.Record( slug, tid.id, tid.id )
+      case ResluggedType(event) => {
+        logger.info( "#TEST #SLUG: Index handling Reslugged event: [{}]", event )
+        Directive.ReviseKey( event.oldSlug, event.newSlug )
+      }
+      case DisabledType(event) => {
+        logger.info( "#TEST #SLUG: Index handling Disabled event: [{}]", event )
+        Directive.Withdraw( event.sourceId.id )
+      }
+      case EnabledType(event) => {
+        logger.info( "#TEST #SLUG: Index handling Enabled event: [{}]", event )
+        Directive.Record( event.slug, event.sourceId.id, event.sourceId.id )
+      }
     } (
       ClassTag( classOf[String] ),
       implicitly[EntityIdentifying[E]].evID,
@@ -82,9 +99,11 @@ object EntityAggregateModule extends LazyLogging {
   }
 
 
-  def builderFor[E <: Entity : ClassTag : EntityIdentifying]: BuilderFactory[E] = new BuilderFactory[E]
+  def builderFor[E <: Entity : ClassTag : EntityIdentifying, EP <: EntityProtocol[E#ID]]: BuilderFactory[E, EP] = {
+    new BuilderFactory[E, EP]
+  }
 
-  class BuilderFactory[E <: Entity : ClassTag : EntityIdentifying] {
+  class BuilderFactory[E <: Entity : ClassTag : EntityIdentifying, EP <: EntityProtocol[E#ID]] {
     type CC = EntityAggregateModuleImpl
 
     def make: ModuleBuilder = new ModuleBuilder
@@ -93,6 +112,9 @@ object EntityAggregateModule extends LazyLogging {
       object P {
         object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
         object Props extends Param[AggregateRootProps]
+        object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
+        object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
+        object Protocol extends Param[EP]
         object StartTask extends OptParam[demesne.StartTask](
           demesne.StartTask.empty( s"start ${implicitly[ClassTag[E]].runtimeClass.getCanonicalName}" )
         )
@@ -103,6 +125,7 @@ object EntityAggregateModule extends LazyLogging {
         object SlugLens extends OptParam[Option[Lens[E, String]]]( None )
         object IsActiveLens extends OptParam[Option[Lens[E, Boolean]]]( None )
       }
+
       import P.{ Props => PProps, _ }
 
       override val gen = Generic[CC]
@@ -110,6 +133,9 @@ object EntityAggregateModule extends LazyLogging {
       override val fieldsContainer = createFieldsContainer( 
         Tag :: 
         PProps ::
+        P.PassivateTimeout ::
+        P.SnapshotPeriod ::
+        Protocol ::
         P.StartTask ::
         Environment ::
         Indexes :: 
@@ -127,6 +153,9 @@ object EntityAggregateModule extends LazyLogging {
     case class EntityAggregateModuleImpl(
       override val aggregateIdTag: Symbol,
       override val aggregateRootPropsOp: AggregateRootProps,
+      override val passivateTimeout: Duration,
+      override val snapshotPeriod: Option[FiniteDuration],
+      override val protocol: EP,
       override val startTask: demesne.StartTask,
       override val environment: AggregateEnvironment,
       _indexes: MakeIndexSpec,
@@ -135,9 +164,9 @@ object EntityAggregateModule extends LazyLogging {
       override val slugLens: Option[Lens[E, String]],
       override val isActiveLens: Option[Lens[E, Boolean]]
     ) extends EntityAggregateModule[E] with Equals {
-      private val trace: Trace[_] = Trace( s"EntityAggregateModule[${implicitly[ClassTag[E]].runtimeClass.safeSimpleName}]" )
       override val evState: ClassTag[E] = implicitly[ClassTag[E]]
 
+      override type Protocol = EP
       override lazy val indexes: Seq[IndexSpecification] = _indexes()
 
       override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[EntityAggregateModuleImpl]
@@ -165,6 +194,9 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
 
   override type ID = E#ID
   override def nextId: TryV[TID] = identifying.nextId
+
+  type Protocol <: EntityProtocol[ID]
+  val protocol: Protocol
 
   def idLens: Lens[E, E#TID]
   def nameLens: Lens[E, String]
@@ -200,10 +232,11 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     indexes: Seq[IndexSpecification],
     environment: AggregateEnvironment
   ) extends SimpleAggregateRootType( name, indexes, environment ) {
+    override def canEqual( that: Any ): Boolean = that.isInstanceOf[EntityAggregateRootType]
     override def toString: String = name + "EntityAggregateRootType"
   }
 
-  override def rootType: AggregateRootType = {
+  override val rootType: AggregateRootType = {
     new EntityAggregateRootType( name = module.shardName, indexes = module.indexes, environment )
   }
 
@@ -214,19 +247,19 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     override def acceptance: Acceptance = entityAcceptance
 
     def entityAcceptance: Acceptance = {
-      case (EntityMessages.Added(_, info), s) => {
+      case (protocol.Added(_, info), s) => {
         preActivate()
         context become LoggingReceive{ around( active ) }
         module.triedToEntity( info ) getOrElse s
       }
-      case (EntityMessages.Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
-      case (EntityMessages.Reslugged(_, _, newSlug), s ) => module.slugLens map { _.set( s )( newSlug ) } getOrElse s
-      case (_: EntityMessages.Disabled, s) => {
+      case (protocol.Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
+      case (protocol.Reslugged(_, _, newSlug), s ) => module.slugLens map { _.set( s )( newSlug ) } getOrElse s
+      case (_: protocol.Disabled, s) => {
         preDisable()
         context become LoggingReceive { around( disabled ) }
         module.isActiveLens map { _.set( s )( false ) } getOrElse s
       }
-      case (_: EntityMessages.Enabled, s) => {
+      case (_: protocol.Enabled, s) => {
         preEnable()
         context become LoggingReceive { around( active ) }
         module.isActiveLens map { _.set( s )( true ) } getOrElse s
@@ -240,28 +273,28 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
     def quiescent: Receive = {
-      case EntityMessages.Add( targetId, info ) if targetId == aggregateId => {
-        persist( EntityMessages.Added(targetId, info) ) { e => acceptAndPublish( e ) }
+      case protocol.Add( targetId, info ) if targetId == aggregateId => {
+        persist( protocol.Added(targetId, info) ) { e => acceptAndPublish( e ) }
       }
     }
 
     def active: Receive = {
-      case EntityMessages.Rename( id, name ) => {
-        persist( EntityMessages.Renamed(id, module.nameLens.get(state), name) ) { e => acceptAndPublish( e ) }
+      case protocol.Rename( id, name ) => {
+        persist( protocol.Renamed(id, module.nameLens.get(state), name) ) { e => acceptAndPublish( e ) }
       }
 
-      case EntityMessages.Reslug( id, slug ) if module.slugLens.isDefined => {
-        persist( EntityMessages.Reslugged(id, module.slugLens.get.get(state), slug) ) { e => acceptAndPublish( e ) }
+      case protocol.Reslug( id, slug ) if module.slugLens.isDefined => {
+        persist( protocol.Reslugged(id, module.slugLens.get.get(state), slug) ) { e => acceptAndPublish( e ) }
       }
 
-      case EntityMessages.Disable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persist( EntityMessages.Disabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
+      case protocol.Disable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
+        persist( protocol.Disabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
       }
     }
 
     def disabled: Receive = {
-      case EntityMessages.Enable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persist( EntityMessages.Enabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
+      case protocol.Enable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
+        persist( protocol.Enabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
       }
     }
   }

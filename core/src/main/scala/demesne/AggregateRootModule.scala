@@ -31,9 +31,11 @@ abstract class AggregateRootModule extends AggregateRootType.Provider with LazyL
 
 object AggregateRootModule {
 
-  trait Command[I] extends CommandLike {
+  trait Message[I] extends MessageLike {
     override type ID = I
   }
+
+  trait Command[I] extends Message[I] with CommandLike 
 
 
   trait Event[I] extends EventLike {

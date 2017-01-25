@@ -30,7 +30,7 @@ object SeatAssignmentsProtocol extends AggregateProtocol[ShortUUID] {
     override val targetId: CreateSeatsAssignment#TID,
     orderId: OrderModule.TID,
     seats: Set[SeatQuantity]
-  ) extends CommandMessage
+  ) extends Command
 
   // Conference/Registration/Commands/AssignSeat.cs
   case class AssignSeat(
@@ -38,14 +38,14 @@ object SeatAssignmentsProtocol extends AggregateProtocol[ShortUUID] {
     seatTypeId: SeatType.TID,
     position: Int,
     attendee: PersonalInfo
-  ) extends CommandMessage
+  ) extends Command
 
   // Conference/Registration/Commands/UnassignSeat.cs
   case class UnassignSeat(
     override val targetId: UnassignSeat#TID,
     seatTypeId: SeatType.TID,
     position: Int
-  ) extends CommandMessage
+  ) extends Command
 
 
   // Registration.Contracts/Events/SeatAssigned.cs
@@ -54,24 +54,24 @@ object SeatAssignmentsProtocol extends AggregateProtocol[ShortUUID] {
     position: Int,
     seatTypeId: SeatType.TID,
     attendee: PersonalInfo
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/SeatAssignmentsCreated.cs
   case class SeatAssignmentsCreated(
     override val sourceId: SeatAssigned#TID,
     orderId: OrderModule.TID,
     seats: Seq[SeatAssignment]
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/SeatAssignmentsUpdated.cs
   case class SeatAssignmentsUpdated(
     override val sourceId: SeatAssignmentsUpdated#TID,
     position: Int,
     attendee: PersonalInfo
-  ) extends EventMessage
+  ) extends Event
 
   // Registration.Contracts/Events/SeatUnassigned.cs
-  case class SeatUnassigned( override val sourceId: SeatUnassigned#TID, position: Int ) extends EventMessage
+  case class SeatUnassigned( override val sourceId: SeatUnassigned#TID, position: Int ) extends Event
 }
 
 object SeatAssignmentsModule extends AggregateRootModule { module =>
@@ -227,7 +227,11 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
       }
     }
 
-    def makeAssignmentEvents( assignment: SeatAssignment, attendee: PersonalInfo, pos: Int ): Seq[Event] = {
+    def makeAssignmentEvents(
+      assignment: SeatAssignment,
+      attendee: PersonalInfo,
+      pos: Int
+    ): Seq[SeatAssignmentsProtocol.Event] = {
       assignment.attendee map { currentAttendee =>
         val result = scala.collection.mutable.Seq()
         if ( !attendee.email.equalsIgnoreCase( currentAttendee.email ) ) {

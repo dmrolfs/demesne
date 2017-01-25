@@ -1,6 +1,7 @@
 package demesne
 
 import scala.concurrent.duration.Duration
+import akka.actor.NotInfluenceReceiveTimeout
 import akka.cluster.sharding.ShardRegion.Passivate
 
 
@@ -9,7 +10,11 @@ object PassivationSpecification {
     override def inactivityTimeout: Duration = Duration.Undefined
   }
 
-  case class StopAggregateRoot[ID]( targetId: ID )
+  case class StopAggregateRoot[I0]( 
+    targetId: StopAggregateRoot[I0]#TID 
+  ) extends MessageLike with NotInfluenceReceiveTimeout { 
+    type ID = I0 
+  }
 }
 
 trait PassivationSpecification {

@@ -6,7 +6,6 @@ import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
-import peds.commons.log.Trace
 import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
 
@@ -40,14 +39,12 @@ object RepositorySupervisor extends LazyLogging {
     initiators: Set[ActorRef] = Set.empty[ActorRef],
     dependencies: Set[Symbol] = Set.empty[Symbol]
   ) extends Equals {
-    private val trace = Trace[StartingRepository]
-
     override def toString: String = {
       s"""StartingRepository([${name}:${state}] dependencies:[${dependencies.map{ _.name }.mkString(", ")}] """ +
       s"""initiators:[${initiators.map{ _.path.name }.mkString(", ")}])"""
     }
 
-    def isSatisfiedBy( resources: Map[Symbol, Any] ): Boolean = trace.briefBlock( s"""[${name}] isSatisfiedBy [${resources.keySet.mkString(", ")}] """ ){
+    def isSatisfiedBy( resources: Map[Symbol, Any] ): Boolean = {
       val met = dependencies & resources.keySet
       dependencies == met
     }
@@ -98,20 +95,16 @@ object RepositorySupervisor extends LazyLogging {
       s"""resources:[${availableResources.keySet.mkString(", ")}] waiting:[${waiting.map{ _.path.name }.mkString(", ")}])"""
     }
 
-    private val trace = Trace[ModelStartupState]
+    def repositoriesInState( state: RepositoryStartupState ): Set[StartingRepository] = starting filter { _.state == state }
 
-    def repositoriesInState( state: RepositoryStartupState ): Set[StartingRepository] = trace.briefBlock(s"repositoriesInState($state)") {
-      starting filter { _.state == state }
-    }
+    def startingStateFor( name: String ): Option[StartingRepository] = starting find { _.name == name }
 
-    def startingStateFor( name: String ): Option[StartingRepository] = trace.block(s"startingStateFor($name)") { starting find { _.name == name } }
-
-    def withLoading( name: String, repository: ActorRef, initiator: ActorRef ): ModelStartupState = trace.block("withLoading") {
+    def withLoading( name: String, repository: ActorRef, initiator: ActorRef ): ModelStartupState = {
       val newStarting = StartingRepository( name, state = Loading, repository = Option(repository), initiators = Set(initiator) )
       withStartingRepositoryState( newStarting )
     }
 
-    def withStartingRepositoryState( repositoryState: StartingRepository ): ModelStartupState = trace.block( s"withStartingRepositoryState(${repositoryState})" ) {
+    def withStartingRepositoryState( repositoryState: StartingRepository ): ModelStartupState = {
       logger.debug( "BEFORE new repositoryState:[{}]", repositoryState )
       logger.debug( "BEFORE starting:[{}]", starting.mkString(", ") )
       val without = starting - repositoryState
@@ -119,7 +112,7 @@ object RepositorySupervisor extends LazyLogging {
       this.copy( starting = without + repositoryState )
     }
 
-    def withWaiting( ref: ActorRef ): ModelStartupState = trace.block("withWaiting") {
+    def withWaiting( ref: ActorRef ): ModelStartupState = {
       if ( starting.nonEmpty ) {
         logger.debug( "Stashing waiting:[{}] repositories are starting:[{}]", ref.path.name, starting.map{ _.name }.mkString(", ") )
         this.copy( waiting = waiting + ref )
@@ -130,16 +123,16 @@ object RepositorySupervisor extends LazyLogging {
       }
     }
 
-    def addResources( resources: Map[Symbol, Any] ): ModelStartupState = trace.block(s"addResources($resources)") {
+    def addResources( resources: Map[Symbol, Any] ): ModelStartupState = {
       this.copy( availableResources = availableResources ++ resources )
     }
 
-    def without( repo: StartingRepository ): ModelStartupState = trace.block("without") {
+    def without( repo: StartingRepository ): ModelStartupState = {
       val newState = this.copy( started = started + repo, starting = starting - repo )
       if ( newState.starting.isEmpty ) newState.drainWaiting() else newState
     }
 
-    def drainWaiting(): ModelStartupState = trace.block("drainWaiting") {
+    def drainWaiting(): ModelStartupState = {
       logger.debug( "notifying waiting:[{}] that RepositorySupervisor Started", waiting.map{_.path.name}.mkString(", ") )
       waiting foreach { _ ! SP.Started }
       this.copy( waiting = Set.empty[ActorRef])

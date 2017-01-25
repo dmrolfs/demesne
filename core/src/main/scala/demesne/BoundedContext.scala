@@ -13,7 +13,6 @@ import scalaz.concurrent.Task
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import peds.commons.TryV
-import peds.commons.log.Trace
 import demesne.repository.{RepositorySupervisor, StartProtocol}
 import demesne.DomainModel.{AggregateIndex, DomainModelCell, Supervisors}
 import demesne.index.{IndexBus, IndexSupervisor}
@@ -41,8 +40,6 @@ object BoundedContext extends StrictLogging { outer =>
   import scala.concurrent.ExecutionContext.global
   val timeoutDuration = 10.seconds
 
-
-  private val trace = Trace( "BoundedContext", logger )
 
   def apply( key: Symbol ): BoundedContext = {
     contexts()
@@ -237,7 +234,7 @@ object BoundedContext extends StrictLogging { outer =>
     override def rootTypes: Set[AggregateRootType] = unsafeCell.rootTypes
     override def get( rootName: String, id: Any ): Option[ActorRef] = {
       val aggregate = unsafeCell.get( rootName, id )
-      logger.debug( "aggregate get([{}], [{}]) = [{}]", rootName, id.toString, aggregate )
+      // logger.debug( "aggregate get([{}], [{}]) = [{}]", rootName, id.toString, aggregate )
       aggregate
     }
     override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {

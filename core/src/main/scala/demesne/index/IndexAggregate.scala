@@ -1,12 +1,11 @@
 package demesne.index
 
-import scala.reflect.ClassTag
+import scala.reflect._
 import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
 import akka.cluster.pubsub.DistributedPubSub
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
-import peds.commons.log.Trace
 import peds.commons.util._
 import demesne.EventLike
 import peds.commons.identifier.TaggedID
@@ -69,13 +68,10 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
   import akka.cluster.pubsub.DistributedPubSubMediator.Publish
   import demesne.index.{ IndexAggregateProtocol => P, Directive => D }
 
-
-  private val trace = Trace( getClass.safeSimpleName, log )
-
   val tid: TaggedID[IndexIdentifier] = IndexIdentifier.make[K, I, V]( topic )
-  val KeyType: ClassTag[K] = implicitly[ClassTag[K]]
-  val IdType: ClassTag[I] = implicitly[ClassTag[I]]
-  val ValueType: ClassTag[V] = implicitly[ClassTag[V]]
+  val KeyType: ClassTag[K] = classTag[K]
+  val IdType: ClassTag[I] = classTag[I]
+  val ValueType: ClassTag[V] = classTag[V]
 
 
   /**
@@ -100,8 +96,8 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
   /**
    * Update the state with the new index.
    */
-  private def updateState( event: Any ): Unit = trace.block( s"updateState(${event}})" ) {
-    log.debug( "IndexedAggregate[{}]: BEFORE updateState: state:[{}]", self.path, state.mkString("\n", "\n", "\n") )
+  private def updateState( event: Any ): Unit = {
+    log.debug( "IndexAggregate[{}]: BEFORE updateState: state:[{}]", self.path, state.mkString("\n", "\n", "\n") )
 
     event match {
       case e @ P.Recorded( sid, KeyType(key), IdType(id), ValueType(value) ) => {
@@ -241,8 +237,6 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
     }
 
     case D.Ignore => { }
-
-    case "print" => println( s"index state = ${state}" )
   }
 
   override def unhandled( message: Any ): Unit = {
@@ -251,8 +245,11 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
 
       case D.Withdraw( id, k ) => {
         log.warning(
-          "IndexAggregate[{}] UNHANDLED: [{}] (id, key, class)=[{}] type:[{}]",
-          self.path, message, (id, k.toString, k.getClass.toString), ValueType.runtimeClass.toString
+          s"IndexAggregate[{}] UNHANDLED: [{}] id:[${id}] type:[{}] " +
+          s"key:[${k.toString}] key-class:[${k.getClass.safeSimpleName}] " +
+          "state:[{}]",
+          self.path, message, ValueType.runtimeClass.safeSimpleName,
+          state
         )
       }
 
@@ -267,8 +264,10 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
       case Directive.ReviseKey( oldKey, newKey ) => {
         log.warning(
           "IndexAggregate[{}] UNHANDLED KEY REVISION [{}] - " +
-          "verify AggregateRootType indexes() type parameterization (old, new):[{}] identifier:[{}]",
-          (topic, self.path), message, (oldKey, newKey), tid.id
+          s"verify AggregateRootType indexes() type parameterization old:[${oldKey.toString}] new:[${newKey.toString}] :" +
+          "[{}] identifier:[{}]",
+          (topic, self.path), message,
+          tid.id
         )
       }
 

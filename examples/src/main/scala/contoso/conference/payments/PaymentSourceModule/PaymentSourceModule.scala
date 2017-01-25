@@ -1,6 +1,6 @@
 package contoso.conference.payments
 
-import demesne.{AggregateProtocol, EventLike}
+import demesne.AggregateProtocol
 import peds.commons.identifier.{ShortUUID, TaggedID}
 
 
@@ -12,7 +12,7 @@ object PaymentSourceProtocol extends AggregateProtocol[ShortUUID] {
   case class PaymentCompleted(
     override val sourceId: PaymentCompleted#TID,
     paymentSourceId: PaymentSourceModule.TID
-  ) extends EventMessage
+  ) extends Event
 }
 
 
