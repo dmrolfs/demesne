@@ -8,6 +8,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import scalaz._
 import Scalaz._
+import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
 import peds.commons.TryV
@@ -38,7 +39,6 @@ abstract class DomainModel {
 
   def get( rootName: String, id: Any ): Option[ActorRef]
 
-
   import DomainModel.AggregateIndex
   def aggregateIndexFor[K, TID, V]( rootType: AggregateRootType, name: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
     aggregateIndexFor[K, TID, V]( rootType.name, name )
@@ -47,6 +47,8 @@ abstract class DomainModel {
   def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]]
 
   def rootTypes: Set[AggregateRootType]
+
+  def configuration: Config
 }
 
 object DomainModel {
@@ -61,6 +63,7 @@ object DomainModel {
   final case class DomainModelCell private[demesne](
     key: Symbol,
     override val system: ActorSystem,
+    override val configuration: Config,
     override val indexBus: IndexBus = new IndexBus,
     override val rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType],
     aggregateRefs: Map[String, RootTypeRef] = Map.empty[String, RootTypeRef],

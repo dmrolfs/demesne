@@ -79,7 +79,7 @@ object BoundedContext extends StrictLogging { outer =>
           BoundedContextCell(
             key,
             system,
-            DomainModelCell( key, system, rootTypes = rootTypes ),
+            DomainModelCell( key, system, configuration, rootTypes = rootTypes ),
             configuration,
             userResources,
             startTasks.toSeq
@@ -230,13 +230,16 @@ object BoundedContext extends StrictLogging { outer =>
     }
 
     override val name: String = key.name
-    override def indexBus: IndexBus = unsafeCell.indexBus
     override def rootTypes: Set[AggregateRootType] = unsafeCell.rootTypes
+    override def configuration: Config = unsafeCell.configuration
+    override def indexBus: IndexBus = unsafeCell.indexBus
+
     override def get( rootName: String, id: Any ): Option[ActorRef] = {
       val aggregate = unsafeCell.get( rootName, id )
       // logger.debug( "aggregate get([{}], [{}]) = [{}]", rootName, id.toString, aggregate )
       aggregate
     }
+
     override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
       unsafeCell.aggregateIndexFor[K, TID, V]( rootName, indexName )
     }
