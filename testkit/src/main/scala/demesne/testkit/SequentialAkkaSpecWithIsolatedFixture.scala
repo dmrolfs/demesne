@@ -65,7 +65,7 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
 
       Option(f.system) foreach { s =>
         val terminated = s.terminate()
-        Await.ready( terminated, 1.second )
+        Await.ready( terminated, 30.seconds )
       }
 
       outcome
