@@ -54,12 +54,11 @@ abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with 
   def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture
 
   override def withFixture( test: OneArgTest ): Outcome = {
-    val fixture = \/ fromTryCatchNonFatal {
-      val slug = testSlug( test )
-      val config = testConfiguration( test, slug )
-      val system = testSystem( test, config, slug )
-      createAkkaFixture( test, config, system, slug )
-    }
+    val slug = testSlug( test )
+    val config = testConfiguration( test, slug )
+    val system = testSystem( test, config, slug )
+
+    val fixture = \/ fromTryCatchNonFatal { createAkkaFixture( test, config, system, slug ) }
 
     val results = fixture map { f =>
       logger.debug( ".......... before test .........." )
@@ -68,26 +67,24 @@ abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with 
       ( test(f), f )
     }
 
-    val outcome = results map { case (outcome, f) =>
+    val outcome = results map { case (o, f) =>
       logger.debug( "---------- finished test ------------" )
       f after test
       logger.debug( ".......... after test .........." )
 
-      Option(f.system) foreach { s =>
-        val terminated = s.terminate()
-        Await.ready( terminated, 1.second )
-      }
-
-      outcome
+      o
     }
 
     outcome match {
-      case \/-( o ) => o
+      case \/-( o ) => {
+        Await.ready( system.terminate(), 5.seconds )
+        o
+      }
       case -\/( ex ) => {
+        Await.ready( system.terminate(), 5.seconds )
         logger.error( s"test[${test.name}] failed", ex )
         throw ex
       }
     }
   }
-
 }

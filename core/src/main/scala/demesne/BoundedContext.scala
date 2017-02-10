@@ -406,7 +406,8 @@ object BoundedContext extends StrictLogging { outer =>
 
     private def setupRepositorySupervisor( budget: Timeout )( implicit ec: ExecutionContext ): Future[ActorRef] = {
       implicit val to = budget
-      val repositorySupervisorName = name + "-repositories"
+      val repositorySupervisorName = name + "-repositories" //todo would like to change this but attempt below fails
+//      val repositorySupervisorName = name + ":repositories"
 
       findRepositorySupervisor( repositorySupervisorName ) flatMap { found =>
         found

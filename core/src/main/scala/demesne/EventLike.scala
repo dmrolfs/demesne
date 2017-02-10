@@ -7,6 +7,7 @@ trait EventLike extends Serializable {
   type ID
   type TID = TaggedID[ID]
   def sourceId: TID
+  def tags: Set[String] = Set.empty[String]
   // def sourceTypeName: Option[String]
   // def version: Long
 }
