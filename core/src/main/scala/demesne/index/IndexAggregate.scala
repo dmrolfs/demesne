@@ -81,13 +81,8 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
 
   // persistenceId must include cluster role to support multiple masters
   override lazy val persistenceId: String = {
-    topic +
-    "/" +
-    Cluster( context.system )
-      .selfRoles
-      .find( _.startsWith( "index-" ) )
-      .map( _ + "-master" )
-      .getOrElse( "index-master" )
+    val root = Cluster( context.system ).selfRoles.find{ _.startsWith( "index-" ) }.map{ _ + "-master" }.getOrElse{ "index-master" } 
+    root + "/" + topic
   }
 
   type State = Map[K, IndexedValue[I, V]]
