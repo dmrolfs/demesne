@@ -13,8 +13,8 @@ import Scalaz._
 import com.typesafe.config.Config
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar
-import peds.commons.identifier.TaggedID
-import peds.commons.log.Trace
+import omnibus.commons.identifier.TaggedID
+import omnibus.commons.log.Trace
 import demesne._
 import demesne.repository.StartProtocol
 

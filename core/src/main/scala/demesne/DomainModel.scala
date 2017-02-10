@@ -10,8 +10,8 @@ import scalaz._
 import Scalaz._
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
-import peds.commons.TryV
+import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
+import omnibus.commons.TryV
 import demesne.index._
 import demesne.index.IndexSupervisor.{IndexRegistered, RegisterIndex}
 

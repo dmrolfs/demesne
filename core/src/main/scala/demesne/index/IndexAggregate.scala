@@ -6,9 +6,9 @@ import akka.cluster.Cluster
 import akka.cluster.pubsub.DistributedPubSub
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
-import peds.commons.util._
+import omnibus.commons.util._
 import demesne.EventLike
-import peds.commons.identifier.TaggedID
+import omnibus.commons.identifier.TaggedID
 
 
 object IndexAggregateProtocol {

@@ -1,7 +1,7 @@
 package demesne
 
 import scala.reflect.ClassTag
-import peds.akka.publish.EventPublisher
+import omnibus.akka.publish.EventPublisher
 
 
 abstract class SagaModule extends AggregateRootModule

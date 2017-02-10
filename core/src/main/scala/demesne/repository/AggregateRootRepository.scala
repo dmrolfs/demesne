@@ -10,11 +10,11 @@ import akka.pattern.pipe
 
 import scalaz._
 import Scalaz._
-import peds.akka.envelope._
-import peds.commons.Valid
+import omnibus.akka.envelope._
+import omnibus.commons.Valid
 import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
-import peds.akka.ActorStack
+import omnibus.akka.ActorStack
 
 
 abstract class EnvelopingAggregateRootRepository(

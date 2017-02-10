@@ -6,9 +6,9 @@ import akka.actor.Props
 import scalaz._
 import Scalaz._
 import shapeless._
-import peds.commons.identifier.Identifying
-import peds.commons.builder._
-import peds.commons.TryV
+import omnibus.commons.identifier.Identifying
+import omnibus.commons.builder._
+import omnibus.commons.TryV
 import demesne._
 import demesne.index.IndexSpecification
 import demesne.repository.{AggregateRootProps, CommonClusteredRepository, CommonLocalRepository}

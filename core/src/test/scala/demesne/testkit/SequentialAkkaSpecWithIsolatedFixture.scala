@@ -9,8 +9,8 @@ import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import org.scalatest.{MustMatchers, Outcome, fixture}
-import peds.commons.log.Trace
-import peds.commons.util._
+import omnibus.commons.log.Trace
+import omnibus.commons.util._
 
 
 object SequentialAkkaSpecWithIsolatedFixture {

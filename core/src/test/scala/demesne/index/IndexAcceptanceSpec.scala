@@ -10,11 +10,11 @@ import com.typesafe.config.Config
 import scalaz._
 import Scalaz._
 import org.scalatest.concurrent.ScalaFutures
-import peds.akka.envelope._
-import peds.commons.identifier._
-import peds.commons.log.Trace
-import peds.archetype.domain.model.core.Entity
-import peds.commons.TryV
+import omnibus.akka.envelope._
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
+import omnibus.archetype.domain.model.core.Entity
+import omnibus.commons.TryV
 import demesne._
 import demesne.index.local.IndexLocalAgent
 import demesne.testkit.{AggregateRootSpec, SimpleTestModule}

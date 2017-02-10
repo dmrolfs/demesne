@@ -13,12 +13,12 @@ import shapeless._
 import com.typesafe.config.{Config, ConfigFactory}
 import demesne.repository.CommonLocalRepository
 import org.scalatest.OptionValues
-import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
-import peds.akka.envelope._
-import peds.commons.TryV
-import peds.commons.identifier.{Identifying, ShortUUID, TaggedID}
-import peds.commons.log.Trace
+import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
+import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
+import omnibus.akka.envelope._
+import omnibus.commons.TryV
+import omnibus.commons.identifier.{Identifying, ShortUUID, TaggedID}
+import omnibus.commons.log.Trace
 
 
 /**

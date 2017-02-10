@@ -11,10 +11,10 @@ import contoso.registration.SeatQuantity
 import demesne._
 import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
-import peds.commons.TryV
-import peds.commons.identifier._
-import peds.akka.publish.EventPublisher
-import peds.commons.log.Trace
+import omnibus.commons.TryV
+import omnibus.commons.identifier._
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.log.Trace
 import squants.{Dimensionless, Each}
 
 

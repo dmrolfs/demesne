@@ -7,15 +7,15 @@ import akka.cluster.sharding.ShardRegion
 import akka.persistence._
 import com.typesafe.scalalogging.LazyLogging
 import demesne.PassivationSpecification.StopAggregateRoot
-import peds.akka.ActorStack
+import omnibus.akka.ActorStack
 
 import scalaz._
 import scalaz.Kleisli._
-import peds.akka.envelope._
-import peds.akka.publish.EventPublisher
-import peds.commons.identifier.{Identifying, TaggedID}
-import peds.commons.{KOp, TryV}
-import peds.commons.util._
+import omnibus.akka.envelope._
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.identifier.{Identifying, TaggedID}
+import omnibus.commons.{KOp, TryV}
+import omnibus.commons.util._
 
 
 //////////////////////////////////////

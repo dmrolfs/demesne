@@ -3,7 +3,7 @@ package demesne.scaladsl
 import akka.actor.Actor.Receive
 import scalaz.Functor
 import scalaz.Free._
-import peds.commons.identifier._
+import omnibus.commons.identifier._
 import demesne.{ AggregateRoot, AggregateRootModule }
 import demesne.module.AggregateRootProps
 

@@ -13,11 +13,11 @@ import scalaz._
 import Scalaz._
 import shapeless._
 import com.github.nscala_time.time.{Imports => joda}
-import peds.commons.{TryV, Valid}
-import peds.akka.AskRetry._
-import peds.akka.publish._
-import peds.commons.identifier._
-import peds.commons.log.Trace
+import omnibus.commons.{TryV, Valid}
+import omnibus.akka.AskRetry._
+import omnibus.akka.publish._
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
 import demesne._
 import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
@@ -258,7 +258,7 @@ object ConferenceModule extends AggregateRootModule { module =>
       } 
     }
 
-    def common: Receive = peds.commons.util.emptyBehavior[Any, Unit]
+    def common: Receive = omnibus.commons.util.emptyBehavior[Any, Unit]
 
     // override val unhandled: Receive = {
     //   case x => log info s">>>>> POST UNEXPECTED MESSAGE $x"

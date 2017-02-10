@@ -13,9 +13,9 @@ import scalaz._
 import Scalaz._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.Tag
-import peds.commons.TryV
-import peds.commons.identifier.{Identifying, ShortUUID, TaggedID}
-import peds.commons.log.Trace
+import omnibus.commons.TryV
+import omnibus.commons.identifier.{Identifying, ShortUUID, TaggedID}
+import omnibus.commons.log.Trace
 import demesne._
 import demesne.index.IndexSupervisor._
 import demesne.index.local.IndexLocalAgent

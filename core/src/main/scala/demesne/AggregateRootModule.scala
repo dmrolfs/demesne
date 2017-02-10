@@ -2,9 +2,9 @@ package demesne
 
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
-import peds.commons.TryV
-import peds.commons.identifier.{Identifying, TaggedID}
-import peds.commons.util._
+import omnibus.commons.TryV
+import omnibus.commons.identifier.{Identifying, TaggedID}
+import omnibus.commons.util._
 
 
 abstract class AggregateRootModule extends AggregateRootType.Provider with LazyLogging { module =>

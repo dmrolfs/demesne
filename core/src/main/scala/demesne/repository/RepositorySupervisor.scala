@@ -4,8 +4,8 @@ import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
-import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
-import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
+import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
+import omnibus.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
 import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
 

@@ -12,7 +12,7 @@ import scalaz._, Scalaz._
 import scalaz.concurrent.Task
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
-import peds.commons.TryV
+import omnibus.commons.TryV
 import demesne.repository.{RepositorySupervisor, StartProtocol}
 import demesne.DomainModel.{AggregateIndex, DomainModelCell, Supervisors}
 import demesne.index.{IndexBus, IndexSupervisor}
@@ -309,7 +309,7 @@ object BoundedContext extends StrictLogging { outer =>
 
 
     override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = {
-      import peds.commons.concurrent._
+      import omnibus.commons.concurrent._
 
       for {
         taskResults <- this.gatherAllTasks().unsafeToFuture

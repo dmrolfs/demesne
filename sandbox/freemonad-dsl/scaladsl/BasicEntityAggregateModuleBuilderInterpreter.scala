@@ -4,9 +4,9 @@ import scala.reflect.ClassTag
 import scalaz.{ Lens => _, _ }, Scalaz._
 import shapeless.Lens
 import shapeless.syntax.typeable._
-import peds.archetype.domain.model.core.Entity
-import peds.commons.log.Trace
-import peds.commons.util._
+import omnibus.archetype.domain.model.core.Entity
+import omnibus.commons.log.Trace
+import omnibus.commons.util._
 import demesne.module.{ AggregateRootProps, BasicEntityAggregateModule }
 
 

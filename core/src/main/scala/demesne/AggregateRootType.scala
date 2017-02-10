@@ -7,9 +7,9 @@ import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.Passivate
 import com.typesafe.scalalogging.LazyLogging
 import demesne.index.IndexSpecification
-import peds.akka.envelope.Envelope
-import peds.akka.publish.ReliablePublisher.ReliableMessage
-import peds.commons.identifier.{Identifying, TaggedID}
+import omnibus.akka.envelope.Envelope
+import omnibus.akka.publish.ReliablePublisher.ReliableMessage
+import omnibus.commons.identifier.{Identifying, TaggedID}
 
 
 object AggregateRootType {

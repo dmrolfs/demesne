@@ -10,12 +10,12 @@ import shapeless.Lens
 import demesne._
 import demesne.testkit.AggregateRootSpec
 import org.scalatest.Tag
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
-import peds.commons.log.Trace
-import peds.commons.identifier._
+import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
+import omnibus.commons.log.Trace
+import omnibus.commons.identifier._
 import org.scalatest.concurrent.ScalaFutures
 import demesne.index.IndexSpecification
-import peds.commons._
+import omnibus.commons._
 
 
 object SimpleAggregateModuleSpec {

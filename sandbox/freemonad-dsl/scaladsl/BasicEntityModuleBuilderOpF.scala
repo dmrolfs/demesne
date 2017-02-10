@@ -1,7 +1,7 @@
 package demesne.scaladsl
 
 import shapeless.Lens
-import peds.archetype.domain.model.core.Entity
+import omnibus.archetype.domain.model.core.Entity
 
 
 trait BasicEntityModuleBuilderOpF[+A] extends SimpleModuleBuilderOpF[A]

@@ -11,10 +11,10 @@ import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
 import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
-import peds.akka.publish.EventPublisher
-import peds.commons.TryV
-import peds.commons.identifier._
-import peds.commons.log.Trace
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.TryV
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
 
 
 object SeatAssignmentsProtocol extends AggregateProtocol[ShortUUID] {
@@ -259,6 +259,6 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
       }
     }
 
-    val unhandled: Receive = peds.commons.util.emptyBehavior[Any, Unit]
+    val unhandled: Receive = omnibus.commons.util.emptyBehavior[Any, Unit]
   }
 }

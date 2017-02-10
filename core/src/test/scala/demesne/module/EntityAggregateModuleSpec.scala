@@ -10,12 +10,12 @@ import com.typesafe.scalalogging.LazyLogging
 import scalaz.Scalaz._
 import shapeless._
 import org.scalatest.Tag
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
-import peds.akka.envelope._
-import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
-import peds.commons.log.Trace
-import peds.commons.identifier._
-import peds.commons.TryV
+import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
+import omnibus.akka.envelope._
+import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
+import omnibus.commons.log.Trace
+import omnibus.commons.identifier._
+import omnibus.commons.TryV
 import org.scalatest.concurrent.ScalaFutures
 import demesne._
 import demesne.index.{IndexSpecification, StackableIndexBusPublisher}

@@ -3,7 +3,7 @@ package demesne.scaladsl
 import scalaz.Functor
 import scalaz.Free._
 import shapeless.Lens
-import peds.archetype.domain.model.core.Entity
+import omnibus.archetype.domain.model.core.Entity
 
 
 trait BasicEntityAggregateModuleBuilder[A] extends SimpleAggregateModuleBuilder[A] {

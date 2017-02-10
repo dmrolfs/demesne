@@ -5,9 +5,9 @@ import akka.actor.Props
 import demesne._
 import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
 import demesne.repository.CommonLocalRepository
-import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
-import peds.commons.identifier.Identifying
-import peds.commons.log.Trace
+import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
+import omnibus.commons.identifier.Identifying
+import omnibus.commons.log.Trace
 
 
 abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule { module =>

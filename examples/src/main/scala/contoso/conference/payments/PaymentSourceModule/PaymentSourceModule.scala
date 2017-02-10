@@ -1,7 +1,7 @@
 package contoso.conference.payments
 
 import demesne.AggregateProtocol
-import peds.commons.identifier.{ShortUUID, TaggedID}
+import omnibus.commons.identifier.{ShortUUID, TaggedID}
 
 
 /**

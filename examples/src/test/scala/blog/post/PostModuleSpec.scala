@@ -7,9 +7,9 @@ import demesne._
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
-import peds.akka.envelope._
-import peds.akka.publish.ReliablePublisher.ReliableMessage
-import peds.commons.log.Trace
+import omnibus.akka.envelope._
+import omnibus.akka.publish.ReliablePublisher.ReliableMessage
+import omnibus.commons.log.Trace
 
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures

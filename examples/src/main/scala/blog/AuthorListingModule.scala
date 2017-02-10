@@ -10,9 +10,9 @@ import akka.event.LoggingReceive
 import scalaz._
 import com.typesafe.scalalogging.LazyLogging
 import demesne.{BoundedContext, StartTask}
-import peds.akka.envelope.EnvelopingActor
-import peds.akka.publish.ReliableReceiver
-import peds.commons.log.Trace
+import omnibus.akka.envelope.EnvelopingActor
+import omnibus.akka.publish.ReliableReceiver
+import omnibus.commons.log.Trace
 import sample.blog.post.PostPrototol.PostPublished
 
 
@@ -53,8 +53,8 @@ object AuthorListingModule extends LazyLogging {
 
   object AuthorListing {
 
-    import peds.akka.envelope.Envelope
-    import peds.akka.publish.ReliablePublisher.ReliableMessage
+    import omnibus.akka.envelope.Envelope
+    import omnibus.akka.publish.ReliablePublisher.ReliableMessage
 
     def props: Props = Props[AuthorListing]
 

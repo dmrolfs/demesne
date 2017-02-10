@@ -13,11 +13,11 @@ import contoso.registration.SeatQuantity
 import demesne._
 import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
-import peds.akka.envelope._
-import peds.akka.publish.EventPublisher
-import peds.commons.TryV
-import peds.commons.identifier._
-import peds.commons.log.Trace
+import omnibus.akka.envelope._
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.TryV
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
 
 
 object RegistrationSagaProtocol extends AggregateProtocol[ShortUUID] {
@@ -106,7 +106,7 @@ object RegistrationSagaModule extends SagaModule { module =>
       Props( new RegistrationSaga( rootType, model, orderType, availabilityType ) with EventPublisher )
     }
 
-    //DMR: det where to locate this b/h; e.g., pull-req into nscala-time, peds?
+    //DMR: det where to locate this b/h; e.g., pull-req into nscala-time, omnibus?
     implicit def period2FiniteDuration( p: joda.Period ): FiniteDuration = FiniteDuration( p.getMillis, MILLISECONDS )
   }
 

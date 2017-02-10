@@ -10,8 +10,8 @@ import akka.event.LoggingReceive
 import com.typesafe.scalalogging.LazyLogging
 import demesne.AggregateRootType
 import demesne.index.{IndexAggregateProtocol => P, _}
-import peds.commons.identifier.TaggedID
-import peds.commons.util._
+import omnibus.commons.identifier.TaggedID
+import omnibus.commons.util._
 
 
 object IndexLocalAgent {

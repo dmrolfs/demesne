@@ -6,10 +6,10 @@ import akka.event.LoggingReceive
 import scalaz.{-\/, \/, \/-}
 import shapeless._
 import com.typesafe.scalalogging.LazyLogging
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
-import peds.akka.publish.EventPublisher
-import peds.commons.builder.HasBuilder
-import peds.commons.TryV
+import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying}
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.builder.HasBuilder
+import omnibus.commons.TryV
 import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType}
 import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent

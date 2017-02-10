@@ -1,6 +1,6 @@
 package demesne
 
-import peds.commons.identifier.TaggedID
+import omnibus.commons.identifier.TaggedID
 
 
 /**

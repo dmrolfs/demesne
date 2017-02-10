@@ -9,11 +9,11 @@ import akka.persistence.AtLeastOnceDelivery
 import scalaz._
 import Scalaz._
 import shapeless._
-import peds.akka.envelope.Envelope
-import peds.akka.publish.EventPublisher
-import peds.commons.{TryV, Valid}
-import peds.commons.identifier._
-import peds.commons.log.Trace
+import omnibus.akka.envelope.Envelope
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.{TryV, Valid}
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
 import demesne._
 import demesne.index.local.IndexLocalAgent
 import demesne.index._
@@ -100,7 +100,7 @@ object PostModule extends AggregateRootModule { module =>
 
   object PostActor {
     def props( model: DomainModel, rt: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = trace.block(s"props(_,${rt}, $makeAuthorListing)") {
-      import peds.akka.publish._
+      import omnibus.akka.publish._
 
       Props(
         new PostActor( model, rt )
@@ -112,7 +112,7 @@ object PostModule extends AggregateRootModule { module =>
           lazy val authorListing: ActorRef = makeAuthorListing()
           log.debug( "POST CTOR authorListing = [{}]", authorListing )
 
-          import peds.commons.util.Chain._
+          import omnibus.commons.util.Chain._
 
           override def publish: Publisher = trace.block( "publish" ) {
             super.publish +> filter +> reliablePublisher( authorListing.path )
@@ -177,7 +177,7 @@ object PostModule extends AggregateRootModule { module =>
 
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
-    import peds.akka.envelope._
+    import omnibus.akka.envelope._
 
     val quiescent: Receive = {
       case P.GetContent(_)  => sender() !+ state.content
