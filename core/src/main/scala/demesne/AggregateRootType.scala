@@ -23,7 +23,7 @@ object AggregateRootType {
 
 abstract class AggregateRootType extends Equals with LazyLogging {
   def name: String
-  def repositoryName: String = org.atteo.evo.inflector.English.plural( name )
+  def repositoryName: String = name // org.atteo.evo.inflector.English.plural( name )
 
   def startTask: StartTask = StartTask.empty( name )
 
