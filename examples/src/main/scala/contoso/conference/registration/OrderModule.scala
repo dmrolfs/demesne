@@ -220,10 +220,10 @@ object OrderModule extends AggregateRootModule { module =>
 
     private val trace = Trace( "Order", log )
 
-    override def parseId( idstr: String ): TID = {
-      val identifying = implicitly[Identifying[OrderState]]
-      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    }
+    // override def tidFromPersistenceId(idstr: String ): TID = {
+    //   val identifying = implicitly[Identifying[OrderState]]
+    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
+    // }
 
     override var state: OrderState = _
     override val evState: ClassTag[OrderState] = ClassTag( classOf[OrderState] )
@@ -297,8 +297,8 @@ object OrderModule extends AggregateRootModule { module =>
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[62]
       // Conference/Registration/Order.cs[145]
-      case RejectOrder( orderId ) => persist( OrderExpired( orderId ) ) { e => 
-        acceptAndPublish( e ) 
+      case RejectOrder( orderId ) => persist( OrderExpired( orderId ) ) { e =>
+        acceptAndPublish( e )
         context.become( around( expired ) )
       }
 
@@ -310,8 +310,8 @@ object OrderModule extends AggregateRootModule { module =>
 
       // Conference/Registration/Handlers/OrderCommandHandler.cs[80]
       // Conference/Registration/Order.cs[153]
-      case ConfirmOrder( orderId ) => persist( OrderConfirmed( orderId ) ) { e => 
-        acceptAndPublish( e ) 
+      case ConfirmOrder( orderId ) => persist( OrderConfirmed( orderId ) ) { e =>
+        acceptAndPublish( e )
         context.become( around( confirmed orElse common ) )
       }
     }
@@ -338,4 +338,3 @@ object OrderModule extends AggregateRootModule { module =>
     private def generateHandle: String = Random.alphanumeric.take( 6 ).mkString.capitalize
   }
 }
-

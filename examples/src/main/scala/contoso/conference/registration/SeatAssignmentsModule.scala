@@ -152,10 +152,10 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
 
     private val trace = Trace( "SeatsAssignment", log )
 
-    override def parseId( idstr: String ): TID = {
-      val identifying = implicitly[Identifying[SeatAssignmentsState]]
-      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    }
+    // override def tidFromPersistenceId(idstr: String ): TID = {
+    //   val identifying = implicitly[Identifying[SeatAssignmentsState]]
+    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
+    // }
 
     override var state: SeatAssignmentsState = _
     override val evState: ClassTag[SeatAssignmentsState] = ClassTag( classOf[SeatAssignmentsState] )
@@ -206,8 +206,8 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
         }
 
         val assignments = makeAssignments( seats )
-        persist( SeatAssignmentsCreated( id, orderId, assignments) ) { event => 
-          acceptAndPublish( event ) 
+        persist( SeatAssignmentsCreated( id, orderId, assignments) ) { event =>
+          acceptAndPublish( event )
           context.become( around( active orElse unhandled ) )
         }
       }

@@ -4,7 +4,7 @@ import sbt._
 import spray.revolver.RevolverPlugin._
 
 object BuildSettings {
-  val VERSION = "2.1.3"
+  val VERSION = "2.1.3.1"
 
   val defaultBuildSettings = Defaults.coreDefaultSettings ++ Format.settings ++ Revolver.settings ++
     Seq(
@@ -14,7 +14,7 @@ object BuildSettings {
       scalaVersion := crossScalaVersions{ (vs: Seq[String]) => vs.head }.value,
       // updateOptions := updateOptions.value.withCachedResolution(true),
       scalacOptions ++= Seq(
-        // "-encoding", 
+        // "-encoding",
         // "utf8",
         "-feature",
         "-unchecked",

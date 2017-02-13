@@ -166,10 +166,10 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
 
     // override val indexBus: IndexBus = model.indexBus
 
-    override def parseId( idstr: String ): TID = {
-      val identifying = implicitly[Identifying[SeatsAvailabilityState]]
-      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    }
+    // override def tidFromPersistenceId(idstr: String ): TID = {
+    //   val identifying = implicitly[Identifying[SeatsAvailabilityState]]
+    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
+    // }
 
     override var state: SeatsAvailabilityState = _
     override val evState: ClassTag[SeatsAvailabilityState] = ClassTag( classOf[SeatsAvailabilityState] )
@@ -307,6 +307,3 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
     }
   }
 }
-
-
-

@@ -54,7 +54,6 @@ abstract class SimpleTestModule[T: Identifying] extends AggregateRootModule { mo
   ) extends AggregateRoot[SimpleTestActor.State, ID] with AggregateRoot.Provider { outer: EventPublisher =>
     import SimpleTestActor._
 
-    override def parseId( idstr: String ): TID = module.parseId( idstr )
     override var state: State = Map.empty[Symbol, Any]
     override val evState: ClassTag[State] = ClassTag( classOf[Map[Symbol, Any]] )
 
