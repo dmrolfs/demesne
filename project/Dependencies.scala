@@ -3,7 +3,7 @@ import sbt._
 
 object Dependencies {
   object peds {
-    val version = "0.4.7"
+    val version = "0.4.8"
     def module( id: String ) = "com.github.dmrolfs" %% s"peds-$id" % version
 
     val commons = module( "commons" )
@@ -99,7 +99,7 @@ object Dependencies {
     qa.persistence.inMemory,
     qa.mockito.core
   )
-  
+
   val defaultDependencyOverrides = Set(
     scalaz.core
   )

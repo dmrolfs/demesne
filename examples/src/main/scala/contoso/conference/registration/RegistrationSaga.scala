@@ -123,10 +123,10 @@ object RegistrationSagaModule extends SagaModule { module =>
 
     private val trace = Trace( "RegistrationSaga", log )
 
-    override def parseId( idstr: String ): TID = {
-      val identifying = implicitly[Identifying[RegistrationSagaState]]
-      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    }
+    // override def tidFromPersistenceId(idstr: String ): TID = {
+    //   val identifying = implicitly[Identifying[RegistrationSagaState]]
+    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
+    // }
 
     override var state: RegistrationSagaState = _
     override val evState: ClassTag[RegistrationSagaState] = ClassTag( classOf[RegistrationSagaState] )
@@ -227,7 +227,7 @@ object RegistrationSagaModule extends SagaModule { module =>
     val confirmedUnhandled: Receive = {
       case c: SA.SeatsReserved => {
         log.info(
-          s"Seat reservation response for request [${workId}] for reservation id [${c.reservationId}] was already handled. " + 
+          s"Seat reservation response for request [${workId}] for reservation id [${c.reservationId}] was already handled. " +
           "Skipping event."
         )
       }
