@@ -159,10 +159,10 @@ object PostModule extends AggregateRootModule { module =>
 
     private val trace = Trace( "Post", log )
 
-    override def parseId( idstr: String ): TID = {
-      val identifying = implicitly[Identifying[State]]
-      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    }
+//    override def tidFromPersistenceId(idstr: String ): TID = {
+//      val identifying = implicitly[Identifying[State]]
+//      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
+//    }
 
     override var state: State = State()
     override val evState: ClassTag[State] = ClassTag( classOf[State] )

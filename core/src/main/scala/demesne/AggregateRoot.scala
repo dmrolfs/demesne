@@ -85,8 +85,6 @@ with ActorLogging {
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
-  override val persistenceId: String = self.path.toStringWithoutAddress
-
   type ID = I
   type TID = TaggedID[ID]
   lazy val evTID: ClassTag[TID] = {
@@ -99,15 +97,25 @@ with ActorLogging {
     }
   }
 
-  def parseId( idstr: String ): TID
+  lazy val aggregateId: TID = aggregateIdFromPath()
 
-  lazy val aggregateId: TID = parseId( idFromPath() )
+  def aggregateIdFromPath(): TID = {
+    val p = self.path.toStringWithoutAddress
+    val sepPos = p lastIndexOf '/'
+    val aidRep = p drop ( sepPos + 1 )
+    val aid = rootType.identifying.safeParseTid[TID]( aidRep )
+    log.debug( "#TEST aggregateId:[{}] from rep:[{}] in path:[{}]", aid, aidRep, p )
+    aid
+  }
+
+  override lazy val persistenceId: String = persistenceIdFromPath() // self.path.toStringWithoutAddress
 
   // assumes the identifier component of the aggregate path contains only the id and not a tagged id.
-  lazy val PathComponents = """^.*\/(.+)$""".r
-  def idFromPath(): String = {
-    val PathComponents(id) = self.path.toStringWithoutAddress
-    id
+//  val PathComponents = """^.*\/(.+)$""".r
+  def persistenceIdFromPath(): String = {
+    val pid = aggregateIdFromPath().toString
+    log.debug( "#TEST persistenceIdFromPath: persistenceId:[{}] from path:[{}] and rootType:[{}]", pid, self.path.toStringWithoutAddress, rootType.name )
+    pid
   }
 
   def state: S

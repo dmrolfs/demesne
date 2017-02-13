@@ -130,20 +130,20 @@ object EntityAggregateModule extends LazyLogging {
 
       override val gen = Generic[CC]
 
-      override val fieldsContainer = createFieldsContainer( 
-        Tag :: 
+      override val fieldsContainer = createFieldsContainer(
+        Tag ::
         PProps ::
         P.PassivateTimeout ::
         P.SnapshotPeriod ::
         Protocol ::
         P.StartTask ::
         Environment ::
-        Indexes :: 
-        IdLens :: 
-        NameLens :: 
-        SlugLens :: 
-        IsActiveLens :: 
-        HNil 
+        Indexes ::
+        IdLens ::
+        NameLens ::
+        SlugLens ::
+        IsActiveLens ::
+        HNil
       )
     }
 
@@ -242,7 +242,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
 
 
   abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] { publisher: AggregateRoot.Provider with EventPublisher =>
-    override def parseId( idstr: String ): TID = identifying.safeParseId[ID]( idstr )( identifying.evID )
+    // override def tidFromPersistenceId(idstr: String ): TID = identifying.safeParseId[ID]( idstr )( identifying.evID )
 
     override def acceptance: Acceptance = entityAcceptance
 

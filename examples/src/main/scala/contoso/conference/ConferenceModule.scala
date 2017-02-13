@@ -182,10 +182,10 @@ object ConferenceModule extends AggregateRootModule { module =>
 
     private val trace = Trace( "Conference", log )
 
-    override def parseId( idstr: String ): TID = {
-      val identifying = implicitly[Identifying[ConferenceState]]
-      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    }
+    // override def tidFromPersistenceId(idstr: String ): TID = {
+    //   val identifying = implicitly[Identifying[ConferenceState]]
+    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
+    // }
 
     override var state: ConferenceState = _
     override val evState: ClassTag[ConferenceState] = ClassTag( classOf[ConferenceState] )
@@ -227,8 +227,8 @@ object ConferenceModule extends AggregateRootModule { module =>
         ).mapTo[CCP.SlugStatus]
 
         askForSlugStatus onComplete {
-          case Success( status ) => persist( ConferenceCreated( id, conference ) ) { event => 
-            acceptAndPublish( event ) 
+          case Success( status ) => persist( ConferenceCreated( id, conference ) ) { event =>
+            acceptAndPublish( event )
             context.become( around( draft ) )
           }
 
@@ -244,18 +244,18 @@ object ConferenceModule extends AggregateRootModule { module =>
       case UpdateSeat( _, seat ) => persist( SeatUpdated( state.id, seat ) ) { acceptAndPublish }
       case DeleteSeat( _, seatId ) => persist( SeatDeleted( state.id, seatId ) ) { acceptAndPublish }
       case Publish => {
-        persist( ConferencePublished( state.id ) ) { event => 
-          acceptAndPublish( event ) 
+        persist( ConferencePublished( state.id ) ) { event =>
+          acceptAndPublish( event )
           context.become( around( published ) )
         }
       }
     }
 
     def published: Receive = LoggingReceive {
-      case Unpublish => persist( ConferenceUnpublished( state.id ) ) { event => 
-        acceptAndPublish( event ) 
+      case Unpublish => persist( ConferenceUnpublished( state.id ) ) { event =>
+        acceptAndPublish( event )
         context.become( around( draft ) )
-      } 
+      }
     }
 
     def common: Receive = omnibus.commons.util.emptyBehavior[Any, Unit]

@@ -99,7 +99,7 @@ object Dependencies {
     qa.persistence.inMemory,
     qa.mockito.core
   )
-  
+
   val defaultDependencyOverrides = Set(
     scalaz.core
   )

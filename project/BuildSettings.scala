@@ -14,7 +14,7 @@ object BuildSettings {
       scalaVersion := crossScalaVersions{ (vs: Seq[String]) => vs.head }.value,
       // updateOptions := updateOptions.value.withCachedResolution(true),
       scalacOptions ++= Seq(
-        // "-encoding", 
+        // "-encoding",
         // "utf8",
         "-feature",
         "-unchecked",

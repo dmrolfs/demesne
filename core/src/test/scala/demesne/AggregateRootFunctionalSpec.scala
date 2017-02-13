@@ -60,6 +60,7 @@ with OptionValues {
 
 
   def assertStates( actual: State, expected: State ): Unit = {
+    logger.debug( "asserting actual:[{}] == expected:[{}]", actual, expected )
     actual.id.tag.name mustBe expected.id.tag.name
     actual.id.id mustBe expected.id.id
     actual.id mustBe expected.id
@@ -302,28 +303,30 @@ object AggregateRootFunctionalSpec {
       import FooActor.State
 
       override val acceptance: Acceptance = {
-        case (Protocol.Barred(id, b), s) if s.isDefined => {
-          log.debug( "TEST: accepted BARRED b=[{}]  current-state:[{}]", b, s )
+        case (Protocol.Barred(i, b), s) if s.isDefined => {
+          val oid = outer.id
+          log.debug( "TEST: oid:[{}] accepted BARRED i=[{}] b=[{}]  current-state:[{}]", oid, i, b, s )
           val result = s map { cur => FooActor.fooAndCount.modify( cur ) { case (_, count) => (b, count + 1) } }
           log.info( "TEST[{}]: UPDATED STATE = [{}]", result.map{_.count}, result )
           result
         }
 
-        case (Protocol.Barred(id, b), s) => {
-          log.debug( "TEST: accepted BARRED b=[{}]  current-state:[{}]", b, s )
-          val id = outer.id
-          Option( State( id = id, foo = Foo(id, "foo", "foo", b = b) ) )
+        case (Protocol.Barred(i, b), s) => {
+          val oid = outer.id
+          log.debug( "TEST: oid:[{}] accepted BARRED id:[{}] b=[{}]  current-state:[{}]", oid, i, b, s )
+          Option( State( id = oid, foo = Foo(oid, "foo", "foo", b = b) ) )
         }
       }
 
-      override def parseId( idstr: String ): FooActor#TID = Foo.fooIdentifying.safeParseId[ShortUUID]( idstr )
+      // override def tidFromPersistenceId(idstr: String ): FooActor#TID = Foo.fooIdentifying.safeParseId[ShortUUID]( idstr )
 
-      val id: TID = {
-        logger.debug( "TEST:BEFORE safeParseId:::: idFromPath=[{}]", idFromPath() )
-        val i = Foo.fooIdentifying.safeParseId[ShortUUID]( idFromPath() )
-        logger.debug( "TEST: i = [{}], classOf(i)=[{}]", i, i.getClass.getCanonicalName )
-        Foo.fooIdentifying.tag( i )
-      }
+      val id: TID = aggregateId
+//                    {
+//        logger.debug( "TEST:BEFORE safeParseId:::: persistenceIdFromPath=[{}]", persistenceIdFromPath() )
+//        val i = Foo.fooIdentifying.safeParseId[ShortUUID]( persistenceIdFromPath() )
+//        logger.debug( "TEST: i = [{}], classOf(i)=[{}]", i, i.getClass.getCanonicalName )
+//        Foo.fooIdentifying.tag( i )
+//      }
 
       override var state: Option[State] = None
       override val evState: ClassTag[Option[State]] = ClassTag( classOf[Option[State]] )
