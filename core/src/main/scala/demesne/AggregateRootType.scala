@@ -1,15 +1,14 @@
 package demesne
 
-import akka.Done
 import scala.concurrent.duration._
-import akka.actor.{ActorSystem, Props}
+import akka.actor.Props
 import akka.cluster.sharding.ShardRegion
 import akka.cluster.sharding.ShardRegion.Passivate
 import com.typesafe.scalalogging.LazyLogging
 import demesne.index.IndexSpecification
 import omnibus.akka.envelope.Envelope
 import omnibus.akka.publish.ReliablePublisher.ReliableMessage
-import omnibus.commons.identifier.{Identifying, TaggedID}
+import omnibus.commons.identifier.Identifying2
 
 
 object AggregateRootType {
@@ -29,7 +28,9 @@ abstract class AggregateRootType extends Equals with LazyLogging {
 
   def repositoryProps( implicit model: DomainModel ): Props
 
-  val identifying: Identifying[_]
+//  type S
+//  type ID
+//  val identifying: Identifying2.Aux[S, ID]
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {
@@ -93,8 +94,8 @@ abstract class AggregateRootType extends Equals with LazyLogging {
         else {
           ( that.## == this.## ) &&
           ( that canEqual this ) &&
-          ( this.name == that.name ) &&
-          ( this.identifying == that.identifying )
+          ( this.name == that.name ) // &&
+//          ( this.identifying == that.identifying )
         }
       }
 
@@ -102,7 +103,7 @@ abstract class AggregateRootType extends Equals with LazyLogging {
     }
   }
 
-  override val hashCode: Int = 41 * ( 41 + name.## ) + identifying.##
+  override val hashCode: Int = 41 * ( 41 + name.## ) // + identifying.##
 
   override def toString: String = name + "AggregateRootType"
 }

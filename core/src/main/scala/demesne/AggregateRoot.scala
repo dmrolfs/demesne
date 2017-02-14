@@ -13,7 +13,7 @@ import scalaz._
 import scalaz.Kleisli._
 import omnibus.akka.envelope._
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.identifier.{Identifying, TaggedID}
+import omnibus.commons.identifier.{Identifying, Identifying2, TaggedID}
 import omnibus.commons.{KOp, TryV}
 import omnibus.commons.util._
 
@@ -36,22 +36,16 @@ object AggregateRoot extends LazyLogging {
 
   type Acceptance[S] = PartialFunction[(Any, S), S]
 
-  def aggregateIdFromPath[S, I]( path: ActorPath )( implicit identifying: Identifying[S] ): TaggedID[I] = {
-    identifying.tidAs[TaggedID[I]]( identifying.tag( identifying.fromString( path.toStringWithoutAddress ) ) ) match {
-      case \/-( tid ) => tid
-      case -\/( ex ) => {
-        logger.error( s"failed to extract tagged id form path[${path.toStringWithoutAddress}]", ex )
-        throw ex
-      }
-    }
+  def aggregateIdFromPath[S, I]( path: ActorPath )( implicit identifying: Identifying2.Aux[S, I] ): TaggedID[I] = {
+    identifying.tag( identifying.idFromString( path.toStringWithoutAddress ) )
   }
 
-  def aggregateIdFromRef[S: Identifying, I]( aggregateRef: ActorRef ): TaggedID[I] = {
+  def aggregateIdFromRef[S, I]( aggregateRef: ActorRef )( implicit identifying: Identifying2.Aux[S, I] ): TaggedID[I] = {
     aggregateIdFromPath[S, I]( aggregateRef.path )
   }
 }
 
-abstract class AggregateRoot[S, I]
+abstract class AggregateRoot[S, I]( implicit identifying: Identifying2.Aux[S, I] )
 extends PersistentActor
 with ActorStack
 with EnvelopingActor
@@ -87,15 +81,16 @@ with ActorLogging {
 
   type ID = I
   type TID = TaggedID[ID]
-  lazy val evTID: ClassTag[TID] = {
-    rootType.identifying.bridgeTidClassTag[TID] match {
-      case \/-( ev ) => ev
-      case -\/( ex ) => {
-        log.error( ex, "failed to bridge TID types from rootType:[{}] into aggregate:[{}]", rootType, persistenceId )
-        throw ex
-      }
-    }
-  }
+  lazy val evTID: ClassTag[TID] = classTag[TID]
+//  lazy val evTID: ClassTag[TID] = {
+//    rootType.identifying.bridgeTidClassTag[TID] match {
+//      case \/-( ev ) => ev
+//      case -\/( ex ) => {
+//        log.error( ex, "failed to bridge TID types from rootType:[{}] into aggregate:[{}]", rootType, persistenceId )
+//        throw ex
+//      }
+//    }
+//  }
 
   lazy val aggregateId: TID = aggregateIdFromPath()
 
@@ -103,7 +98,8 @@ with ActorLogging {
     val p = self.path.toStringWithoutAddress
     val sepPos = p lastIndexOf '/'
     val aidRep = p drop ( sepPos + 1 )
-    val aid = rootType.identifying.safeParseTid[TID]( aidRep )
+    val aid = identifying.tidFromString( aidRep )
+//    val aid = rootType.identifying.safeParseTid[TID]( aidRep )
     log.debug( "#TEST aggregateId:[{}] from rep:[{}] in path:[{}]", aid, aidRep, p )
     aid
   }
