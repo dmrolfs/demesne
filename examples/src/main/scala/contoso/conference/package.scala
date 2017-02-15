@@ -54,7 +54,7 @@ package object conference {
 
   // Conference/Conference/ConferenceInfo.cs
   case class ConferenceInfo(
-    id: ConferenceModule.ID,
+    id: ConferenceModule.TID,
     name: String,
     slug: String,
     ownerName: String,

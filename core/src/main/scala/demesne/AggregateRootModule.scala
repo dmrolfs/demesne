@@ -7,9 +7,11 @@ import omnibus.commons.identifier.{Identifying2, TaggedID}
 import omnibus.commons.util._
 
 
-abstract class AggregateRootModule extends AggregateRootType.Provider with LazyLogging { module =>
-  type ID
-  val identifying: Identifying2.Aux[_, ID]
+abstract class AggregateRootModule[S, I0]( implicit val identifying: Identifying2.Aux[S, I0] )
+  extends AggregateRootType.Provider with LazyLogging { module =>
+
+  type ID = I0
+//  val identifying: Identifying2.Aux[_, ID]
   type TID = TaggedID[ID]
 
   def nextId: TryV[TID] = identifying.nextTID

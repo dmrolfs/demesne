@@ -24,13 +24,13 @@ object EntityAggregateModule extends LazyLogging {
   type MakeIndexSpec = Function0[Seq[IndexSpecification]]
   val makeEmptyIndexSpec: MakeIndexSpec = () => Seq.empty[IndexSpecification]
 
-  def makeSlugSpec[E <: Entity: ClassTag](
+  def makeSlugSpec[E <: Entity](
     idLens: Lens[E, E#TID],
-    slugLens: Option[Lens[E, String]] = None
-  )(
+    slugLens: Option[Lens[E, String]] = None,
     infoToEntity: PartialFunction[Any, Option[E]]
   )(
     implicit identifying: Identifying2.Aux[E, E#ID],
+    evE: ClassTag[E],
     evID: ClassTag[E#ID]
   ): IndexSpecification = {
     def label( entity: E ): String = slugLens map { _.get( entity ) } getOrElse { idLens.get( entity ).get.toString }
@@ -117,7 +117,7 @@ object EntityAggregateModule extends LazyLogging {
     class ModuleBuilder extends HasBuilder[CC]{
       object P {
 //        object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
-        object Tag extends OptParam[Symbol]( identifying.idTag )
+//        object Tag extends OptParam[Symbol]( identifying.idTag )
         object Props extends Param[AggregateRootProps]
         object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
         object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
@@ -138,7 +138,7 @@ object EntityAggregateModule extends LazyLogging {
       override val gen = Generic[CC]
 
       override val fieldsContainer = createFieldsContainer(
-        Tag ::
+//        Tag ::
         PProps ::
         P.PassivateTimeout ::
         P.SnapshotPeriod ::
@@ -199,10 +199,10 @@ object EntityAggregateModule extends LazyLogging {
 }
 
 abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override val identifying: Identifying2.Aux[E, E#ID] )
-  extends SimpleAggregateModule[E] { module =>
+  extends SimpleAggregateModule[E, E#ID] { module =>
 //  override val identifying: EntityIdentifying[E] = implicitly[EntityIdentifying[E]]
 
-  override type ID = E#ID
+//  override type ID = E#ID
 //  override def nextId: TryV[TID] = identifying.nextId
 
   type Protocol <: EntityProtocol[ID]
@@ -252,7 +252,12 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
 
 
   abstract class EntityAggregateActor( implicit identifying: Identifying2.Aux[E, E#ID] )
-    extends AggregateRoot[E, E#ID] { publisher: AggregateRoot.Provider with EventPublisher =>
+    extends AggregateRoot[E, E#ID]()(
+      identifying,
+      evState //,
+//      the[ClassTag[E#ID]]
+    ) {
+    publisher: AggregateRoot.Provider with EventPublisher =>
     // override def tidFromPersistenceId(idstr: String ): TID = identifying.safeParseId[ID]( idstr )( identifying.evID )
 
     override def acceptance: Acceptance = entityAcceptance

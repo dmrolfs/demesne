@@ -9,12 +9,14 @@ import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import omnibus.akka.envelope._
 import omnibus.akka.publish.ReliablePublisher.ReliableMessage
+import omnibus.commons.TryV
 import omnibus.commons.log.Trace
 
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
 import sample.blog.author.AuthorListingModule
 import sample.blog.post.{PostPrototol => P}
+
 import scalaz.{-\/, \/-}
 
 
@@ -26,6 +28,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
   private val trace = Trace[PostModuleSpec]
 
 
+  override type State = Post
   override type ID = PostModule.ID
   override type Protocol = PostPrototol.type
   override val protocol: Protocol = PostPrototol
@@ -40,19 +43,11 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
   class PostFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[PostFixture]
 
-    override val module: AggregateRootModule = PostModule
+    override val module: AggregateRootModule[State, ID] = PostModule
 
     val author: TestProbe = TestProbe()
 
-    override def nextId(): TID = {
-      PostModule.PostActor.postIdentifying.nextIdAs[TID] match {
-        case \/-( tid ) => tid
-        case -\/( ex ) => {
-          logger.error( "failed to create next id for Post", ex )
-          throw ex
-        }
-      }
-    }
+    override def nextId(): TID = TryV unsafeGet Post.identifying.nextTID
 
     object TestPostRootType extends PostModule.PostType {
       override def repositoryProps( implicit model: DomainModel ): Props = PostModule.Repository.localProps( model )
@@ -128,7 +123,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       bus.expectNoMsg( 200.millis.dilated )
     }
 
-    "have empty contents before use" in { fixture: Fixture =>
+    "have empty contents before use" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId.toOption.get
@@ -223,7 +218,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
       }
     }
 
-    "follow happy path" taggedAs WIP in { fixture: Fixture =>
+    "follow happy path" in { fixture: Fixture =>
       import fixture._
 
       val id = PostModule.nextId.toOption.get

@@ -15,7 +15,8 @@ import demesne.repository.{AggregateRootProps, CommonClusteredRepository, Common
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 
-abstract class SimpleAggregateModule[S: ClassTag] extends AggregateRootModule { module =>
+abstract class SimpleAggregateModule[S, I]( implicit override val identifying: Identifying2.Aux[S, I], val evState: ClassTag[S] )
+  extends AggregateRootModule()( identifying ) { module =>
 //  override def nextId: TryV[TID] = {
 //    import scala.reflect._
 //    val tidTag = classTag[TID]
@@ -32,7 +33,7 @@ abstract class SimpleAggregateModule[S: ClassTag] extends AggregateRootModule { 
   def aggregateRootPropsOp: AggregateRootProps
 //todo why is this here?  def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
 
-  val evState: ClassTag[S] = the[ClassTag[S]]
+//  val evState: ClassTag[S] = the[ClassTag[S]]
 //  val identifying: Identifying[S] = implicitly[Identifying[S]]
 
   def passivateTimeout: Duration
@@ -83,7 +84,7 @@ object SimpleAggregateModule {
     class ModuleBuilder extends HasBuilder[CC] {
       object P {
 //        object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[S]].runtimeClass )
-        object Tag extends OptParam[Symbol]( identifying.idTag )
+//        object Tag extends OptParam[Symbol]( identifying.idTag )
         object Props extends Param[AggregateRootProps]
         object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
         object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
@@ -96,7 +97,7 @@ object SimpleAggregateModule {
 
       override val gen = Generic[CC]
       override val fieldsContainer = createFieldsContainer(
-        P.Tag ::
+//        P.Tag ::
         P.Props ::
         P.PassivateTimeout ::
         P.SnapshotPeriod ::
@@ -109,7 +110,7 @@ object SimpleAggregateModule {
   }
 
 
-  final case class SimpleAggregateModuleImpl[S: ClassTag, I](
+  final case class SimpleAggregateModuleImpl[S, I](
 //    override val aggregateIdTag: Symbol,
     override val aggregateRootPropsOp: AggregateRootProps,
     override val passivateTimeout: Duration,
@@ -118,8 +119,9 @@ object SimpleAggregateModule {
     override val environment: AggregateEnvironment,
     override val indexes: Seq[IndexSpecification]
   )(
-    implicit override val identifying: Identifying2.Aux[S, I]
-  ) extends SimpleAggregateModule[S] with Equals { module =>
+    implicit override val identifying: Identifying2.Aux[S, I],
+    evState: ClassTag[S]
+  ) extends SimpleAggregateModule[S, I]()( identifying, evState ) with Equals { module =>
 //    def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {
 //      val lhs = implicitly[ClassTag[I]]
 //      val rhs = identifying.evID

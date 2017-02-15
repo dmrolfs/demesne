@@ -63,13 +63,65 @@ object ConferenceProtocol extends AggregateProtocol[ShortUUID] {
   case class SeatDeleted( override val sourceId: SeatDeleted#TID, seatTypeId: SeatType.TID ) extends ConferenceEvent
 }
 
+
+case class ConferenceState(
+  id: ConferenceState#TID,
+  name: String,
+  slug: String,
+  ownerName: String,
+  ownerEmail: String, //DMR: EmailAddress Archetype
+  scheduled: joda.Interval,
+  seats: Set[SeatType] = Set(),
+  description: Option[String] = None,
+  location: Option[String] = None,  //DMR: Geolocation Archetype
+  tagline: Option[String] = None,
+  accessCode: Option[String] = None,
+  isPublished: Boolean = false,
+  twitterSearch: Option[String] = None
+) {
+  type ID = ShortUUID
+  type TID = TaggedID[ID]
+}
+
+object ConferenceState {
+  def apply( info: ConferenceInfo ): ConferenceState = {
+    ConferenceState(
+      id = info.id,
+      name = info.name,
+      slug = info.slug,
+      ownerName = info.ownerName,
+      ownerEmail = info.ownerEmail, //DMR: EmailAddress Archetype
+      scheduled = info.scheduled,
+      seats = info.seats,
+      description = info.description,
+      location = info.location,  //DMR: Geolocation Archetype
+      tagline = info.tagline,
+      accessCode = info.accessCode,
+      twitterSearch = info.twitterSearch
+    )
+  }
+
+  val seatsLens = lens[ConferenceState] >> 'seats
+
+
+  implicit val identifying = new Identifying2[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
+//    override type ID = ShortUUID
+    override val idTag: Symbol = 'conference
+    override def tidOf( s: ConferenceState ): TID = s.id
+//    override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+//    override def idFromString( idRep: String ): ID = ShortUUID( idRep )
+  }
+}
+
+
+
 //object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
-object ConferenceModule extends AggregateRootModule { module =>
+object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceState#ID] { module =>
   //DMR move these into common AggregateModuleCompanion trait
   val trace = Trace[ConferenceModule.type]
 
-  override type ID = ShortUUID
-  override def nextId: TryV[TID] = conferenceIdentifying.nextIdAs[TID]
+//  override type ID = ShortUUID
+//  override def nextId: TryV[TID] = conferenceIdentifying.nextIdAs[TID]
 
 
   object Repository {
@@ -106,62 +158,18 @@ object ConferenceModule extends AggregateRootModule { module =>
     }
   }
 
-  override val aggregateIdTag: Symbol = 'conference
+//  override val aggregateIdTag: Symbol = 'conference
 
   object ConferenceType extends AggregateRootType {
     override val name: String = module.shardName
 
-    override lazy val identifying: Identifying[_] = conferenceIdentifying
+//    override lazy val identifying: Identifying[_] = conferenceIdentifying
 
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
   override val rootType: AggregateRootType = ConferenceType
 
-
-  case class ConferenceState(
-    id: TID,
-    name: String,
-    slug: String,
-    ownerName: String,
-    ownerEmail: String, //DMR: EmailAddress Archetype
-    scheduled: joda.Interval,
-    seats: Set[SeatType] = Set(),
-    description: Option[String] = None,
-    location: Option[String] = None,  //DMR: Geolocation Archetype
-    tagline: Option[String] = None,
-    accessCode: Option[String] = None,
-    isPublished: Boolean = false,
-    twitterSearch: Option[String] = None
-  )
-
-  object ConferenceState {
-    def apply( info: ConferenceInfo ): ConferenceState = {
-      ConferenceState(
-        id = info.id,
-        name = info.name,
-        slug = info.slug,
-        ownerName = info.ownerName,
-        ownerEmail = info.ownerEmail, //DMR: EmailAddress Archetype
-        scheduled = info.scheduled,
-        seats = info.seats,
-        description = info.description,
-        location = info.location,  //DMR: Geolocation Archetype
-        tagline = info.tagline,
-        accessCode = info.accessCode,
-        twitterSearch = info.twitterSearch
-      )
-    }
-
-    val seatsLens = lens[ConferenceState] >> 'seats
-  }
-
-  implicit val conferenceIdentifying: Identifying[ConferenceState] = {
-    new Identifying[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
-      override def idOf( o: ConferenceState ): TID = o.id
-      override val idTag: Symbol = ConferenceModule.aggregateIdTag
-    }
-  }
 
   object Conference {
     def props( model: DomainModel, rt: AggregateRootType, conferenceContext: ActorRef ): Props = {
@@ -188,7 +196,7 @@ object ConferenceModule extends AggregateRootModule { module =>
     // }
 
     override var state: ConferenceState = _
-    override val evState: ClassTag[ConferenceState] = ClassTag( classOf[ConferenceState] )
+//    override val evState: ClassTag[ConferenceState] = ClassTag( classOf[ConferenceState] )
 
     override val acceptance: Acceptance = {
       case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
