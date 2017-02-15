@@ -1,6 +1,6 @@
 package demesne
 
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.reflect._
 import akka.actor.{ActorRef, ActorSystem, Props}
@@ -29,7 +29,6 @@ extends demesne.testkit.AggregateRootSpec[AggregateRootFunctionalSpec]
 with ScalaFutures
 with OptionValues {
   import AggregateRootFunctionalSpec._
-//  import FooModule.FooActor.State
 
   private val trace = Trace[AggregateRootFunctionalSpec]
 
@@ -268,7 +267,6 @@ object AggregateRootFunctionalSpec {
     private def trace: Trace[_] = Trace[FooModule.type]
 
     override type ID = ShortUUID
-//    override def nextId: TryV[TID] = Foo.fooIdentifying.nextIdAs[TID]
 
     override val rootType: AggregateRootType = trace.block("rootType") {
       new AggregateRootType {
@@ -319,18 +317,9 @@ object AggregateRootFunctionalSpec {
         }
       }
 
-      // override def tidFromPersistenceId(idstr: String ): FooActor#TID = Foo.fooIdentifying.safeParseId[ShortUUID]( idstr )
-
       val id: TID = aggregateId
-//                    {
-//        logger.debug( "TEST:BEFORE safeParseId:::: persistenceIdFromPath=[{}]", persistenceIdFromPath() )
-//        val i = Foo.fooIdentifying.safeParseId[ShortUUID]( persistenceIdFromPath() )
-//        logger.debug( "TEST: i = [{}], classOf(i)=[{}]", i, i.getClass.getCanonicalName )
-//        Foo.fooIdentifying.tag( i )
-//      }
 
       override var state: Option[State] = None
-//      override val evState: ClassTag[Option[State]] = ClassTag( classOf[Option[State]] )
 
       override def receiveCommand: Receive = LoggingReceive { around( action ) }
       val action: Receive = {

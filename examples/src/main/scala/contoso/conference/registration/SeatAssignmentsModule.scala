@@ -1,20 +1,17 @@
 package contoso.conference.registration
 
 import scala.annotation.tailrec
-import scala.reflect._
 import akka.actor.Props
 import akka.event.LoggingReceive
 
 import scalaz.Scalaz._
 import contoso.conference.SeatType
-import contoso.conference.registration.SeatAssignmentsModule.TID
 import contoso.conference.registration.SeatAssignmentsProtocol.{SeatAssignment, SeatAssignmentRef}
 import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
 import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.TryV
 import omnibus.commons.identifier._
 import omnibus.commons.log.Trace
 
@@ -118,10 +115,6 @@ object SeatAssignmentsModule extends AggregateRootModule[SeatAssignmentsState, S
 
   val trace = Trace[SeatAssignmentsModule.type]
 
-//  override type ID = ShortUUID
-//  override def nextId: TryV[TID] = implicitly[Identifying[SeatAssignmentsState]].nextIdAs[TID]
-
-
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
   }
@@ -134,7 +127,6 @@ object SeatAssignmentsModule extends AggregateRootModule[SeatAssignmentsState, S
 
   object SeatAssignmentsType extends AggregateRootType {
     override def name: String = module.shardName
-//    override lazy val identifying: Identifying[_] = seatsAssignmentsIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -155,13 +147,7 @@ object SeatAssignmentsModule extends AggregateRootModule[SeatAssignmentsState, S
 
     private val trace = Trace( "SeatsAssignment", log )
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[SeatAssignmentsState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: SeatAssignmentsState = _
-//    override val evState: ClassTag[SeatAssignmentsState] = ClassTag( classOf[SeatAssignmentsState] )
 
     case class SeatAssignmentsCreated(
       override val sourceId: SeatAssigned#TID,

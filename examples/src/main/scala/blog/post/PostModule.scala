@@ -39,11 +39,6 @@ object Post {
   implicit val identifying = new Identifying[Post] with ShortUUID.ShortUuidIdentifying[Post] {
     override val idTag: Symbol = 'post
     override def tidOf( p: Post ): TID = p.id
-    //      override val evID: ClassTag[ID] = classTag[ShortUUID]
-    //      override def idOf( o: State ): TID = o.id
-    //      override def fromString( idstr: String ): ID = ShortUUID( idstr )
-    //      override def nextId: TryV[TID] = tag( ShortUUID() ).right
-    //      override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
   }
 }
 
@@ -51,15 +46,10 @@ object Post {
 object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
   private val trace = Trace[PostModule.type]
 
-//  override type ID = ShortUUID
-//  override def nextId: TryV[TID] = identifying.nextTID
-
   override val rootType: AggregateRootType = new PostType
 
   class PostType extends AggregateRootType {
     override val name: String = module.shardName
-
-//    override lazy val identifying: Identifying[_] = PostActor.postIdentifying
 
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.clusteredProps( model )
 
@@ -87,7 +77,6 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
   abstract class Repository( model: DomainModel )
   extends EnvelopingAggregateRootRepository( model, module.rootType ) { actor: AggregateRootRepository.AggregateContext =>
     import sample.blog.author.AuthorListingModule
-
     import demesne.repository.{ StartProtocol => SP }
 
     var makeAuthorListing: () => ActorRef = _
@@ -106,7 +95,6 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
     }
 
     override def aggregateProps: Props = trace.block( "aggregateProps" ) {
-//      throw new IllegalArgumentException( "LOOK AT FN STACK" )
       log.debug( "PostModule: making PostActor Props with model:[{}] rootType:[{}] makeAuthorListing:[{}]", model, rootType, makeAuthorListing )
       PostActor.props( model, rootType, makeAuthorListing )
     }
@@ -160,17 +148,9 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
     override val model: DomainModel,
     override val rootType: AggregateRootType
   ) extends AggregateRoot[Post, Post#ID] with AggregateRoot.Provider { outer: EventPublisher =>
-    import PostActor._
-
     private val trace = Trace( "Post", log )
 
-//    override def tidFromPersistenceId(idstr: String ): TID = {
-//      val identifying = implicitly[Identifying[State]]
-//      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-//    }
-
     override var state: Post = _
-//    override val evState: ClassTag[State] = ClassTag( classOf[State] )
 
     override val acceptance: Acceptance = {
       case ( P.PostAdded(id, c), _ )=> Post( id = id, content = c, published = false )

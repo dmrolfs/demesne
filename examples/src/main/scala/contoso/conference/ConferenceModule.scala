@@ -4,7 +4,6 @@ import akka.Done
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.reflect._
 import scala.util.{Failure, Success}
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
@@ -13,7 +12,7 @@ import scalaz._
 import Scalaz._
 import shapeless._
 import com.github.nscala_time.time.{Imports => joda}
-import omnibus.commons.{TryV, Valid}
+import omnibus.commons.Valid
 import omnibus.akka.AskRetry._
 import omnibus.akka.publish._
 import omnibus.commons.identifier._
@@ -105,24 +104,15 @@ object ConferenceState {
 
 
   implicit val identifying = new Identifying[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
-//    override type ID = ShortUUID
     override val idTag: Symbol = 'conference
     override def tidOf( s: ConferenceState ): TID = s.id
-//    override def nextTID: TryV[TID] = tag( ShortUUID() ).right
-//    override def idFromString( idRep: String ): ID = ShortUUID( idRep )
   }
 }
 
 
 
-//object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
 object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceState#ID] { module =>
-  //DMR move these into common AggregateModuleCompanion trait
   val trace = Trace[ConferenceModule.type]
-
-//  override type ID = ShortUUID
-//  override def nextId: TryV[TID] = conferenceIdentifying.nextIdAs[TID]
-
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -158,13 +148,8 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
     }
   }
 
-//  override val aggregateIdTag: Symbol = 'conference
-
   object ConferenceType extends AggregateRootType {
     override val name: String = module.shardName
-
-//    override lazy val identifying: Identifying[_] = conferenceIdentifying
-
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -190,13 +175,7 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
 
     private val trace = Trace( "Conference", log )
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[ConferenceState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: ConferenceState = _
-//    override val evState: ClassTag[ConferenceState] = ClassTag( classOf[ConferenceState] )
 
     override val acceptance: Acceptance = {
       case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
@@ -267,10 +246,6 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
     }
 
     def common: Receive = omnibus.commons.util.emptyBehavior[Any, Unit]
-
-    // override val unhandled: Receive = {
-    //   case x => log info s">>>>> POST UNEXPECTED MESSAGE $x"
-    // }
   }
 
 

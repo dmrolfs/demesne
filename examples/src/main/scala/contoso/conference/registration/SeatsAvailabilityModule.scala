@@ -132,11 +132,6 @@ object SeatsAvailabilityState {
 object SeatsAvailabilityModule extends AggregateRootModule[SeatsAvailabilityState, SeatsAvailabilityState#ID] { module =>
   val trace = Trace[SeatsAvailabilityModule.type]
 
-//  override type ID = ConferenceModule.ID // SeatsAvailability supports corresponding Conference
-//  override def nextId: TryV[TID] = {
-//    new IllegalStateException( "SeatsAvailability supports corresponding Conference so does not have independent ID" ).left
-//  }
-
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -150,7 +145,6 @@ object SeatsAvailabilityModule extends AggregateRootModule[SeatsAvailabilityStat
 
   object SeatsAvailabilityType extends AggregateRootType {
     override def name: String = module.shardName
-//    override lazy val identifying: Identifying[_] = seatsAvailabilityIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -173,13 +167,7 @@ object SeatsAvailabilityModule extends AggregateRootModule[SeatsAvailabilityStat
 
     // override val indexBus: IndexBus = model.indexBus
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[SeatsAvailabilityState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: SeatsAvailabilityState = _
-//    override val evState: ClassTag[SeatsAvailabilityState] = ClassTag( classOf[SeatsAvailabilityState] )
 
     override def acceptance: Acceptance = {
       // Conference/Registration/SeatsAvailability.cs[185-198]

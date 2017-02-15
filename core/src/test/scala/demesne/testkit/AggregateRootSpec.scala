@@ -109,10 +109,13 @@ with BeforeAndAfterAll
 
 
   object WIP extends Tag( "wip" )
+}
 
 
-  //todo: easy support for ReliableMessage( _, Envelope( payload: TARGET_CLASS, _ ) ) matching
-  //todo: focus on the target class in usage
+
+
+//todo: easy support for ReliableMessage( _, Envelope( payload: TARGET_CLASS, _ ) ) matching
+//todo: focus on the target class in usage
 //  def expectEventPublishedMatching[E: ClassTag]( matcher: PartialFunction[Any, Boolean] ): Unit = {
 //    val probe = TestProbe()
 //    system.eventStream.subscribe( probe.ref, implicitly[ClassTag[E]].runtimeClass )
@@ -189,4 +192,3 @@ with BeforeAndAfterAll
 //    }
 //  }
 //
-}

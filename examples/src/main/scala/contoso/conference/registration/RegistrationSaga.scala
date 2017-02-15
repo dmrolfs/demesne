@@ -1,7 +1,6 @@
 package contoso.conference.registration
 
 import scala.concurrent.duration._
-import scala.reflect._
 import akka.actor._
 
 import scalaz.Scalaz._
@@ -15,7 +14,6 @@ import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
 import omnibus.akka.envelope._
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.TryV
 import omnibus.commons.identifier._
 import omnibus.commons.log.Trace
 
@@ -68,11 +66,6 @@ object RegistrationSagaState {
 object RegistrationSagaModule extends SagaModule[RegistrationSagaState, RegistrationSagaState#ID] { module =>
   val trace = Trace[RegistrationSagaModule.type]
 
-//  override type ID = ShortUUID
-
-//  override def nextId: TryV[TID] = implicitly[Identifying[RegistrationSagaState]].nextIdAs[TID]
-
-
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
   }
@@ -92,7 +85,6 @@ object RegistrationSagaModule extends SagaModule[RegistrationSagaState, Registra
 
   object RegistrationSagaType extends AggregateRootType {
     override def name: String = module.shardName
-//    override lazy val identifying: Identifying[_] = registrationSagaIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -127,13 +119,7 @@ object RegistrationSagaModule extends SagaModule[RegistrationSagaState, Registra
 
     private val trace = Trace( "RegistrationSaga", log )
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[RegistrationSagaState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: RegistrationSagaState = _
-//    override val evState: ClassTag[RegistrationSagaState] = ClassTag( classOf[RegistrationSagaState] )
 
     import context.dispatcher
     var expirationMessager: Cancellable = _

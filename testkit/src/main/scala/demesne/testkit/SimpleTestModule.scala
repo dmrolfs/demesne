@@ -1,6 +1,5 @@
 package demesne.testkit
 
-import scala.reflect._
 import akka.actor.Props
 import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
 import omnibus.commons.TryV
@@ -19,8 +18,6 @@ abstract class SimpleTestModule[T, I0]( implicit override val identifying: Ident
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
   def parseId( idstr: String ): TID = identifying.tidFromString( idstr )
-
-//  val evID: ClassTag[ID]
 
   override def rootType: AggregateRootType = {
     new AggregateRootType {

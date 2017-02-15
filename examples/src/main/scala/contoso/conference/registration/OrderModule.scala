@@ -159,13 +159,8 @@ case class OrderState(
 
 object OrderState {
   implicit val orderIdentifying = new Identifying[OrderState] with ShortUUID.ShortUuidIdentifying[OrderState] {
-//      override val idTag: Symbol = OrderModule.aggregateIdTag
-//      override def idOf( o: OrderState ): TID = o.id
-//    override type ID = ShortUUID
     override val idTag: Symbol = 'order
     override def tidOf( s: OrderState ): TID = s.id
-//    override def nextTID: TryV[TID] = tag( ShortUUID() ).right
-//    override def idFromString( idRep: String ): ID = ShortUUID( idRep )
   }
 }
 
@@ -185,10 +180,6 @@ object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =
 
   private val trace = Trace[OrderModule.type]
 
-
-//  override type ID = ShortUUID
-//  override def nextId: TryV[TID] = implicitly[Identifying[OrderState]].nextIdAs[TID]
-
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
   }
@@ -204,7 +195,6 @@ object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =
 
   object OrderType extends AggregateRootType {
     override val name: String = module.shardName
-//    override lazy val identifying: Identifying[_] = orderIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -226,13 +216,7 @@ object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =
 
     private val trace = Trace( "Order", log )
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[OrderState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: OrderState = _
-//    override val evState: ClassTag[OrderState] = ClassTag( classOf[OrderState] )
 
     var expirationMessager: Cancellable = _
 
