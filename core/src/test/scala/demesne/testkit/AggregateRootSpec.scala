@@ -14,7 +14,7 @@ import Scalaz._
 import com.typesafe.config.Config
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar
-import omnibus.commons.identifier.{Identifying2, TaggedID}
+import omnibus.commons.identifier.{Identifying, TaggedID}
 import omnibus.commons.log.Trace
 import demesne._
 import demesne.repository.StartProtocol

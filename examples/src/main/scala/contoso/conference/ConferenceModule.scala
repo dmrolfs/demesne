@@ -104,7 +104,7 @@ object ConferenceState {
   val seatsLens = lens[ConferenceState] >> 'seats
 
 
-  implicit val identifying = new Identifying2[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
+  implicit val identifying = new Identifying[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
 //    override type ID = ShortUUID
     override val idTag: Symbol = 'conference
     override def tidOf( s: ConferenceState ): TID = s.id

@@ -6,7 +6,7 @@ import akka.actor.Props
 import scalaz._
 import Scalaz._
 import shapeless._
-import omnibus.commons.identifier.Identifying2
+import omnibus.commons.identifier.Identifying
 import omnibus.commons.builder._
 import demesne._
 import demesne.index.IndexSpecification
@@ -15,7 +15,7 @@ import demesne.repository.{AggregateRootProps, CommonClusteredRepository, Common
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 
-abstract class SimpleAggregateModule[S, I]( implicit override val identifying: Identifying2.Aux[S, I], val evState: ClassTag[S] )
+abstract class SimpleAggregateModule[S, I]( implicit override val identifying: Identifying.Aux[S, I], val evState: ClassTag[S] )
   extends AggregateRootModule()( identifying ) { module =>
 //  override def nextId: TryV[TID] = {
 //    import scala.reflect._
@@ -74,9 +74,9 @@ abstract class SimpleAggregateModule[S, I]( implicit override val identifying: I
 }
 
 object SimpleAggregateModule {
-  def builderFor[S: ClassTag, I]( implicit identifying: Identifying2.Aux[S, I] ): BuilderFactory[S, I] = new BuilderFactory[S, I]
+  def builderFor[S: ClassTag, I]( implicit identifying: Identifying.Aux[S, I] ): BuilderFactory[S, I] = new BuilderFactory[S, I]
 
-  class BuilderFactory[S: ClassTag, I]( implicit identifying: Identifying2.Aux[S, I] ) {
+  class BuilderFactory[S: ClassTag, I]( implicit identifying: Identifying.Aux[S, I] ) {
     type CC = SimpleAggregateModuleImpl[S, I]
 
     def make: ModuleBuilder = new ModuleBuilder
@@ -119,7 +119,7 @@ object SimpleAggregateModule {
     override val environment: AggregateEnvironment,
     override val indexes: Seq[IndexSpecification]
   )(
-    implicit override val identifying: Identifying2.Aux[S, I],
+    implicit override val identifying: Identifying.Aux[S, I],
     evState: ClassTag[S]
   ) extends SimpleAggregateModule[S, I]()( identifying, evState ) with Equals { module =>
 //    def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {

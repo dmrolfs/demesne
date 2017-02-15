@@ -17,7 +17,7 @@ import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
 import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
 import omnibus.akka.envelope._
 import omnibus.commons.TryV
-import omnibus.commons.identifier.{Identifying, Identifying2, ShortUUID, TaggedID}
+import omnibus.commons.identifier.{Identifying, ShortUUID, TaggedID}
 import omnibus.commons.log.Trace
 
 
@@ -258,7 +258,7 @@ object AggregateRootFunctionalSpec {
   }
 
   object State {
-    implicit val stateIdentifying = new Identifying2[State] with ShortUUID.ShortUuidIdentifying[State] {
+    implicit val stateIdentifying = new Identifying[State] with ShortUUID.ShortUuidIdentifying[State] {
       override val idTag: Symbol = Symbol( "foo-state" )
       override def tidOf( o: State ): TID = o.id
     }
@@ -300,7 +300,7 @@ object AggregateRootFunctionalSpec {
     class FooActor(
       override val model: DomainModel,
       override val rootType: AggregateRootType
-    ) extends AggregateRoot[Option[State], ShortUUID]()( Identifying2.optionIdentifying(State.stateIdentifying), classTag[Option[State]] )
+    ) extends AggregateRoot[Option[State], ShortUUID]()( Identifying.optionIdentifying(State.stateIdentifying), classTag[Option[State]] )
               with AggregateRoot.Provider { outer: EventPublisher =>
 
       override val acceptance: Acceptance = {

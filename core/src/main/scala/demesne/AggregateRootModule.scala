@@ -3,15 +3,15 @@ package demesne
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
 import omnibus.commons.TryV
-import omnibus.commons.identifier.{Identifying2, TaggedID}
+import omnibus.commons.identifier.{Identifying, TaggedID}
 import omnibus.commons.util._
 
 
-abstract class AggregateRootModule[S, I0]( implicit val identifying: Identifying2.Aux[S, I0] )
+abstract class AggregateRootModule[S, I0]( implicit val identifying: Identifying.Aux[S, I0] )
   extends AggregateRootType.Provider with LazyLogging { module =>
 
   type ID = I0
-//  val identifying: Identifying2.Aux[_, ID]
+//  val identifying: Identifying.Aux[_, ID]
   type TID = TaggedID[ID]
 
   def nextId: TryV[TID] = identifying.nextTID

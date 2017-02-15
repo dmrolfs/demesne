@@ -37,7 +37,7 @@ object IndexAcceptanceSpec {
       def foobar( foo: String, bar: Int ): String = foo + "-" + bar
     }
 
-    implicit val fooIdentifying = new Identifying2[Foo] with ShortUUID.ShortUuidIdentifying[Foo] {
+    implicit val fooIdentifying = new Identifying[Foo] with ShortUUID.ShortUuidIdentifying[Foo] {
       override val idTag: Symbol = 'foo
       override def tidOf( f: Foo ): TID = f.id
     }
@@ -75,7 +75,7 @@ object IndexAcceptanceSpec {
 //    override def nextId: TryV[TID] = implicitly[Identifying[Foo]].nextIdAs[TID]
 
 
-//    override def parseId( idstr: String ): TID = the[Identifying2[Foo]].tidFromString( idstr )
+//    override def parseId( idstr: String ): TID = the[Identifying[Foo]].tidFromString( idstr )
 //      val identifying = implicitly[Identifying[Foo]]
 //      identifying.safeParseId[ID]( idstr )( evID )
 //    }

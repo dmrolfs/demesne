@@ -158,7 +158,7 @@ case class OrderState(
 }
 
 object OrderState {
-  implicit val orderIdentifying = new Identifying2[OrderState] with ShortUUID.ShortUuidIdentifying[OrderState] {
+  implicit val orderIdentifying = new Identifying[OrderState] with ShortUUID.ShortUuidIdentifying[OrderState] {
 //      override val idTag: Symbol = OrderModule.aggregateIdTag
 //      override def idOf( o: OrderState ): TID = o.id
 //    override type ID = ShortUUID

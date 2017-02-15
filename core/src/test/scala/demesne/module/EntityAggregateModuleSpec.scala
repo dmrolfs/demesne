@@ -91,7 +91,7 @@ object EntityAggregateModuleSpec extends LazyLogging {
 
   object FooAggregateRoot {
     import demesne.index.{ Directive => D }
-//    implicit val fi: Identifying2.Aux[Foo, Foo#ID] = Foo.identifying
+//    implicit val fi: Identifying.Aux[Foo, Foo#ID] = Foo.identifying
 //    implicit val evID: ClassTag[Foo#ID] = classTag[ShortUUID]
 
     val myIndexes: () => Seq[IndexSpecification] = () => trace.briefBlock( "myIndexes" ) {

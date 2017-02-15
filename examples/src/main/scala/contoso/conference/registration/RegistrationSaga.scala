@@ -43,7 +43,7 @@ case class RegistrationSagaState(
 }
 
 object RegistrationSagaState {
-  implicit val identifying = new Identifying2[RegistrationSagaState] with ShortUUID.ShortUuidIdentifying[RegistrationSagaState] {
+  implicit val identifying = new Identifying[RegistrationSagaState] with ShortUUID.ShortUuidIdentifying[RegistrationSagaState] {
     override val idTag: Symbol = 'registration
     override def tidOf(o: RegistrationSagaState): TID = o.id
   }

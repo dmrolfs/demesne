@@ -8,7 +8,7 @@ import com.typesafe.scalalogging.LazyLogging
 import demesne.index.IndexSpecification
 import omnibus.akka.envelope.Envelope
 import omnibus.akka.publish.ReliablePublisher.ReliableMessage
-import omnibus.commons.identifier.Identifying2
+import omnibus.commons.identifier.Identifying
 
 
 object AggregateRootType {
@@ -30,7 +30,7 @@ abstract class AggregateRootType extends Equals with LazyLogging {
 
 //  type S
 //  type ID
-//  val identifying: Identifying2.Aux[S, ID]
+//  val identifying: Identifying.Aux[S, ID]
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {

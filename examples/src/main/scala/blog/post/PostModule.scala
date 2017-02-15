@@ -36,7 +36,7 @@ object Post {
   val bodyLens = lens[Post] >> 'content >> 'body
   val titleLens = lens[Post] >> 'content >> 'title
 
-  implicit val identifying = new Identifying2[Post] with ShortUUID.ShortUuidIdentifying[Post] {
+  implicit val identifying = new Identifying[Post] with ShortUUID.ShortUuidIdentifying[Post] {
     override val idTag: Symbol = 'post
     override def tidOf( p: Post ): TID = p.id
     //      override val evID: ClassTag[ID] = classTag[ShortUUID]

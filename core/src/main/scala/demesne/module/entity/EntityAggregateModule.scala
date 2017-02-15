@@ -16,7 +16,7 @@ import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent
 import demesne.module.{AggregateEnvironment, LocalAggregate, SimpleAggregateModule}
 import demesne.repository.AggregateRootProps
-import omnibus.commons.identifier.Identifying2
+import omnibus.commons.identifier.Identifying
 import omnibus.commons.util._
 
 
@@ -29,7 +29,7 @@ object EntityAggregateModule extends LazyLogging {
     slugLens: Option[Lens[E, String]] = None,
     infoToEntity: PartialFunction[Any, Option[E]]
   )(
-    implicit identifying: Identifying2.Aux[E, E#ID],
+    implicit identifying: Identifying.Aux[E, E#ID],
     evE: ClassTag[E],
     evID: ClassTag[E#ID]
   ): IndexSpecification = {
@@ -104,12 +104,12 @@ object EntityAggregateModule extends LazyLogging {
 
 
   def builderFor[E <: Entity : ClassTag, EP <: EntityProtocol[E#ID]](
-    implicit identifying: Identifying2.Aux[E, E#ID]
+    implicit identifying: Identifying.Aux[E, E#ID]
   ): BuilderFactory[E, EP] = {
     new BuilderFactory[E, EP]
   }
 
-  class BuilderFactory[E <: Entity : ClassTag, EP <: EntityProtocol[E#ID]]( implicit identifying: Identifying2.Aux[E, E#ID] ) {
+  class BuilderFactory[E <: Entity : ClassTag, EP <: EntityProtocol[E#ID]]( implicit identifying: Identifying.Aux[E, E#ID] ) {
     type CC = EntityAggregateModuleImpl
 
     def make: ModuleBuilder = new ModuleBuilder
@@ -171,7 +171,7 @@ object EntityAggregateModule extends LazyLogging {
       override val slugLens: Option[Lens[E, String]],
       override val isActiveLens: Option[Lens[E, Boolean]]
     )(
-      implicit override val identifying: Identifying2.Aux[E, E#ID]
+      implicit override val identifying: Identifying.Aux[E, E#ID]
     ) extends EntityAggregateModule[E] with Equals {
       override val evState: ClassTag[E] = the[ClassTag[E]]
 
@@ -198,7 +198,7 @@ object EntityAggregateModule extends LazyLogging {
   }
 }
 
-abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override val identifying: Identifying2.Aux[E, E#ID] )
+abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override val identifying: Identifying.Aux[E, E#ID] )
   extends SimpleAggregateModule[E, E#ID] { module =>
 //  override val identifying: EntityIdentifying[E] = implicitly[EntityIdentifying[E]]
 
@@ -251,7 +251,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
   }
 
 
-  abstract class EntityAggregateActor( implicit identifying: Identifying2.Aux[E, E#ID] )
+  abstract class EntityAggregateActor( implicit identifying: Identifying.Aux[E, E#ID] )
     extends AggregateRoot[E, E#ID]()(
       identifying,
       evState //,

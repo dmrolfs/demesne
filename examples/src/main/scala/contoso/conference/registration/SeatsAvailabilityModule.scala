@@ -110,7 +110,7 @@ object SeatsAvailabilityState {
     original ++ newRemainingSeats
   }
 
-  implicit val seatsAvailabilityIdentifying = new Identifying2[SeatsAvailabilityState] with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
+  implicit val seatsAvailabilityIdentifying = new Identifying[SeatsAvailabilityState] with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
     override val idTag: Symbol = 'seatsAvailability
 
     override def nextTID: TryV[TID] = {

@@ -13,7 +13,7 @@ import shapeless.the
 import omnibus.akka.envelope._
 import omnibus.akka.publish.EventPublisher
 import omnibus.akka.ActorStack
-import omnibus.commons.identifier.{Identifying2, TaggedID}
+import omnibus.commons.identifier.{Identifying, TaggedID}
 import omnibus.commons.{KOp, TryV}
 import omnibus.commons.util._
 import demesne.PassivationSpecification.StopAggregateRoot
@@ -37,17 +37,17 @@ object AggregateRoot extends LazyLogging {
 
   type Acceptance[S] = PartialFunction[(Any, S), S]
 
-  def aggregateIdFromPath[S, I]( path: ActorPath )( implicit identifying: Identifying2.Aux[S, I] ): TaggedID[I] = {
+  def aggregateIdFromPath[S, I]( path: ActorPath )( implicit identifying: Identifying.Aux[S, I] ): TaggedID[I] = {
     identifying.tag( identifying.idFromString( path.toStringWithoutAddress ) )
   }
 
-  def aggregateIdFromRef[S, I]( aggregateRef: ActorRef )( implicit identifying: Identifying2.Aux[S, I] ): TaggedID[I] = {
+  def aggregateIdFromRef[S, I]( aggregateRef: ActorRef )( implicit identifying: Identifying.Aux[S, I] ): TaggedID[I] = {
     aggregateIdFromPath[S, I]( aggregateRef.path )
   }
 }
 
 abstract class AggregateRoot[S, I0](
-  implicit identifying: Identifying2.Aux[S, I0],
+  implicit identifying: Identifying.Aux[S, I0],
   evState: ClassTag[S] //,
 //  evID: ClassTag[I0]
 ) extends PersistentActor

@@ -105,7 +105,7 @@ object SeatAssignmentsState {
     }
   }
 
-  implicit val identifying = new Identifying2[SeatAssignmentsState] with ShortUUID.ShortUuidIdentifying[SeatAssignmentsState] {
+  implicit val identifying = new Identifying[SeatAssignmentsState] with ShortUUID.ShortUuidIdentifying[SeatAssignmentsState] {
     override val idTag: Symbol = 'seatAssignment
     override def tidOf( o: SeatAssignmentsState ): TID = o.id
   }
