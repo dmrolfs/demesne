@@ -4,7 +4,6 @@ import akka.Done
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.reflect._
 import scala.util.{Failure, Success}
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
@@ -13,7 +12,7 @@ import scalaz._
 import Scalaz._
 import shapeless._
 import com.github.nscala_time.time.{Imports => joda}
-import omnibus.commons.{TryV, Valid}
+import omnibus.commons.Valid
 import omnibus.akka.AskRetry._
 import omnibus.akka.publish._
 import omnibus.commons.identifier._
@@ -63,14 +62,57 @@ object ConferenceProtocol extends AggregateProtocol[ShortUUID] {
   case class SeatDeleted( override val sourceId: SeatDeleted#TID, seatTypeId: SeatType.TID ) extends ConferenceEvent
 }
 
-//object ConferenceModule extends AggregateRootModule[ShortUUID] { module =>
-object ConferenceModule extends AggregateRootModule { module =>
-  //DMR move these into common AggregateModuleCompanion trait
+
+case class ConferenceState(
+  id: ConferenceState#TID,
+  name: String,
+  slug: String,
+  ownerName: String,
+  ownerEmail: String, //DMR: EmailAddress Archetype
+  scheduled: joda.Interval,
+  seats: Set[SeatType] = Set(),
+  description: Option[String] = None,
+  location: Option[String] = None,  //DMR: Geolocation Archetype
+  tagline: Option[String] = None,
+  accessCode: Option[String] = None,
+  isPublished: Boolean = false,
+  twitterSearch: Option[String] = None
+) {
+  type ID = ShortUUID
+  type TID = TaggedID[ID]
+}
+
+object ConferenceState {
+  def apply( info: ConferenceInfo ): ConferenceState = {
+    ConferenceState(
+      id = info.id,
+      name = info.name,
+      slug = info.slug,
+      ownerName = info.ownerName,
+      ownerEmail = info.ownerEmail, //DMR: EmailAddress Archetype
+      scheduled = info.scheduled,
+      seats = info.seats,
+      description = info.description,
+      location = info.location,  //DMR: Geolocation Archetype
+      tagline = info.tagline,
+      accessCode = info.accessCode,
+      twitterSearch = info.twitterSearch
+    )
+  }
+
+  val seatsLens = lens[ConferenceState] >> 'seats
+
+
+  implicit val identifying = new Identifying[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
+    override val idTag: Symbol = 'conference
+    override def tidOf( s: ConferenceState ): TID = s.id
+  }
+}
+
+
+
+object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceState#ID] { module =>
   val trace = Trace[ConferenceModule.type]
-
-  override type ID = ShortUUID
-  override def nextId: TryV[TID] = conferenceIdentifying.nextIdAs[TID]
-
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -106,62 +148,13 @@ object ConferenceModule extends AggregateRootModule { module =>
     }
   }
 
-  override val aggregateIdTag: Symbol = 'conference
-
   object ConferenceType extends AggregateRootType {
     override val name: String = module.shardName
-
-    override lazy val identifying: Identifying[_] = conferenceIdentifying
-
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
   override val rootType: AggregateRootType = ConferenceType
 
-
-  case class ConferenceState(
-    id: TID,
-    name: String,
-    slug: String,
-    ownerName: String,
-    ownerEmail: String, //DMR: EmailAddress Archetype
-    scheduled: joda.Interval,
-    seats: Set[SeatType] = Set(),
-    description: Option[String] = None,
-    location: Option[String] = None,  //DMR: Geolocation Archetype
-    tagline: Option[String] = None,
-    accessCode: Option[String] = None,
-    isPublished: Boolean = false,
-    twitterSearch: Option[String] = None
-  )
-
-  object ConferenceState {
-    def apply( info: ConferenceInfo ): ConferenceState = {
-      ConferenceState(
-        id = info.id,
-        name = info.name,
-        slug = info.slug,
-        ownerName = info.ownerName,
-        ownerEmail = info.ownerEmail, //DMR: EmailAddress Archetype
-        scheduled = info.scheduled,
-        seats = info.seats,
-        description = info.description,
-        location = info.location,  //DMR: Geolocation Archetype
-        tagline = info.tagline,
-        accessCode = info.accessCode,
-        twitterSearch = info.twitterSearch
-      )
-    }
-
-    val seatsLens = lens[ConferenceState] >> 'seats
-  }
-
-  implicit val conferenceIdentifying: Identifying[ConferenceState] = {
-    new Identifying[ConferenceState] with ShortUUID.ShortUuidIdentifying[ConferenceState] {
-      override def idOf( o: ConferenceState ): TID = o.id
-      override val idTag: Symbol = ConferenceModule.aggregateIdTag
-    }
-  }
 
   object Conference {
     def props( model: DomainModel, rt: AggregateRootType, conferenceContext: ActorRef ): Props = {
@@ -182,13 +175,7 @@ object ConferenceModule extends AggregateRootModule { module =>
 
     private val trace = Trace( "Conference", log )
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[ConferenceState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: ConferenceState = _
-    override val evState: ClassTag[ConferenceState] = ClassTag( classOf[ConferenceState] )
 
     override val acceptance: Acceptance = {
       case ( ConferenceCreated(_, c), _ ) => ConferenceState( c )
@@ -259,10 +246,6 @@ object ConferenceModule extends AggregateRootModule { module =>
     }
 
     def common: Receive = omnibus.commons.util.emptyBehavior[Any, Unit]
-
-    // override val unhandled: Receive = {
-    //   case x => log info s">>>>> POST UNEXPECTED MESSAGE $x"
-    // }
   }
 
 

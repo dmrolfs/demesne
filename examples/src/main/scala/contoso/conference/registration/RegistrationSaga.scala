@@ -1,7 +1,6 @@
 package contoso.conference.registration
 
 import scala.concurrent.duration._
-import scala.reflect._
 import akka.actor._
 
 import scalaz.Scalaz._
@@ -15,7 +14,6 @@ import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
 import omnibus.akka.envelope._
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.TryV
 import omnibus.commons.identifier._
 import omnibus.commons.log.Trace
 
@@ -25,19 +23,48 @@ object RegistrationSagaProtocol extends AggregateProtocol[ShortUUID] {
   case class RegistrationProcessExpired( override val sourceId: RegistrationProcessExpired#TID ) extends Event
 }
 
+
+// Conference/Registration/RegistrationProcessManager.cs [41 - 88]
+case class RegistrationSagaState(
+  id: RegistrationSagaState#TID,
+  conferenceId: ConferenceModule.TID,
+  orderId: OrderModule.TID,
+  reservationId: OrderModule.TID,
+  state: RegistrationSagaState.ProcessState = RegistrationSagaState.NotStarted,
+  seatReservationWorkId: WorkId = WorkId.unknown,
+  reservationAutoExpiration: Option[joda.DateTime]= None,
+  lastUpdated: joda.DateTime = joda.DateTime.now
+) {
+  type ID = ShortUUID
+  type TID = TaggedID[ID]
+  def isCompleted: Boolean = state == RegistrationSagaState.FullyConfirmed || state == RegistrationSagaState.OrderExpired
+}
+
+object RegistrationSagaState {
+  implicit val identifying = new Identifying[RegistrationSagaState] with ShortUUID.ShortUuidIdentifying[RegistrationSagaState] {
+    override val idTag: Symbol = 'registration
+    override def tidOf(o: RegistrationSagaState): TID = o.id
+  }
+
+  sealed trait ProcessState
+  case object NotStarted extends ProcessState
+  case object AwaitingReservationConfirmation extends ProcessState
+  case object ReservationConfirmationReceived extends ProcessState
+  case object PaymentConfirmationReceived extends ProcessState
+  case object FullyConfirmed extends ProcessState
+  case object OrderExpired extends ProcessState
+}
+
+
+
 /**
 * Represents a Saga that is in charge of communicating between the different distributed components when registering
 * to a conference, reserving the seats, expiring the reservation in case the order is not completed in time, etc.
 *
 * Created by damonrolfs on 9/11/14.
 */
-object RegistrationSagaModule extends SagaModule { module =>
+object RegistrationSagaModule extends SagaModule[RegistrationSagaState, RegistrationSagaState#ID] { module =>
   val trace = Trace[RegistrationSagaModule.type]
-
-  override type ID = ShortUUID
-
-  override def nextId: TryV[TID] = implicitly[Identifying[RegistrationSagaState]].nextIdAs[TID]
-
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -58,42 +85,10 @@ object RegistrationSagaModule extends SagaModule { module =>
 
   object RegistrationSagaType extends AggregateRootType {
     override def name: String = module.shardName
-    override lazy val identifying: Identifying[_] = registrationSagaIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
   override val rootType: AggregateRootType = RegistrationSagaType
-
-
-  sealed trait ProcessState
-  case object NotStarted extends ProcessState
-  case object AwaitingReservationConfirmation extends ProcessState
-  case object ReservationConfirmationReceived extends ProcessState
-  case object PaymentConfirmationReceived extends ProcessState
-  case object FullyConfirmed extends ProcessState
-  case object OrderExpired extends ProcessState
-
-  // Conference/Registration/RegistrationProcessManager.cs [41 - 88]
-  case class RegistrationSagaState(
-    id: TID,
-    conferenceId: ConferenceModule.TID,
-    orderId: OrderModule.TID,
-    reservationId: OrderModule.TID,
-    state: ProcessState = NotStarted,
-    seatReservationWorkId: WorkId = WorkId.unknown,
-    reservationAutoExpiration: Option[joda.DateTime]= None,
-    lastUpdated: joda.DateTime = joda.DateTime.now
-  ) {
-    def isCompleted: Boolean = state == FullyConfirmed || state == OrderExpired
-  }
-
-
-  implicit val registrationSagaIdentifying: Identifying[RegistrationSagaState] = {
-    new Identifying[RegistrationSagaState] with ShortUUID.ShortUuidIdentifying[RegistrationSagaState] {
-      override val idTag: Symbol = 'registration
-      override def idOf( o: RegistrationSagaState ): TID = o.id
-    }
-  }
 
 
   object RegistrationSaga {
@@ -120,16 +115,11 @@ object RegistrationSagaModule extends SagaModule { module =>
     import contoso.conference.registration.{ OrderProtocol => O }
     import contoso.conference.registration.{ SeatsAvailabilityProtocol => SA }
     import contoso.conference.payments.{ PaymentSourceProtocol => P }
+    import RegistrationSagaState._
 
     private val trace = Trace( "RegistrationSaga", log )
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[RegistrationSagaState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: RegistrationSagaState = _
-    override val evState: ClassTag[RegistrationSagaState] = ClassTag( classOf[RegistrationSagaState] )
 
     import context.dispatcher
     var expirationMessager: Cancellable = _

@@ -1,6 +1,7 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
+
 import scala.concurrent.duration._
 import scala.reflect.ClassTag
 import scala.concurrent.Await
@@ -13,7 +14,7 @@ import Scalaz._
 import com.typesafe.config.Config
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar
-import omnibus.commons.identifier.TaggedID
+import omnibus.commons.identifier.{Identifying, TaggedID}
 import omnibus.commons.log.Trace
 import demesne._
 import demesne.repository.StartProtocol
@@ -33,6 +34,7 @@ with BeforeAndAfterAll
 {
   private val trace = Trace[AggregateRootSpec[A]]
 
+  type State
   type ID
   type TID = TaggedID[ID]
 
@@ -44,7 +46,7 @@ with BeforeAndAfterAll
   extends AkkaFixture( _config, _system, _slug ) { fixture =>
     private val trace = Trace[AggregateFixture]
 
-    val module: AggregateRootModule
+    val module: AggregateRootModule[State, ID]
 
     import akka.util.Timeout
     implicit val actorTimeout = Timeout( 5.seconds )
@@ -107,10 +109,13 @@ with BeforeAndAfterAll
 
 
   object WIP extends Tag( "wip" )
+}
 
 
-  //todo: easy support for ReliableMessage( _, Envelope( payload: TARGET_CLASS, _ ) ) matching
-  //todo: focus on the target class in usage
+
+
+//todo: easy support for ReliableMessage( _, Envelope( payload: TARGET_CLASS, _ ) ) matching
+//todo: focus on the target class in usage
 //  def expectEventPublishedMatching[E: ClassTag]( matcher: PartialFunction[Any, Boolean] ): Unit = {
 //    val probe = TestProbe()
 //    system.eventStream.subscribe( probe.ref, implicitly[ClassTag[E]].runtimeClass )
@@ -187,4 +192,3 @@ with BeforeAndAfterAll
 //    }
 //  }
 //
-}

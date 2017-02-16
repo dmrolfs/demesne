@@ -139,7 +139,33 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
 }
 
 
-object OrderModule extends AggregateRootModule { module =>
+// Conference/Registration/Order.cs
+case class OrderState(
+  id: OrderState#TID,
+  conferenceId: ConferenceModule.TID,
+  seats: Seq[SeatQuantity] = Seq(),
+  confirmed: Boolean = false
+) {
+  type ID = ShortUUID
+  type TID = TaggedID[ID]
+
+  def isCompletedBy( reserved: Seq[SeatQuantity] ): Boolean = {
+    seats exists { s =>
+      if ( s.quantity == Each( 0 ) ) false
+      else reserved exists { r => ( r.seatTypeId == s.seatTypeId ) && ( r.quantity == s.quantity ) }
+    }
+  }
+}
+
+object OrderState {
+  implicit val orderIdentifying = new Identifying[OrderState] with ShortUUID.ShortUuidIdentifying[OrderState] {
+    override val idTag: Symbol = 'order
+    override def tidOf( s: OrderState ): TID = s.id
+  }
+}
+
+
+object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =>
   import omnibus.commons.log.Trace
 
   val fallback = "reservation-auto-expiration = 15 minutes"
@@ -153,10 +179,6 @@ object OrderModule extends AggregateRootModule { module =>
   )
 
   private val trace = Trace[OrderModule.type]
-
-
-  override type ID = ShortUUID
-  override def nextId: TryV[TID] = implicitly[Identifying[OrderState]].nextIdAs[TID]
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -173,36 +195,10 @@ object OrderModule extends AggregateRootModule { module =>
 
   object OrderType extends AggregateRootType {
     override val name: String = module.shardName
-    override lazy val identifying: Identifying[_] = orderIdentifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
   override val rootType: AggregateRootType = OrderType
-
-
-
-
-  // Conference/Registration/Order.cs
-  case class OrderState(
-    id: TID,
-    conferenceId: ConferenceModule.TID,
-    seats: Seq[SeatQuantity] = Seq(),
-    confirmed: Boolean = false
-  ) {
-    def isCompletedBy( reserved: Seq[SeatQuantity] ): Boolean = {
-      seats exists { s =>
-        if ( s.quantity == Each( 0 ) ) false
-        else reserved exists { r => ( r.seatTypeId == s.seatTypeId ) && ( r.quantity == s.quantity ) }
-      }
-    }
-  }
-
-  implicit val orderIdentifying: Identifying[OrderState] = {
-    new Identifying[OrderState] with ShortUUID.ShortUuidIdentifying[OrderState] {
-      override val idTag: Symbol = OrderModule.aggregateIdTag
-      override def idOf( o: OrderState ): TID = o.id
-    }
-  }
 
 
   object Order {
@@ -220,13 +216,7 @@ object OrderModule extends AggregateRootModule { module =>
 
     private val trace = Trace( "Order", log )
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[OrderState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: OrderState = _
-    override val evState: ClassTag[OrderState] = ClassTag( classOf[OrderState] )
 
     var expirationMessager: Cancellable = _
 

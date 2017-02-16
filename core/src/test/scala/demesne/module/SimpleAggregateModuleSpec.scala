@@ -26,8 +26,6 @@ object SimpleAggregateModuleSpec {
 
   trait Foo extends Entity {
     override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
 
     def isActive: Boolean
     def f: Int
@@ -36,15 +34,11 @@ object SimpleAggregateModuleSpec {
   }
 
   object Foo extends EntityLensProvider[Foo] {
-    implicit val fooIdentifying: Identifying[Foo] = new EntityIdentifying[Foo] {
-      override type ID = Foo#ID
-      override val evEntity: ClassTag[Foo] = classTag[Foo]
-      override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
-      override lazy val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
-      override def nextId: TryV[TID] = tag( ShortUUID() ).right
-      override def fromString( idstr: String ): ID = ShortUUID( idstr )
+    implicit val fooIdentifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
+      override lazy val idTag: Symbol = 'fooTAG
+      override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+      override def idFromString( idRep: String ): ShortUUID = ShortUUID fromString idRep
     }
-
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo,  Foo#TID] {
       override def get( f: Foo ): Foo#TID = f.id
@@ -88,12 +82,12 @@ object SimpleAggregateModuleSpec {
 
   object FooAggregateRoot {
     val trace = Trace[FooAggregateRoot.type]
-    val module: SimpleAggregateModule[Foo] = trace.block( "foo-module" ) {
-      val b = SimpleAggregateModule.builderFor[Foo].make
-      import b.P.{ Tag => BTag, Props => BProps, _ }
+    val module: SimpleAggregateModule[Foo, Foo#ID] = trace.block( "foo-module" ) {
+      val b = SimpleAggregateModule.builderFor[Foo, Foo#ID].make
+      import b.P.{ Props => BProps, _ }
 
       b.builder
-       .set( BTag, 'fooTAG )
+//       .set( BTag, 'fooTAG )
        .set( BProps, FooActor.props(_,_) )
        .build()
     }
@@ -106,9 +100,12 @@ object SimpleAggregateModuleSpec {
 
 
 abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggregateModuleSpec] with ScalaFutures {
+  import SimpleAggregateModuleSpec.Foo
 
   private val trace = Trace[SimpleAggregateModuleSpec]
 
+
+  override type State = Foo
   override type ID = ShortUUID
   override type Protocol = SimpleAggregateModuleSpec.Protocol.type
   override val protocol: Protocol = SimpleAggregateModuleSpec.Protocol
@@ -121,21 +118,22 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
   override type Fixture = TestFixture
 
   class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
-    override val module: AggregateRootModule = SimpleAggregateModuleSpec.FooAggregateRoot.module
+    override val module: AggregateRootModule[Foo, Foo#ID] = SimpleAggregateModuleSpec.FooAggregateRoot.module
 
     override def rootTypes: Set[AggregateRootType] = Set( module.rootType )
 
-    override def nextId(): TID = {
-      import SimpleAggregateModuleSpec.Foo.{fooIdentifying => identifying}
-
-      identifying.nextIdAs[TID] match {
-        case \/-( r ) => r
-        case -\/( ex ) => {
-          logger.error( "failed to generate nextId", ex )
-          throw ex
-        }
-      }
-    }
+    override def nextId(): TID = TryV.unsafeGet( SimpleAggregateModuleSpec.Foo.fooIdentifying.nextTID )
+//    {
+//      import SimpleAggregateModuleSpec.Foo.{fooIdentifying => identifying}
+//
+//      identifying.nextIdAs[TID] match {
+//        case \/-( r ) => r
+//        case -\/( ex ) => {
+//          logger.error( "failed to generate nextId", ex )
+//          throw ex
+//        }
+//      }
+//    }
   }
 
 
@@ -148,8 +146,8 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
 
     "simple" in { fixture: Fixture =>
       import fixture._
-      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
-        aggregateIdTag = 'fooTAG, 
+      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo, Foo#ID](
+//        aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
         passivateTimeout = AggregateRootType.DefaultPassivation,
         snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
@@ -158,21 +156,21 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
         indexes = Seq.empty[IndexSpecification]
       )
 
-      val b = SimpleAggregateModule.builderFor[Foo].make
-      import b.P.{ Tag => BTag, Props => BProps, _ }
+      val b = SimpleAggregateModule.builderFor[Foo, Foo#ID].make
+      import b.P.{ Props => BProps, _ }
       val actual = b.builder
-                    .set( BTag, 'fooTAG )
+//                    .set( BTag, 'fooTAG )
                     .set( BProps, FooAggregateRoot.FooActor.props(_, _) )
                     .build
 
-      actual.aggregateIdTag must equal( 'fooTAG )
+//      actual.aggregateIdTag must equal( 'fooTAG )
     }
 
     "build module" in { fixture: Fixture =>
       import fixture._
 
-      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo](
-        aggregateIdTag = 'fooTAG,
+      val expected = SimpleAggregateModule.SimpleAggregateModuleImpl[Foo, Foo#ID](
+//        aggregateIdTag = 'fooTAG,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
         passivateTimeout = AggregateRootType.DefaultPassivation,
         snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),

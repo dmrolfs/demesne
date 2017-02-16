@@ -33,8 +33,6 @@ object EntityAggregateModuleSpec extends LazyLogging {
 
   trait Foo extends Entity {
     override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
 
     def isActive: Boolean
     def f: Int
@@ -44,12 +42,8 @@ object EntityAggregateModuleSpec extends LazyLogging {
 
   object Foo extends EntityLensProvider[Foo] {
     implicit val identifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
-      override val evEntity: ClassTag[Foo] = classTag[Foo]
-      override type ID = ShortUUID
-      override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
-      override lazy val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
-      override def nextId: TryV[TID] = tag( ShortUUID() ).right
-      override def fromString( idstr: String ): ID = ShortUUID( idstr )
+      override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+      override def idFromString( idRep: String ): ID = ShortUUID fromString idRep 
     }
 
 
@@ -95,12 +89,16 @@ object EntityAggregateModuleSpec extends LazyLogging {
 
   object FooAggregateRoot {
     import demesne.index.{ Directive => D }
+//    implicit val fi: Identifying.Aux[Foo, Foo#ID] = Foo.identifying
+//    implicit val evID: ClassTag[Foo#ID] = classTag[ShortUUID]
 
     val myIndexes: () => Seq[IndexSpecification] = () => trace.briefBlock( "myIndexes" ) {
       Seq(
-        EntityAggregateModule.makeSlugSpec[Foo]( Foo.idLens, Some(Foo.slugLens) ){
-          case f: Foo => Some( f )
-        },
+        EntityAggregateModule.makeSlugSpec[Foo](
+          idLens = Foo.idLens,
+          slugLens = Some(Foo.slugLens),
+          infoToEntity = { case f: Foo => Some( f ) }
+        ),
         demesne.index.local.IndexLocalAgent.spec[String, Foo#TID, Foo#TID]( 'name ) {
           case Protocol.Added( tid, info ) => {
             module.triedToEntity( info )
@@ -118,14 +116,14 @@ object EntityAggregateModuleSpec extends LazyLogging {
     }
 
     val trace = Trace[FooAggregateRoot.type]
-    val builderFactory: EntityAggregateModule.BuilderFactory[Foo, Protocol.type] = EntityAggregateModule.builderFor[Foo, Protocol.type ]
+    val builderFactory: EntityAggregateModule.BuilderFactory[Foo, Protocol.type] = EntityAggregateModule.builderFor[Foo, Protocol.type]
     val module: EntityAggregateModule[Foo] = trace.block( "foo-module" ) {
       val b = builderFactory.make
-      import b.P.{ Tag => BTag, Props => BProps, Protocol => BProtocol, _ }
+      import b.P.{ Props => BProps, Protocol => BProtocol, _ }
 
       b.builder
-       .set( BTag, Foo.identifying.idTag )
-       .set( BProps, FooActor.props(_,_) )
+//       .set( BTag, Foo.identifying.idTag )
+       .set( BProps, FooActor.props(_: DomainModel,_: AggregateRootType) )
        .set( BProtocol, Protocol )
        .set( Indexes, myIndexes )
        .set( IdLens, Foo.idLens )
@@ -145,7 +143,7 @@ object EntityAggregateModuleSpec extends LazyLogging {
     class FooActor( override val model: DomainModel, override val rootType: AggregateRootType )
     extends module.EntityAggregateActor with AggregateRoot.Provider { publisher: EventPublisher =>
       override var state: Foo = _
-      override val evState: ClassTag[Foo] = ClassTag( classOf[Foo] )
+//      override val evState: ClassTag[Foo] = ClassTag( classOf[Foo] )
 
       override val active: Receive = super.active orElse {
         case Protocol.Bar( _, b ) => {
@@ -162,6 +160,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
   private val trace = Trace[EntityAggregateModuleSpec]
 
+  override type State = Foo
   override type ID = ShortUUID
 
   override type Protocol = EntityAggregateModuleSpec.Protocol.type
@@ -177,9 +176,9 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
   class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[TestFixture]
-    override def nextId(): TID = Foo.identifying.safeNextId
+    override def nextId(): TID = TryV.unsafeGet( Foo.identifying.nextTID )
 
-    override val module: AggregateRootModule = FooAggregateRoot.module
+    override val module: AggregateRootModule[Foo, Foo#ID] = FooAggregateRoot.module
 
     val rootType: AggregateRootType = module.rootType
 
@@ -199,11 +198,10 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
   "Module should" should {
     import FooAggregateRoot.{ module => Module }
 
-    "build module" in { fixture: Fixture =>
+    "build module" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
-        aggregateIdTag = Foo.identifying.idTag,
         aggregateRootPropsOp = FooAggregateRoot.FooActor.props(_,_),
         passivateTimeout = AggregateRootType.DefaultPassivation,
         snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
@@ -222,7 +220,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
       expected.canEqual( FooAggregateRoot.module ) must equal( true )
       expected.## must equal( FooAggregateRoot.module.## )
-      FooAggregateRoot.module.aggregateIdTag must equal( expected.aggregateIdTag )
+//      FooAggregateRoot.module.aggregateIdTag must equal( expected.aggregateIdTag )
       FooAggregateRoot.module.indexes must equal( expected.indexes )
       FooAggregateRoot.module must equal( expected )
     }
@@ -392,7 +390,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
       whenReady( bevt ) { e => e.b mustBe 17 }
     }
 
-    "enablement actions translate in slug index" taggedAs WIP in { fixture: Fixture =>
+    "enablement actions translate in slug index" in { fixture: Fixture =>
       import fixture._
 
       val tid = Module.nextId.toOption.get

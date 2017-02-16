@@ -6,16 +6,17 @@ import akka.actor.{ActorLogging, ActorPath, ActorRef, ReceiveTimeout}
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
 import com.typesafe.scalalogging.LazyLogging
-import demesne.PassivationSpecification.StopAggregateRoot
-import omnibus.akka.ActorStack
 
 import scalaz._
 import scalaz.Kleisli._
+import shapeless.the
 import omnibus.akka.envelope._
 import omnibus.akka.publish.EventPublisher
+import omnibus.akka.ActorStack
 import omnibus.commons.identifier.{Identifying, TaggedID}
 import omnibus.commons.{KOp, TryV}
 import omnibus.commons.util._
+import demesne.PassivationSpecification.StopAggregateRoot
 
 
 //////////////////////////////////////
@@ -36,23 +37,20 @@ object AggregateRoot extends LazyLogging {
 
   type Acceptance[S] = PartialFunction[(Any, S), S]
 
-  def aggregateIdFromPath[S, I]( path: ActorPath )( implicit identifying: Identifying[S] ): TaggedID[I] = {
-    identifying.tidAs[TaggedID[I]]( identifying.tag( identifying.fromString( path.toStringWithoutAddress ) ) ) match {
-      case \/-( tid ) => tid
-      case -\/( ex ) => {
-        logger.error( s"failed to extract tagged id form path[${path.toStringWithoutAddress}]", ex )
-        throw ex
-      }
-    }
+  def aggregateIdFromPath[S, I]( path: ActorPath )( implicit identifying: Identifying.Aux[S, I] ): TaggedID[I] = {
+    identifying.tag( identifying.idFromString( path.toStringWithoutAddress ) )
   }
 
-  def aggregateIdFromRef[S: Identifying, I]( aggregateRef: ActorRef ): TaggedID[I] = {
+  def aggregateIdFromRef[S, I]( aggregateRef: ActorRef )( implicit identifying: Identifying.Aux[S, I] ): TaggedID[I] = {
     aggregateIdFromPath[S, I]( aggregateRef.path )
   }
 }
 
-abstract class AggregateRoot[S, I]
-extends PersistentActor
+abstract class AggregateRoot[S, I0](
+  implicit identifying: Identifying.Aux[S, I0],
+  evState: ClassTag[S] //,
+//  evID: ClassTag[I0]
+) extends PersistentActor
 with ActorStack
 with EnvelopingActor
 with ActorLogging {
@@ -85,17 +83,18 @@ with ActorLogging {
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
-  type ID = I
+  type ID = I0
   type TID = TaggedID[ID]
-  lazy val evTID: ClassTag[TID] = {
-    rootType.identifying.bridgeTidClassTag[TID] match {
-      case \/-( ev ) => ev
-      case -\/( ex ) => {
-        log.error( ex, "failed to bridge TID types from rootType:[{}] into aggregate:[{}]", rootType, persistenceId )
-        throw ex
-      }
-    }
-  }
+  lazy val evTID: ClassTag[TID] = classTag[TID]
+//  lazy val evTID: ClassTag[TID] = {
+//    rootType.identifying.bridgeTidClassTag[TID] match {
+//      case \/-( ev ) => ev
+//      case -\/( ex ) => {
+//        log.error( ex, "failed to bridge TID types from rootType:[{}] into aggregate:[{}]", rootType, persistenceId )
+//        throw ex
+//      }
+//    }
+//  }
 
   lazy val aggregateId: TID = aggregateIdFromPath()
 
@@ -103,7 +102,8 @@ with ActorLogging {
     val p = self.path.toStringWithoutAddress
     val sepPos = p lastIndexOf '/'
     val aidRep = p drop ( sepPos + 1 )
-    val aid = rootType.identifying.safeParseTid[TID]( aidRep )
+    val aid = identifying.tidFromString( aidRep )
+//    val aid = rootType.identifying.safeParseTid[TID]( aidRep )
     log.debug( "#TEST aggregateId:[{}] from rep:[{}] in path:[{}]", aid, aidRep, p )
     aid
   }
@@ -120,7 +120,6 @@ with ActorLogging {
 
   def state: S
   def state_=( newState: S ): Unit
-  val evState: ClassTag[S]
 
 
   def aggregateIdFor( msg: Any ): Option[ShardRegion.EntityId] = {
@@ -197,8 +196,10 @@ with ActorLogging {
   }
 
   def acceptSnapshot( snapshotOffer: SnapshotOffer ): S = {
-    evState.unapply( snapshotOffer.snapshot ) getOrElse {
-      val ex = new IllegalStateException(s"snapshot does not match State type:[${evState}]; offer:[${snapshotOffer.snapshot}]")
+    the[ClassTag[S]].unapply( snapshotOffer.snapshot ) getOrElse {
+      val ex = new IllegalStateException(
+        s"snapshot does not match State type:[${the[ClassTag[S]]}]; offer:[${snapshotOffer.snapshot}]"
+      )
       log.error( ex, "invalid snapshot offer" )
       throw ex
     }

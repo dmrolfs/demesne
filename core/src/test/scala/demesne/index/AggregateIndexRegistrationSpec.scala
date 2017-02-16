@@ -57,15 +57,15 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
       new AggregateRootType {
         override def name: String = "foo"
 
-        override val identifying: Identifying[_] = new Identifying[ShortUUID] {
-          override type ID = ShortUUID
-          override val evID: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
-          override val evTID: ClassTag[TID] = ClassTag( classOf[TaggedID[ShortUUID]])
-          override val idTag: Symbol = 'foo
-          override def idOf( o: ShortUUID ): TID = tag( o )
-          override def fromString( idstr: String ): ShortUUID = ShortUUID( idstr )
-          override def nextId: TryV[TID] = tag( ShortUUID() ).right
-        }
+//        override val identifying: Identifying[_] = new Identifying[ShortUUID] {
+//          override type ID = ShortUUID
+//          override val evID: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
+//          override val evTID: ClassTag[TID] = ClassTag( classOf[TaggedID[ShortUUID]])
+//          override val idTag: Symbol = 'foo
+//          override def idOf( o: ShortUUID ): TID = tag( o )
+//          override def fromString( idstr: String ): ShortUUID = ShortUUID( idstr )
+//          override def nextId: TryV[TID] = tag( ShortUUID() ).right
+//        }
 
         override def indexes: Seq[IndexSpecification] = specs
 
