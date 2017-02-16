@@ -26,8 +26,6 @@ object SimpleAggregateModuleSpec {
 
   trait Foo extends Entity {
     override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
 
     def isActive: Boolean
     def f: Int
@@ -39,17 +37,8 @@ object SimpleAggregateModuleSpec {
     implicit val fooIdentifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
       override lazy val idTag: Symbol = 'fooTAG
       override def nextTID: TryV[TID] = tag( ShortUUID() ).right
-      override def idFromString( idRep: String ): ShortUUID = ShortUUID( idRep )
+      override def idFromString( idRep: String ): ShortUUID = ShortUUID fromString idRep
     }
-//    {
-//      override type ID = Foo#ID
-//      override val evEntity: ClassTag[Foo] = classTag[Foo]
-//      override lazy val evID: ClassTag[ID] = classTag[ShortUUID]
-//      override lazy val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
-//      override def nextId: TryV[TID] = tag( ShortUUID() ).right
-//      override def fromString( idstr: String ): ID = ShortUUID( idstr )
-//    }
-
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo,  Foo#TID] {
       override def get( f: Foo ): Foo#TID = f.id

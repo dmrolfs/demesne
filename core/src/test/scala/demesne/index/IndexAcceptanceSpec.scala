@@ -25,8 +25,6 @@ import demesne.testkit.concurrent.CountDownFunction
 object IndexAcceptanceSpec {
   case class Foo( override val id: TaggedID[ShortUUID], override val name: String, foo: String, bar: Int ) extends Entity {
     override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
     def toSummary: Foo.Summary = Foo.Summary( this.id, Foo.Summary.foobar(this.foo, this.bar) )
   }
 

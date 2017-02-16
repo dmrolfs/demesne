@@ -33,8 +33,6 @@ object EntityAggregateModuleSpec extends LazyLogging {
 
   trait Foo extends Entity {
     override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
 
     def isActive: Boolean
     def f: Int
@@ -45,7 +43,7 @@ object EntityAggregateModuleSpec extends LazyLogging {
   object Foo extends EntityLensProvider[Foo] {
     implicit val identifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
       override def nextTID: TryV[TID] = tag( ShortUUID() ).right
-      override def idFromString( idRep: String ): ID = ShortUUID( idRep )
+      override def idFromString( idRep: String ): ID = ShortUUID fromString idRep 
     }
 
 

@@ -143,8 +143,6 @@ with OptionValues {
 object AggregateRootFunctionalSpec {
   trait Foo extends Entity with Equals {
     override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
 
     def f: Int
     def b: Double
@@ -200,7 +198,7 @@ object AggregateRootFunctionalSpec {
 
     implicit val fooIdentifying = new EntityIdentifying[Foo] {
       override def nextTID: TryV[TID] = tag( ShortUUID() ).right
-      override def idFromString( idRep: String ): ShortUUID = ShortUUID( idRep )
+      override def idFromString( idRep: String ): ShortUUID = ShortUUID fromString idRep
     }
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo,  Foo#TID] {
