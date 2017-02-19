@@ -273,6 +273,8 @@ object AggregateRootFunctionalSpec {
         }
 
         override def name: String = FooModule.shardName
+        override type S = State
+        override val identifying: Identifying[State] = State.stateIdentifying
         //      override def aggregateRootProps( implicit model: DomainModel ): Props = FooModule.FooActor.props( model, this )
         override val toString: String = "FooAggregateRootType"
         override def passivateTimeout: Duration = 1.seconds

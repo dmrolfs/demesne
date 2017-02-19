@@ -46,8 +46,8 @@ object AggregateRoot extends LazyLogging {
   }
 }
 
-abstract class AggregateRoot[S, I0](
-  implicit identifying: Identifying.Aux[S, I0],
+abstract class AggregateRoot[S, I](
+  implicit identifying: Identifying.Aux[S, I],
   evState: ClassTag[S] //,
 //  evID: ClassTag[I0]
 ) extends PersistentActor
@@ -83,7 +83,7 @@ with ActorLogging {
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
-  type ID = I0
+  type ID = I
   type TID = TaggedID[ID]
   lazy val evTID: ClassTag[TID] = classTag[TID]
 //  lazy val evTID: ClassTag[TID] = {

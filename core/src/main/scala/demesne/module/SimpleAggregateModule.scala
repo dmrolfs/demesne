@@ -15,7 +15,10 @@ import demesne.repository.{AggregateRootProps, CommonClusteredRepository, Common
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 
-abstract class SimpleAggregateModule[S, I]( implicit override val identifying: Identifying.Aux[S, I], val evState: ClassTag[S] )
+abstract class SimpleAggregateModule[S0, I0](
+  implicit override val identifying: Identifying.Aux[S0, I0],
+  val evState: ClassTag[S0]
+)
   extends AggregateRootModule()( identifying ) { module =>
 //  override def nextId: TryV[TID] = {
 //    import scala.reflect._
@@ -54,6 +57,9 @@ abstract class SimpleAggregateModule[S, I]( implicit override val identifying: I
     override def startTask: StartTask = module.startTask
 
 //    override lazy val identifying: Identifying[_] = module.identifying
+
+    override type S = S0
+    override val identifying: Identifying[S] = module.identifying
 
     override def repositoryProps( implicit model: DomainModel ): Props = {
       environment match {

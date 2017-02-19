@@ -22,15 +22,14 @@ object AggregateRootType {
 
 abstract class AggregateRootType extends Equals with LazyLogging {
   def name: String
-  def repositoryName: String = name // org.atteo.evo.inflector.English.plural( name )
+  def repositoryName: String = name
 
   def startTask: StartTask = StartTask.empty( name )
 
   def repositoryProps( implicit model: DomainModel ): Props
 
-//  type S
-//  type ID
-//  val identifying: Identifying.Aux[S, ID]
+  type S
+  val identifying: Identifying[S]
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {

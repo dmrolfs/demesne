@@ -85,6 +85,8 @@ object RegistrationSagaModule extends SagaModule[RegistrationSagaState, Registra
 
   object RegistrationSagaType extends AggregateRootType {
     override def name: String = module.shardName
+    override type S = RegistrationSagaState
+    override val identifying: Identifying[S] = RegistrationSagaState.identifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 

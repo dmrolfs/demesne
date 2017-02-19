@@ -23,6 +23,9 @@ abstract class SimpleTestModule[T, I0]( implicit override val identifying: Ident
     new AggregateRootType {
       override val name: String = module.name
 
+      override type S = T
+      override val identifying: Identifying[T] = module.identifying
+
       override def repositoryProps( implicit model: DomainModel ): Props = {
         CommonLocalRepository.props( model, this, SimpleTestActor.props(_, _) )
       }

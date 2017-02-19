@@ -150,6 +150,8 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
 
   object ConferenceType extends AggregateRootType {
     override val name: String = module.shardName
+    override type S = ConferenceState
+    override val identifying: Identifying[S] = ConferenceState.identifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
