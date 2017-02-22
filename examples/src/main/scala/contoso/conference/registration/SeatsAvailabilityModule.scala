@@ -110,7 +110,7 @@ object SeatsAvailabilityState {
     original ++ newRemainingSeats
   }
 
-  implicit val seatsAvailabilityIdentifying = new Identifying[SeatsAvailabilityState] with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
+  implicit val identifying = new Identifying[SeatsAvailabilityState] with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
     override val idTag: Symbol = 'seatsAvailability
 
     override def nextTID: TryV[TID] = {
@@ -145,6 +145,9 @@ object SeatsAvailabilityModule extends AggregateRootModule[SeatsAvailabilityStat
 
   object SeatsAvailabilityType extends AggregateRootType {
     override def name: String = module.shardName
+    override type S = SeatsAvailabilityState
+    override val identifying: Identifying[S] = SeatsAvailabilityState.identifying
+
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 

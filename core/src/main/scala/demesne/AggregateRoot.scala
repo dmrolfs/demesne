@@ -46,8 +46,8 @@ object AggregateRoot extends LazyLogging {
   }
 }
 
-abstract class AggregateRoot[S, I0](
-  implicit identifying: Identifying.Aux[S, I0],
+abstract class AggregateRoot[S, I](
+  implicit identifying: Identifying.Aux[S, I],
   evState: ClassTag[S] //,
 //  evID: ClassTag[I0]
 ) extends PersistentActor
@@ -83,18 +83,9 @@ with ActorLogging {
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
-  type ID = I0
+  type ID = I
   type TID = TaggedID[ID]
   lazy val evTID: ClassTag[TID] = classTag[TID]
-//  lazy val evTID: ClassTag[TID] = {
-//    rootType.identifying.bridgeTidClassTag[TID] match {
-//      case \/-( ev ) => ev
-//      case -\/( ex ) => {
-//        log.error( ex, "failed to bridge TID types from rootType:[{}] into aggregate:[{}]", rootType, persistenceId )
-//        throw ex
-//      }
-//    }
-//  }
 
   lazy val aggregateId: TID = aggregateIdFromPath()
 
@@ -102,21 +93,14 @@ with ActorLogging {
     val p = self.path.toStringWithoutAddress
     val sepPos = p lastIndexOf '/'
     val aidRep = p drop ( sepPos + 1 )
-    val aid = identifying.tidFromString( aidRep )
-//    val aid = rootType.identifying.safeParseTid[TID]( aidRep )
-    log.debug( "#TEST aggregateId:[{}] from rep:[{}] in path:[{}]", aid, aidRep, p )
-    aid
+    identifying.tidFromString( aidRep )
   }
 
   override lazy val persistenceId: String = persistenceIdFromPath() // self.path.toStringWithoutAddress
 
   // assumes the identifier component of the aggregate path contains only the id and not a tagged id.
 //  val PathComponents = """^.*\/(.+)$""".r
-  def persistenceIdFromPath(): String = {
-    val pid = aggregateIdFromPath().toString
-    log.debug( "#TEST persistenceIdFromPath: persistenceId:[{}] from path:[{}] and rootType:[{}]", pid, self.path.toStringWithoutAddress, rootType.name )
-    pid
-  }
+  def persistenceIdFromPath(): String = aggregateIdFromPath().toString
 
   def state: S
   def state_=( newState: S ): Unit

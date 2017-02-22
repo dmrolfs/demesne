@@ -51,6 +51,9 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
   class PostType extends AggregateRootType {
     override val name: String = module.shardName
 
+    override type S = Post
+    override val identifying: Identifying[Post] = Post.identifying
+
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.clusteredProps( model )
 
     override def indexes: Seq[IndexSpecification] = {

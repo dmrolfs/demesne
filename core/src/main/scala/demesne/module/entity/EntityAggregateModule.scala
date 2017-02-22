@@ -7,7 +7,7 @@ import akka.event.LoggingReceive
 import scalaz.{-\/, \/, \/-}
 import shapeless._
 import com.typesafe.scalalogging.LazyLogging
-import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying}
+import omnibus.archetype.domain.model.core.Entity
 import omnibus.akka.publish.EventPublisher
 import omnibus.commons.builder.HasBuilder
 import omnibus.commons.TryV
@@ -116,8 +116,6 @@ object EntityAggregateModule extends LazyLogging {
 
     class ModuleBuilder extends HasBuilder[CC]{
       object P {
-//        object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
-//        object Tag extends OptParam[Symbol]( identifying.idTag )
         object Props extends Param[AggregateRootProps]
         object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
         object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
@@ -138,7 +136,6 @@ object EntityAggregateModule extends LazyLogging {
       override val gen = Generic[CC]
 
       override val fieldsContainer = createFieldsContainer(
-//        Tag ::
         PProps ::
         P.PassivateTimeout ::
         P.SnapshotPeriod ::
@@ -158,7 +155,6 @@ object EntityAggregateModule extends LazyLogging {
     // Impl CC required to be within BuilderFactory class in order to avoid the existential type issue preventing matching
     // of L <: HList inferred types in shapeless Generic[CC] and HasBuilder
     case class EntityAggregateModuleImpl(
-//      override val aggregateIdTag: Symbol,
       override val aggregateRootPropsOp: AggregateRootProps,
       override val passivateTimeout: Duration,
       override val snapshotPeriod: Option[FiniteDuration],
@@ -200,10 +196,6 @@ object EntityAggregateModule extends LazyLogging {
 
 abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override val identifying: Identifying.Aux[E, E#ID] )
   extends SimpleAggregateModule[E, E#ID] { module =>
-//  override val identifying: EntityIdentifying[E] = implicitly[EntityIdentifying[E]]
-
-//  override type ID = E#ID
-//  override def nextId: TryV[TID] = identifying.nextId
 
   type Protocol <: EntityProtocol[ID]
   val protocol: Protocol
@@ -223,19 +215,6 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
   }
 
   final def triedToEntity( from: Any ): Option[E] = TryV.unsafeGet( \/ fromTryCatchNonFatal { toEntity( from ) } )
-//    \/ fromTryCatchNonFatal { toEntity( from ) } match {
-//      case \/-(to) => to
-//      case -\/(ex) => {
-//        logger.error(
-//          s"failed to convert Added.info type[${from.getClass.getCanonicalName}] " +
-//            s"to entity type[${module.evState.runtimeClass.getCanonicalName}]",
-//          ex
-//        )
-//
-//        throw ex
-//      }
-//    }
-//  }
 
   class EntityAggregateRootType(
     name: String,
@@ -254,12 +233,9 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
   abstract class EntityAggregateActor( implicit identifying: Identifying.Aux[E, E#ID] )
     extends AggregateRoot[E, E#ID]()(
       identifying,
-      evState //,
-//      the[ClassTag[E#ID]]
+      evState
     ) {
     publisher: AggregateRoot.Provider with EventPublisher =>
-    // override def tidFromPersistenceId(idstr: String ): TID = identifying.safeParseId[ID]( idstr )( identifying.evID )
-
     override def acceptance: Acceptance = entityAcceptance
 
     def entityAcceptance: Acceptance = {

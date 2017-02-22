@@ -11,7 +11,6 @@ import demesne.repository.CommonLocalRepository
 
 abstract class SimpleTestModule[T, I0]( implicit override val identifying: Identifying.Aux[T, I0] )
   extends AggregateRootModule[T, I0] { module =>
-  override type ID = I0
   def name: String
   def indexes: Seq[IndexSpecification]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
@@ -22,6 +21,9 @@ abstract class SimpleTestModule[T, I0]( implicit override val identifying: Ident
   override def rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.name
+
+      override type S = T
+      override val identifying: Identifying[T] = module.identifying
 
       override def repositoryProps( implicit model: DomainModel ): Props = {
         CommonLocalRepository.props( model, this, SimpleTestActor.props(_, _) )

@@ -158,7 +158,7 @@ case class OrderState(
 }
 
 object OrderState {
-  implicit val orderIdentifying = new Identifying[OrderState] with ShortUUID.ShortUuidIdentifying[OrderState] {
+  implicit val identifying = new Identifying[OrderState] with ShortUUID.ShortUuidIdentifying[OrderState] {
     override val idTag: Symbol = 'order
     override def tidOf( s: OrderState ): TID = s.id
   }
@@ -195,6 +195,8 @@ object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =
 
   object OrderType extends AggregateRootType {
     override val name: String = module.shardName
+    override type S = OrderState
+    override val identifying: Identifying[S] = OrderState.identifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
