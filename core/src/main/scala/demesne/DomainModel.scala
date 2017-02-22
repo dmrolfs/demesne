@@ -196,26 +196,31 @@ object DomainModel {
     )(
       implicit ec: ExecutionContext
     ): Future[Seq[(IndexSpecification, IndexEnvelope)]] = {
-      logger.debug( "establishing indexes for rootType:[{}] with supervisor:[{}]", rootType, supervisor.path.name )
+      if ( rootType.indexes.isEmpty ) {
+        logger.debug( "no indexes for rootType:[{}]", rootType )
+        Future successful Seq.empty[(IndexSpecification, IndexEnvelope)]
+      } else {
+        logger.debug( "establishing indexes for rootType:[{}] with supervisor:[{}]", rootType, supervisor.path.name )
 
-      val result = rootType.indexes map { spec =>
-        for {
-          registration <- supervisor.ask( RegisterIndex(rootType, spec) )( indexBudget ).mapTo[IndexRegistered]
-          ref = registration.agentRef
-          envelope <- ref.ask( GetIndex )( agentBudget ).mapTo[IndexEnvelope]
-        } yield {
-          logger.debug(
-            "Registering root-type:[{}] name -> index:[{}] -> [{}]",
-            rootType.name,
-            spec.name,
-            envelope.payload.toString
-          )
+        val result = rootType.indexes map { spec =>
+          for {
+            registration <- supervisor.ask( RegisterIndex(rootType, spec) )( indexBudget ).mapTo[IndexRegistered]
+            ref = registration.agentRef
+            envelope <- ref.ask( GetIndex )( agentBudget ).mapTo[IndexEnvelope]
+          } yield {
+            logger.debug(
+              "Registering root-type:[{}] name -> index:[{}] -> [{}]",
+              rootType.name,
+              spec.name,
+              envelope.payload.toString
+            )
 
-          ( spec -> envelope )
+            ( spec -> envelope )
+          }
         }
-      }
 
-      Future sequence result
+        Future sequence result
+      }
     }
   }
 

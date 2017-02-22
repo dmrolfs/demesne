@@ -58,6 +58,7 @@ object IndexAggregate {
   )
 }
 
+//todo maybe leverage agent projection?
 /**
  * [[IndexAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are
  * [[demesne.index.Directive.Record]]ed. Recorded events are published via a distrubuted pub/sub mechanism to a relay who

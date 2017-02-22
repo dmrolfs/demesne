@@ -11,7 +11,6 @@ import demesne.repository.CommonLocalRepository
 
 abstract class SimpleTestModule[T, I0]( implicit override val identifying: Identifying.Aux[T, I0] )
   extends AggregateRootModule[T, I0] { module =>
-  override type ID = I0
   def name: String
   def indexes: Seq[IndexSpecification]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]

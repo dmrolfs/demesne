@@ -93,8 +93,7 @@ abstract class AggregateRootType extends Equals with LazyLogging {
         else {
           ( that.## == this.## ) &&
           ( that canEqual this ) &&
-          ( this.name == that.name ) // &&
-//          ( this.identifying == that.identifying )
+          ( this.name == that.name )
         }
       }
 
@@ -102,7 +101,7 @@ abstract class AggregateRootType extends Equals with LazyLogging {
     }
   }
 
-  override val hashCode: Int = 41 * ( 41 + name.## ) // + identifying.##
+  override val hashCode: Int = 41 * ( 41 + name.## )
 
   override def toString: String = name + "AggregateRootType"
 }
