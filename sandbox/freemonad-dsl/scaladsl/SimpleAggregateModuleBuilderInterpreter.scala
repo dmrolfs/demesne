@@ -6,9 +6,9 @@ import akka.actor.Actor.Receive
 import scalaz.{ Lens => _, _ }, Scalaz._
 import shapeless.{ Id => _, _ }
 // import shapeless.syntax.typeable._
-import peds.commons.V
-import peds.commons.log.Trace
-import peds.commons.util._
+import omnibus.commons.V
+import omnibus.commons.log.Trace
+import omnibus.commons.util._
 import demesne.{ AggregateRoot, AggregateRootModule }
 import demesne.module.{ AggregateRootProps, DemesneModuleError, SimpleAggregateModule }
 

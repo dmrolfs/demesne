@@ -4,7 +4,7 @@
 //import akka.cluster.sharding.ClusterSharding
 //import shapeless.Typeable
 //import com.typesafe.scalalogging.StrictLogging
-//import peds.commons.log.Trace
+//import omnibus.commons.log.Trace
 //
 //
 //package object factory extends StrictLogging {

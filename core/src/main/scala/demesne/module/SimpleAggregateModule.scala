@@ -1,40 +1,28 @@
 package demesne.module
 
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.reflect._
 import akka.actor.Props
 
 import scalaz._
 import Scalaz._
 import shapeless._
-import peds.commons.identifier.Identifying
-import peds.commons.builder._
-import peds.commons.TryV
+import omnibus.commons.identifier.Identifying
+import omnibus.commons.builder._
 import demesne._
 import demesne.index.IndexSpecification
 import demesne.repository.{AggregateRootProps, CommonClusteredRepository, CommonLocalRepository}
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
 
-
-abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends AggregateRootModule { module =>
-  override def nextId: TryV[TID] = {
-    import scala.reflect._
-    val tidTag = classTag[TID]
-    identifying.nextId flatMap { nid =>
-      nid match {
-        case tidTag( t ) => t.right
-        case t => new ClassCastException( s"${t} id-type is not of type ${nid.id.getClass.getCanonicalName}" ).left
-      }
-    }
-  }
+abstract class SimpleAggregateModule[S0, I0](
+  implicit override val identifying: Identifying.Aux[S0, I0],
+  val evState: ClassTag[S0]
+) extends AggregateRootModule()( identifying ) { module =>
 
   def indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification]
 
   def aggregateRootPropsOp: AggregateRootProps
 //todo why is this here?  def moduleProperties: Map[Symbol, Any] = Map.empty[Symbol, Any]
-
-  val evState: ClassTag[S] = implicitly[ClassTag[S]]
-  val identifying: Identifying[S] = implicitly[Identifying[S]]
 
   def passivateTimeout: Duration
   def snapshotPeriod: Option[FiniteDuration]
@@ -53,7 +41,8 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
 
     override def startTask: StartTask = module.startTask
 
-    override lazy val identifying: Identifying[_] = module.identifying
+    override type S = S0
+    override val identifying: Identifying[S] = module.identifying
 
     override def repositoryProps( implicit model: DomainModel ): Props = {
       environment match {
@@ -74,21 +63,20 @@ abstract class SimpleAggregateModule[S: ClassTag : Identifying] extends Aggregat
 }
 
 object SimpleAggregateModule {
-  def builderFor[S: ClassTag : Identifying]: BuilderFactory[S] = new BuilderFactory[S]
+  def builderFor[S: ClassTag, I]( implicit identifying: Identifying.Aux[S, I] ): BuilderFactory[S, I] = new BuilderFactory[S, I]
 
-  class BuilderFactory[S: ClassTag : Identifying] {
-    type CC = SimpleAggregateModuleImpl[S]
+  class BuilderFactory[S: ClassTag, I]( implicit identifying: Identifying.Aux[S, I] ) {
+    type CC = SimpleAggregateModuleImpl[S, I]
 
     def make: ModuleBuilder = new ModuleBuilder
 
     class ModuleBuilder extends HasBuilder[CC] {
       object P {
-        object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[S]].runtimeClass )
         object Props extends Param[AggregateRootProps]
         object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
         object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
         object StartTask extends OptParam[demesne.StartTask](
-          demesne.StartTask.empty( s"start ${implicitly[ClassTag[S]].runtimeClass.getCanonicalName}" )
+          demesne.StartTask.empty( s"start ${the[ClassTag[S]].runtimeClass.getCanonicalName}" )
         )
         object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
         object Indexes extends OptParam[Seq[IndexSpecification]]( Seq.empty[IndexSpecification] )
@@ -96,7 +84,6 @@ object SimpleAggregateModule {
 
       override val gen = Generic[CC]
       override val fieldsContainer = createFieldsContainer(
-        P.Tag ::
         P.Props ::
         P.PassivateTimeout ::
         P.SnapshotPeriod ::
@@ -109,37 +96,27 @@ object SimpleAggregateModule {
   }
 
 
-  final case class SimpleAggregateModuleImpl[S: ClassTag : Identifying](
-    override val aggregateIdTag: Symbol,
+  final case class SimpleAggregateModuleImpl[S, I](
     override val aggregateRootPropsOp: AggregateRootProps,
     override val passivateTimeout: Duration,
     override val snapshotPeriod: Option[FiniteDuration],
     override val startTask: demesne.StartTask,
     override val environment: AggregateEnvironment,
     override val indexes: Seq[IndexSpecification]
-  ) extends SimpleAggregateModule[S] with Equals { module =>
-    def bridgeIDClassTag[I: ClassTag]: ClassTag[I] = {
-      val lhs = implicitly[ClassTag[I]]
-      val rhs = identifying.evID
-      if ( lhs == rhs ) lhs
-      else throw new ClassCastException(
-        s"ID[${lhs.runtimeClass.getCanonicalName}] is equivalent to Identifying[T]#ID[${rhs.runtimeClass.getCanonicalName}]"
-      )
-    }
+  )(
+    implicit override val identifying: Identifying.Aux[S, I],
+    evState: ClassTag[S]
+  ) extends SimpleAggregateModule[S, I]()( identifying, evState ) with Equals { module =>
 
-    override type ID = identifying.ID
-    override def nextId: TryV[TID] = identifying.nextId
-
-    override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]
+    override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S, I]]
 
     override def equals( rhs: Any ): Boolean = rhs match {
-      case that: SimpleAggregateModuleImpl[S] => {
+      case that: SimpleAggregateModuleImpl[S, I] => {
         if ( this eq that ) true
         else {
           ( that.## == this.## ) &&
           ( that canEqual this ) &&
-          ( this.aggregateIdTag == that.aggregateIdTag ) &&
-          (this.indexes == that.indexes )
+          ( this.indexes == that.indexes )
         }
       }
 
@@ -148,8 +125,8 @@ object SimpleAggregateModule {
 
     override def hashCode: Int = {
       41 * (
-        41 + aggregateIdTag.##
-      ) + indexes.##
+        41 + indexes.##
+      )
     }
   }
 }

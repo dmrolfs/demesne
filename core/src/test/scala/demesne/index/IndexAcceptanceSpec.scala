@@ -9,12 +9,13 @@ import com.typesafe.config.Config
 
 import scalaz._
 import Scalaz._
+import shapeless.the
 import org.scalatest.concurrent.ScalaFutures
-import peds.akka.envelope._
-import peds.commons.identifier._
-import peds.commons.log.Trace
-import peds.archetype.domain.model.core.Entity
-import peds.commons.TryV
+import omnibus.akka.envelope._
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
+import omnibus.archetype.domain.model.core.Entity
+import omnibus.commons.TryV
 import demesne._
 import demesne.index.local.IndexLocalAgent
 import demesne.testkit.{AggregateRootSpec, SimpleTestModule}
@@ -24,8 +25,6 @@ import demesne.testkit.concurrent.CountDownFunction
 object IndexAcceptanceSpec {
   case class Foo( override val id: TaggedID[ShortUUID], override val name: String, foo: String, bar: Int ) extends Entity {
     override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
     def toSummary: Foo.Summary = Foo.Summary( this.id, Foo.Summary.foobar(this.foo, this.bar) )
   }
 
@@ -36,14 +35,9 @@ object IndexAcceptanceSpec {
       def foobar( foo: String, bar: Int ): String = foo + "-" + bar
     }
 
-    implicit lazy val fooIdentifying: Identifying[Foo] = new Identifying[Foo] {
-      override type ID = Foo#ID
+    implicit val fooIdentifying = new Identifying[Foo] with ShortUUID.ShortUuidIdentifying[Foo] {
       override val idTag: Symbol = 'foo
-      override def idOf( o: Foo ): TID = o.id
-      override lazy val evID: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
-      override lazy val evTID: ClassTag[TID] = ClassTag( classOf[TID] )
-      override def nextId: TryV[TID] = tag( ShortUUID() ).right
-      override def fromString( idstr: String ): ID = ShortUUID( idstr )
+      override def tidOf( f: Foo ): TID = f.id
     }
   }
 
@@ -59,30 +53,33 @@ object IndexAcceptanceSpec {
   }
 
 
-  object TestModule extends SimpleTestModule[Foo] { module =>
-    override type ID = Foo#ID
-    override lazy val evID: ClassTag[ID] = {
+  object TestModule extends SimpleTestModule[Foo, Foo#ID]()( Foo.fooIdentifying ) { module =>
 
-      implicitly[Identifying[Foo]].bridgeIdClassTag[ShortUUID] match {
-        case \/-( ctag ) => {
-          logger.info( "TestModule.evId = ctag = [{}]", ctag )
-          ctag
-        }
-        case -\/( ex ) => {
-          logger.error( "identifying couldn't provide sufficient ClassTag:", ex )
-          throw ex
-        }
-      }
-    }
-
-
-    override def nextId: TryV[TID] = implicitly[Identifying[Foo]].nextIdAs[TID]
+//    override type ID = Foo#ID
+//    override val evID: ClassTag[ID] = classTag[Foo#ID]
+//      implicitly[Identifying[Foo]].bridgeIdClassTag[ShortUUID] match {
+//        case \/-( ctag ) => {
+//          logger.info( "TestModule.evId = ctag = [{}]", ctag )
+//          ctag
+//        }
+//        case -\/( ex ) => {
+//          logger.error( "identifying couldn't provide sufficient ClassTag:", ex )
+//          throw ex
+//        }
+//      }
+//    }
 
 
-    override def parseId( idstr: String ): TID = {
-      val identifying = implicitly[Identifying[Foo]]
-      identifying.safeParseId[ID]( idstr )( evID )
-    }
+//    override def nextId: TryV[TID] = implicitly[Identifying[Foo]].nextIdAs[TID]
+
+
+//    override def parseId( idstr: String ): TID = the[Identifying[Foo]].tidFromString( idstr )
+//      val identifying = implicitly[Identifying[Foo]]
+//      identifying.safeParseId[ID]( idstr )( evID )
+//    }
+
+//    override def parseId(idstr: String): _root_.demesne.index.IndexAcceptanceSpec.TestModule.TID = ???
+
 
     override def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any] = {
       case Protocol.Add( id, name, foo, bar ) => Protocol.Added( id, name, foo, bar )
@@ -145,6 +142,8 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
 
   private val trace = Trace[IndexAcceptanceSpec]
 
+
+  override type State = Foo
   override type ID = Foo#ID
   override type Protocol = IndexAcceptanceSpec.Protocol.type
   override val protocol: Protocol = IndexAcceptanceSpec.Protocol
@@ -157,17 +156,18 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
   override type Fixture = TestFixture
 
   class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
-    override def nextId(): TID = {
-      Foo.fooIdentifying.nextIdAs[TID] match {
-        case \/-( r ) => r
-        case -\/( ex ) => {
-          logger.error( "failed to generate nextId", ex )
-          throw ex
-        }
-      }
-    }
+    override def nextId(): TID = TryV.unsafeGet( Foo.fooIdentifying.nextTID )
+//    {
+//      Foo.fooIdentifying.nextIdAs[TID] match {
+//        case \/-( r ) => r
+//        case -\/( ex ) => {
+//          logger.error( "failed to generate nextId", ex )
+//          throw ex
+//        }
+//      }
+//    }
 
-    override val module: AggregateRootModule = TestModule
+    override val module: AggregateRootModule[Foo, Foo#ID] = TestModule
 
     override def rootTypes: Set[AggregateRootType] = Set( module.rootType )
   }

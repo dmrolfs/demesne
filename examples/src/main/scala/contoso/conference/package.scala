@@ -7,7 +7,7 @@ import squants.DimensionlessConversions._
 import squants.market.USD
 import com.wix.accord._
 import com.wix.accord.dsl._
-import peds.commons.identifier._
+import omnibus.commons.identifier._
 
 
 package object conference {
@@ -54,7 +54,7 @@ package object conference {
 
   // Conference/Conference/ConferenceInfo.cs
   case class ConferenceInfo(
-    id: ConferenceModule.ID,
+    id: ConferenceModule.TID,
     name: String,
     slug: String,
     ownerName: String,

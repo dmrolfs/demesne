@@ -6,7 +6,7 @@ import akka.actor._
 import akka.contrib.pattern.ReliableProxy
 import akka.contrib.pattern.ReliableProxy.{Connecting, TargetChanged}
 import akka.event.LoggingReceive
-import peds.akka.envelope.Envelope
+import omnibus.akka.envelope.Envelope
 
 
 object IndexRelay extends com.typesafe.scalalogging.LazyLogging {

@@ -4,7 +4,7 @@ import akka.event.{ActorEventBus, SubchannelClassification}
 import akka.util.Subclassification
 import com.typesafe.scalalogging.LazyLogging
 import demesne.AggregateRootType
-import peds.akka.publish.Publisher
+import omnibus.akka.publish.Publisher
 
 
 object IndexBus extends LazyLogging {

@@ -2,8 +2,8 @@ package demesne.index
 
 import akka.actor.{ Actor, ActorLogging }
 import demesne.{ AggregateRootType, DomainModel }
-import peds.akka.publish.{ EventPublisher, Publisher, silent }
-import peds.commons.util.Chain._
+import omnibus.akka.publish.{ EventPublisher, Publisher, silent }
+import omnibus.commons.util.Chain._
 
 
 trait StackableIndexBusPublisher extends EventPublisher { outer: Actor with ActorLogging with DomainModel.Provider with AggregateRootType.Provider =>

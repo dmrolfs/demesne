@@ -1,6 +1,6 @@
 package demesne
 
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.reflect._
 import akka.actor.{ActorRef, ActorSystem, Props}
@@ -13,12 +13,12 @@ import shapeless._
 import com.typesafe.config.{Config, ConfigFactory}
 import demesne.repository.CommonLocalRepository
 import org.scalatest.OptionValues
-import peds.akka.publish.{EventPublisher, StackableStreamPublisher}
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
-import peds.akka.envelope._
-import peds.commons.TryV
-import peds.commons.identifier.{Identifying, ShortUUID, TaggedID}
-import peds.commons.log.Trace
+import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
+import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
+import omnibus.akka.envelope._
+import omnibus.commons.TryV
+import omnibus.commons.identifier.{Identifying, ShortUUID, TaggedID}
+import omnibus.commons.log.Trace
 
 
 /**
@@ -29,11 +29,12 @@ extends demesne.testkit.AggregateRootSpec[AggregateRootFunctionalSpec]
 with ScalaFutures
 with OptionValues {
   import AggregateRootFunctionalSpec._
-  import FooModule.FooActor.State
 
   private val trace = Trace[AggregateRootFunctionalSpec]
 
-  override type ID = Foo#ID
+
+  override type State = AggregateRootFunctionalSpec.State
+  override type ID = AggregateRootFunctionalSpec.Foo#ID
 
   override type Protocol = AggregateRootFunctionalSpec.Protocol.type
   override val protocol: Protocol = AggregateRootFunctionalSpec.Protocol
@@ -46,11 +47,11 @@ with OptionValues {
 
   class Fixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[Fixture]
-    override val module: AggregateRootModule = AggregateRootFunctionalSpec.FooModule
+    override val module: AggregateRootModule[State, ID] = AggregateRootFunctionalSpec.FooModule
 
     override def rootTypes: Set[AggregateRootType] = trace.block("rootTypes") { Set( AggregateRootFunctionalSpec.FooModule.rootType ) }
 
-    override def nextId(): TID = Foo.fooIdentifying.safeNextId
+    override def nextId(): TID = TryV.unsafeGet( State.stateIdentifying.nextTID )
 
     def infoFrom( ar: ActorRef )( implicit ec: ExecutionContext ): Future[Option[State]] = {
       import akka.pattern.ask
@@ -75,9 +76,8 @@ with OptionValues {
   }
 
   "AggregateRoot" should {
-    "save and reload a snapshot" in { f: Fixture =>
+    "save and reload a snapshot" taggedAs WIP in { f: Fixture =>
       import f._
-      import FooModule.FooActor.State
       import scala.concurrent.ExecutionContext.Implicits.global
 
       val e1 = State( tid, Foo(tid, "foo", "foo", b = 17), count = 1 )
@@ -100,9 +100,8 @@ with OptionValues {
       whenReady( infoFrom(entityRef) ) { actual => assertStates( actual.value, e2 ) }
     }
 
-    "recover and continue after passivation" taggedAs WIP in { f: Fixture =>
+    "recover and continue after passivation" in { f: Fixture =>
       import f._
-      import FooModule.FooActor.State
       import scala.concurrent.ExecutionContext.Implicits.global
 
       val p1 = State( tid, Foo(tid, "foo", "foo", b = 3.14159) )
@@ -144,8 +143,6 @@ with OptionValues {
 object AggregateRootFunctionalSpec {
   trait Foo extends Entity with Equals {
     override type ID = ShortUUID
-    override val evID: ClassTag[ID] = classTag[ShortUUID]
-    override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
 
     def f: Int
     def b: Double
@@ -200,14 +197,8 @@ object AggregateRootFunctionalSpec {
 
 
     implicit val fooIdentifying = new EntityIdentifying[Foo] {
-      override val evEntity: ClassTag[Foo] = classTag[Foo]
-      override val evID: ClassTag[ID] = classTag[ShortUUID]
-      override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
-      override def nextId: TryV[TID] = tag( ShortUUID() ).right
-      override def fromString( idstr: String ): ShortUUID = {
-        logger.debug( "identifying.fromString({}) = [{}]", idstr, ShortUUID(idstr) )
-        ShortUUID( idstr )
-      }
+      override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+      override def idFromString( idRep: String ): ShortUUID = ShortUUID fromString idRep
     }
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo,  Foo#TID] {
@@ -251,30 +242,39 @@ object AggregateRootFunctionalSpec {
   }
 
 
-  object Protocol extends AggregateProtocol[Foo#ID] {
+  object Protocol extends AggregateProtocol[State#ID] {
     case class LogWarning( override val targetId: LogWarning#TID, message: String ) extends Command
     case class Bar( override val targetId: Bar#TID, b: Double ) extends Command
     case class Barred( override val sourceId: Barred#TID, b: Double ) extends Event
     case class GetState( override val targetId: GetState#TID ) extends Command
-    case class MyState( override val sourceId: MyState#TID, state: Option[FooModule.FooActor.State] ) extends Event
+    case class MyState( override val sourceId: MyState#TID, state: Option[State] ) extends Event
   }
 
-  object FooModule extends AggregateRootModule { module =>
+  case class State( id: TaggedID[ShortUUID], foo: Foo, count: Int = 1 ) {
+    type ID = State.stateIdentifying.ID
+  }
+
+  object State {
+    implicit val stateIdentifying = new Identifying[State] with ShortUUID.ShortUuidIdentifying[State] {
+      override val idTag: Symbol = Symbol( "foo-state" )
+      override def tidOf( o: State ): TID = o.id
+    }
+  }
+
+  object FooModule extends AggregateRootModule[State, ShortUUID] { module =>
     private def trace: Trace[_] = Trace[FooModule.type]
 
     override type ID = ShortUUID
-    override def nextId: TryV[TID] = Foo.fooIdentifying.nextIdAs[TID]
 
     override val rootType: AggregateRootType = trace.block("rootType") {
       new AggregateRootType {
-
-        override lazy val identifying: Identifying[_] = Foo.fooIdentifying
-
         override def repositoryProps( implicit model: DomainModel ): Props = {
           CommonLocalRepository.props( model, this, FooActor.props(_, _) )
         }
 
         override def name: String = FooModule.shardName
+        override type S = State
+        override val identifying: Identifying[State] = State.stateIdentifying
         //      override def aggregateRootProps( implicit model: DomainModel ): Props = FooModule.FooActor.props( model, this )
         override val toString: String = "FooAggregateRootType"
         override def passivateTimeout: Duration = 1.seconds
@@ -288,19 +288,18 @@ object AggregateRootFunctionalSpec {
         Props( new FooActor( model, rootType ) with StackableStreamPublisher )
       }
 
-
-      case class State( id: TaggedID[ShortUUID], foo: Foo, count: Int = 1 )
       val fooLens: Lens[State, Foo] = lens[State] >> 'foo
       val countLens: Lens[State, Int] = lens[State] >> 'count
       val foob: Lens[State, Double] = Foo.bLens compose fooLens
       val fooAndCount = foob ~ countLens
+
     }
 
     class FooActor(
       override val model: DomainModel,
       override val rootType: AggregateRootType
-    ) extends AggregateRoot[Option[FooActor.State], ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
-      import FooActor.State
+    ) extends AggregateRoot[Option[State], ShortUUID]()( Identifying.optionIdentifying(State.stateIdentifying), classTag[Option[State]] )
+              with AggregateRoot.Provider { outer: EventPublisher =>
 
       override val acceptance: Acceptance = {
         case (Protocol.Barred(i, b), s) if s.isDefined => {
@@ -318,18 +317,9 @@ object AggregateRootFunctionalSpec {
         }
       }
 
-      // override def tidFromPersistenceId(idstr: String ): FooActor#TID = Foo.fooIdentifying.safeParseId[ShortUUID]( idstr )
-
       val id: TID = aggregateId
-//                    {
-//        logger.debug( "TEST:BEFORE safeParseId:::: persistenceIdFromPath=[{}]", persistenceIdFromPath() )
-//        val i = Foo.fooIdentifying.safeParseId[ShortUUID]( persistenceIdFromPath() )
-//        logger.debug( "TEST: i = [{}], classOf(i)=[{}]", i, i.getClass.getCanonicalName )
-//        Foo.fooIdentifying.tag( i )
-//      }
 
       override var state: Option[State] = None
-      override val evState: ClassTag[Option[State]] = ClassTag( classOf[Option[State]] )
 
       override def receiveCommand: Receive = LoggingReceive { around( action ) }
       val action: Receive = {

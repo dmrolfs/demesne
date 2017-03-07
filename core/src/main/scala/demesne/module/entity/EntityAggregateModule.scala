@@ -1,33 +1,37 @@
 package demesne.module.entity
 
 import scala.reflect._
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import akka.event.LoggingReceive
 
 import scalaz.{-\/, \/, \/-}
 import shapeless._
 import com.typesafe.scalalogging.LazyLogging
-import peds.archetype.domain.model.core.{Entity, EntityIdentifying}
-import peds.akka.publish.EventPublisher
-import peds.commons.builder.HasBuilder
-import peds.commons.TryV
-import demesne.{AggregateRoot, AggregateRootModule, AggregateRootType}
+import omnibus.archetype.domain.model.core.Entity
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.builder.HasBuilder
+import omnibus.commons.TryV
+import demesne.{AggregateRoot, AggregateRootType}
 import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent
 import demesne.module.{AggregateEnvironment, LocalAggregate, SimpleAggregateModule}
 import demesne.repository.AggregateRootProps
-
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import omnibus.commons.identifier.Identifying
+import omnibus.commons.util._
 
 
 object EntityAggregateModule extends LazyLogging {
   type MakeIndexSpec = Function0[Seq[IndexSpecification]]
   val makeEmptyIndexSpec: MakeIndexSpec = () => Seq.empty[IndexSpecification]
 
-  def makeSlugSpec[E <: Entity : EntityIdentifying](
+  def makeSlugSpec[E <: Entity](
     idLens: Lens[E, E#TID],
-    slugLens: Option[Lens[E, String]] = None
-  )(
+    slugLens: Option[Lens[E, String]] = None,
     infoToEntity: PartialFunction[Any, Option[E]]
+  )(
+    implicit identifying: Identifying.Aux[E, E#ID],
+    evE: ClassTag[E],
+    evID: ClassTag[E#ID]
   ): IndexSpecification = {
     def label( entity: E ): String = slugLens map { _.get( entity ) } getOrElse { idLens.get( entity ).get.toString }
 
@@ -64,12 +68,12 @@ object EntityAggregateModule extends LazyLogging {
       }
     } (
       ClassTag( classOf[String] ),
-      implicitly[EntityIdentifying[E]].evID,
-      implicitly[EntityIdentifying[E]].evID
+      evID,
+      evID
     )
   }
 
-  def triedToEntity[E <: Entity : EntityIdentifying](
+  def triedToEntity[E <: Entity: ClassTag](
     from: Any
   )(
     toEntity: PartialFunction[Any, Option[E]]
@@ -87,8 +91,8 @@ object EntityAggregateModule extends LazyLogging {
         case \/-( to ) => to
         case -\/( ex ) => {
           logger.error(
-            s"failed to convert Added.info type[${from.getClass.getCanonicalName}] " +
-              s"to entity type[${implicitly[EntityIdentifying[E]].evEntity.runtimeClass.getCanonicalName}]",
+            s"failed to convert Added.info type[${from.getClass.getName}] " +
+              s"to entity type[${the[ClassTag[E]].runtimeClass.getName}]",
             ex
           )
 
@@ -99,24 +103,25 @@ object EntityAggregateModule extends LazyLogging {
   }
 
 
-  def builderFor[E <: Entity : ClassTag : EntityIdentifying, EP <: EntityProtocol[E#ID]]: BuilderFactory[E, EP] = {
+  def builderFor[E <: Entity : ClassTag, EP <: EntityProtocol[E#ID]](
+    implicit identifying: Identifying.Aux[E, E#ID]
+  ): BuilderFactory[E, EP] = {
     new BuilderFactory[E, EP]
   }
 
-  class BuilderFactory[E <: Entity : ClassTag : EntityIdentifying, EP <: EntityProtocol[E#ID]] {
+  class BuilderFactory[E <: Entity : ClassTag, EP <: EntityProtocol[E#ID]]( implicit identifying: Identifying.Aux[E, E#ID] ) {
     type CC = EntityAggregateModuleImpl
 
     def make: ModuleBuilder = new ModuleBuilder
 
     class ModuleBuilder extends HasBuilder[CC]{
       object P {
-        object Tag extends OptParam[Symbol]( AggregateRootModule tagify implicitly[ClassTag[E]].runtimeClass )
         object Props extends Param[AggregateRootProps]
         object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
         object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
         object Protocol extends Param[EP]
         object StartTask extends OptParam[demesne.StartTask](
-          demesne.StartTask.empty( s"start ${implicitly[ClassTag[E]].runtimeClass.getCanonicalName}" )
+          demesne.StartTask.empty(s"start ${the[ClassTag[E]].runtimeClass.safeSimpleName}")
         )
         object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
         object Indexes extends OptParam[MakeIndexSpec]( makeEmptyIndexSpec )
@@ -131,7 +136,6 @@ object EntityAggregateModule extends LazyLogging {
       override val gen = Generic[CC]
 
       override val fieldsContainer = createFieldsContainer(
-        Tag ::
         PProps ::
         P.PassivateTimeout ::
         P.SnapshotPeriod ::
@@ -151,7 +155,6 @@ object EntityAggregateModule extends LazyLogging {
     // Impl CC required to be within BuilderFactory class in order to avoid the existential type issue preventing matching
     // of L <: HList inferred types in shapeless Generic[CC] and HasBuilder
     case class EntityAggregateModuleImpl(
-      override val aggregateIdTag: Symbol,
       override val aggregateRootPropsOp: AggregateRootProps,
       override val passivateTimeout: Duration,
       override val snapshotPeriod: Option[FiniteDuration],
@@ -163,8 +166,10 @@ object EntityAggregateModule extends LazyLogging {
       override val nameLens: Lens[E, String],
       override val slugLens: Option[Lens[E, String]],
       override val isActiveLens: Option[Lens[E, Boolean]]
+    )(
+      implicit override val identifying: Identifying.Aux[E, E#ID]
     ) extends EntityAggregateModule[E] with Equals {
-      override val evState: ClassTag[E] = implicitly[ClassTag[E]]
+      override val evState: ClassTag[E] = the[ClassTag[E]]
 
       override type Protocol = EP
       override lazy val indexes: Seq[IndexSpecification] = _indexes()
@@ -177,23 +182,20 @@ object EntityAggregateModule extends LazyLogging {
           else {
             ( that.## == this.## ) &&
             ( that canEqual this ) &&
-            ( this.aggregateIdTag == that.aggregateIdTag )
+            ( this.identifying.idTag == that.identifying.idTag )
           }
         }
 
         case _ => false
       }
 
-      override def hashCode: Int = 41 * ( 41 + aggregateIdTag.## )
+      override def hashCode: Int = 41 * ( 41 + identifying.idTag.## )
     }
   }
 }
 
-abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying] extends SimpleAggregateModule[E] { module =>
-  override val identifying: EntityIdentifying[E] = implicitly[EntityIdentifying[E]]
-
-  override type ID = E#ID
-  override def nextId: TryV[TID] = identifying.nextId
+abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override val identifying: Identifying.Aux[E, E#ID] )
+  extends SimpleAggregateModule[E, E#ID] { module =>
 
   type Protocol <: EntityProtocol[ID]
   val protocol: Protocol
@@ -212,20 +214,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
     case module.evState(s) => Option( s )
   }
 
-  final def triedToEntity( from: Any ): Option[E] = {
-    \/ fromTryCatchNonFatal { toEntity( from ) } match {
-      case \/-(to) => to
-      case -\/(ex) => {
-        logger.error(
-          s"failed to convert Added.info type[${from.getClass.getCanonicalName}] " +
-            s"to entity type[${module.evState.runtimeClass.getCanonicalName}]",
-          ex
-        )
-
-        throw ex
-      }
-    }
-  }
+  final def triedToEntity( from: Any ): Option[E] = TryV.unsafeGet( \/ fromTryCatchNonFatal { toEntity( from ) } )
 
   class EntityAggregateRootType(
     name: String,
@@ -241,9 +230,12 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag : EntityIdentifying]
   }
 
 
-  abstract class EntityAggregateActor extends AggregateRoot[E, E#ID] { publisher: AggregateRoot.Provider with EventPublisher =>
-    // override def tidFromPersistenceId(idstr: String ): TID = identifying.safeParseId[ID]( idstr )( identifying.evID )
-
+  abstract class EntityAggregateActor( implicit identifying: Identifying.Aux[E, E#ID] )
+    extends AggregateRoot[E, E#ID]()(
+      identifying,
+      evState
+    ) {
+    publisher: AggregateRoot.Provider with EventPublisher =>
     override def acceptance: Acceptance = entityAcceptance
 
     def entityAcceptance: Acceptance = {

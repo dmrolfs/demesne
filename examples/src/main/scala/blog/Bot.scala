@@ -5,10 +5,12 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
 import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
+
 import scalaz.{-\/, \/-}
 import demesne.DomainModel
-import peds.commons.identifier._
-import peds.commons.log.Trace
+import omnibus.commons.TryV
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
 import sample.blog.author.AuthorListingModule
 import sample.blog.post._
 
@@ -54,20 +56,27 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
 
   val create: Receive = LoggingReceive {
     case Tick => {
-      val addPost = for {
-        postId <- PostModule.PostActor.postIdentifying.nextIdAs[PostModule.TID]
-      } yield {
-        n += 1
-        log.info( s"bot CREATING post $n" )
-        val title = s"Post $n from $from"
-        postRegion( postId ) ! P.AddPost( postId, PostContent( currentAuthor, title, "..." ) )
-        context become edit( postId )
-      }
+      val postId = TryV unsafeGet Post.identifying.nextTID
+      n += 1
+      log.info( s"bot CREATING post $n" )
+      val title = s"Post $n from $from"
+      postRegion( postId ) ! P.AddPost( postId, PostContent( currentAuthor, title, "..." ) )
+      context become edit( postId )
 
-      addPost match {
-        case \/-(_) => ()
-        case -\/( ex ) => throw ex
-      }
+//      val addPost = for {
+//        postId <- Post.identifying.nextTID
+//      } yield {
+//        n += 1
+//        log.info( s"bot CREATING post $n" )
+//        val title = s"Post $n from $from"
+//        postRegion( postId ) ! P.AddPost( postId, PostContent( currentAuthor, title, "..." ) )
+//        context become edit( postId )
+//      }
+//
+//      addPost match {
+//        case \/-(_) => ()
+//        case -\/( ex ) => throw ex
+//      }
     }
   }
 

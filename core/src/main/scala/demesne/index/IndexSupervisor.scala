@@ -9,10 +9,10 @@ import akka.util.Timeout
 import com.typesafe.scalalogging.StrictLogging
 import demesne.{index, AggregateRootType}
 import demesne.index.IndexSupervisor.ConstituencyProvider
-import peds.akka.envelope.Envelope
-import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
-import peds.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
-import peds.commons.util._
+import omnibus.akka.envelope.Envelope
+import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
+import omnibus.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
+import omnibus.commons.util._
 
 
 /**

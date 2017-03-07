@@ -2,7 +2,7 @@ package demesne.index
 
 import scala.language.existentials
 import scala.reflect.ClassTag
-import peds.commons.identifier.TaggedID
+import omnibus.commons.identifier.TaggedID
 
 
 /**

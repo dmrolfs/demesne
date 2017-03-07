@@ -12,10 +12,10 @@ import scalaz._
 import Scalaz._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.Tag
-import peds.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
-import peds.commons.TryV
-import peds.commons.identifier.{Identifying, ShortUUID, TaggedID}
-import peds.commons.log.Trace
+import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
+import omnibus.commons.TryV
+import omnibus.commons.identifier.{Identifying, ShortUUID, TaggedID}
+import omnibus.commons.log.Trace
 import demesne._
 import demesne.index.IndexSupervisor._
 import demesne.index.local.IndexLocalAgent
@@ -57,14 +57,13 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
       new AggregateRootType {
         override def name: String = "foo"
 
-        override val identifying: Identifying[_] = new Identifying[ShortUUID] {
+        override type S = ShortUUID
+        override val identifying: Identifying[ShortUUID] = new Identifying[ShortUUID] {
           override type ID = ShortUUID
-          override val evID: ClassTag[ID] = ClassTag( classOf[ShortUUID] )
-          override val evTID: ClassTag[TID] = ClassTag( classOf[TaggedID[ShortUUID]])
           override val idTag: Symbol = 'foo
-          override def idOf( o: ShortUUID ): TID = tag( o )
-          override def fromString( idstr: String ): ShortUUID = ShortUUID( idstr )
-          override def nextId: TryV[TID] = tag( ShortUUID() ).right
+          override def tidOf( o: ShortUUID ): TID = tag( o )
+          override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+          override def idFromString( idRep: String ): ID = ShortUUID.fromString( idRep )
         }
 
         override def indexes: Seq[IndexSpecification] = specs

@@ -1,20 +1,19 @@
 package contoso.conference.registration
 
 import scala.annotation.tailrec
-import scala.reflect._
 import akka.actor.Props
 import akka.event.LoggingReceive
 
 import scalaz.Scalaz._
 import contoso.conference.SeatType
+import contoso.conference.registration.SeatAssignmentsProtocol.{SeatAssignment, SeatAssignmentRef}
 import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
 import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
-import peds.akka.publish.EventPublisher
-import peds.commons.TryV
-import peds.commons.identifier._
-import peds.commons.log.Trace
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
 
 
 object SeatAssignmentsProtocol extends AggregateProtocol[ShortUUID] {
@@ -74,15 +73,47 @@ object SeatAssignmentsProtocol extends AggregateProtocol[ShortUUID] {
   case class SeatUnassigned( override val sourceId: SeatUnassigned#TID, position: Int ) extends Event
 }
 
-object SeatAssignmentsModule extends AggregateRootModule { module =>
+
+case class SeatAssignmentsState( id: SeatAssignmentsState#TID, orderId: OrderModule.TID, seats: Seq[SeatAssignment] ) {
+  type ID = ShortUUID
+  type TID = TaggedID[ID]
+}
+
+object SeatAssignmentsState {
+  def updateSeats(
+    state: SeatAssignmentsState
+  )(
+    id: SeatAssignmentsState#TID,
+    position: Int,
+    seatTypeId: Option[SeatType.TID],
+    attendee: Option[PersonalInfo]
+  ): SeatAssignmentsState = {
+    if ( state.seats.isDefinedAt( position ) ) {
+      val effSeatType = seatTypeId getOrElse state.seats( position ).seatTypeId
+      val assignment = SeatAssignment(
+        seatTypeId = effSeatType,
+        attendee = attendee,
+        reference = Some( SeatAssignmentRef( id = id, position = position ) )
+      )
+      val newSeats = state.seats.take( position ) ++ ( assignment +: state.seats.drop( position + 1 ) )
+      state.copy( seats = newSeats )
+    } else {
+      state
+    }
+  }
+
+  implicit val identifying = new Identifying[SeatAssignmentsState] with ShortUUID.ShortUuidIdentifying[SeatAssignmentsState] {
+    override val idTag: Symbol = 'seatAssignment
+    override def tidOf( o: SeatAssignmentsState ): TID = o.id
+  }
+}
+
+
+object SeatAssignmentsModule extends AggregateRootModule[SeatAssignmentsState, SeatAssignmentsState#ID] { module =>
   import SeatAssignmentsProtocol._
   import com.wix.accord._
 
   val trace = Trace[SeatAssignmentsModule.type]
-
-  override type ID = ShortUUID
-  override def nextId: TryV[TID] = implicitly[Identifying[SeatAssignmentsState]].nextIdAs[TID]
-
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -96,46 +127,12 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
 
   object SeatAssignmentsType extends AggregateRootType {
     override def name: String = module.shardName
-    override lazy val identifying: Identifying[_] = seatsAssignmentsIdentifying
+    override type S = SeatAssignmentsState
+    override val identifying: Identifying[S] = SeatAssignmentsState.identifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
   override val rootType: AggregateRootType = SeatAssignmentsType
-
-
-  case class SeatAssignmentsState( id: TID, orderId: OrderModule.TID, seats: Seq[SeatAssignment] )
-
-  object SeatAssignmentsState {
-    def updateSeats(
-      state: SeatAssignmentsState
-    )(
-      id: module.TID,
-      position: Int,
-      seatTypeId: Option[SeatType.TID],
-      attendee: Option[PersonalInfo]
-    ): SeatAssignmentsState = {
-      if ( state.seats.isDefinedAt( position ) ) {
-        val effSeatType = seatTypeId getOrElse state.seats( position ).seatTypeId
-        val assignment = SeatAssignment(
-          seatTypeId = effSeatType,
-          attendee = attendee,
-          reference = Some( SeatAssignmentRef( id = id, position = position ) )
-        )
-        val newSeats = state.seats.take( position ) ++ ( assignment +: state.seats.drop( position + 1 ) )
-        state.copy( seats = newSeats )
-      } else {
-        state
-      }
-    }
-  }
-
-
-  implicit val seatsAssignmentsIdentifying: Identifying[SeatAssignmentsState] = {
-    new Identifying[SeatAssignmentsState] with ShortUUID.ShortUuidIdentifying[SeatAssignmentsState] {
-      override val idTag: Symbol = 'seatAssignment
-      override def idOf( o: SeatAssignmentsState ): TID = o.id
-    }
-  }
 
 
   object SeatAssignments {
@@ -152,13 +149,7 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
 
     private val trace = Trace( "SeatsAssignment", log )
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[SeatAssignmentsState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: SeatAssignmentsState = _
-    override val evState: ClassTag[SeatAssignmentsState] = ClassTag( classOf[SeatAssignmentsState] )
 
     case class SeatAssignmentsCreated(
       override val sourceId: SeatAssigned#TID,
@@ -259,6 +250,6 @@ object SeatAssignmentsModule extends AggregateRootModule { module =>
       }
     }
 
-    val unhandled: Receive = peds.commons.util.emptyBehavior[Any, Unit]
+    val unhandled: Receive = omnibus.commons.util.emptyBehavior[Any, Unit]
   }
 }

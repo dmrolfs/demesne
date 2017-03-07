@@ -3,7 +3,7 @@ package demesne
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import akka.actor.{ActorRef, ActorSystem, Cancellable, NotInfluenceReceiveTimeout}
-import peds.commons.identifier.TaggedID
+import omnibus.commons.identifier.TaggedID
 
 
 object SnapshotSpecification {

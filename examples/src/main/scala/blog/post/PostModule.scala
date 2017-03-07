@@ -9,11 +9,11 @@ import akka.persistence.AtLeastOnceDelivery
 import scalaz._
 import Scalaz._
 import shapeless._
-import peds.akka.envelope.Envelope
-import peds.akka.publish.EventPublisher
-import peds.commons.{TryV, Valid}
-import peds.commons.identifier._
-import peds.commons.log.Trace
+import omnibus.akka.envelope.Envelope
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.{TryV, Valid}
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
 import demesne._
 import demesne.index.local.IndexLocalAgent
 import demesne.index._
@@ -22,18 +22,37 @@ import demesne.repository.{AggregateRootRepository, EnvelopingAggregateRootRepos
 import sample.blog.post.{PostPrototol => P}
 
 
-object PostModule extends AggregateRootModule { module =>
-  private val trace = Trace[PostModule.type]
+case class Post(
+  id: TaggedID[ShortUUID],
+  content: PostContent = PostContent.empty,
+  published: Boolean = false,
+  isActive: Boolean = true
+) {
+  type ID = ShortUUID
+  type TID = TaggedID[ID]
+}
 
-  override type ID = ShortUUID
-  override def nextId: TryV[TID] = PostActor.postIdentifying.nextIdAs[TID]
+object Post {
+  val bodyLens = lens[Post] >> 'content >> 'body
+  val titleLens = lens[Post] >> 'content >> 'title
+
+  implicit val identifying = new Identifying[Post] with ShortUUID.ShortUuidIdentifying[Post] {
+    override val idTag: Symbol = 'post
+    override def tidOf( p: Post ): TID = p.id
+  }
+}
+
+
+object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
+  private val trace = Trace[PostModule.type]
 
   override val rootType: AggregateRootType = new PostType
 
   class PostType extends AggregateRootType {
     override val name: String = module.shardName
 
-    override lazy val identifying: Identifying[_] = PostActor.postIdentifying
+    override type S = Post
+    override val identifying: Identifying[Post] = Post.identifying
 
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.clusteredProps( model )
 
@@ -61,7 +80,6 @@ object PostModule extends AggregateRootModule { module =>
   abstract class Repository( model: DomainModel )
   extends EnvelopingAggregateRootRepository( model, module.rootType ) { actor: AggregateRootRepository.AggregateContext =>
     import sample.blog.author.AuthorListingModule
-
     import demesne.repository.{ StartProtocol => SP }
 
     var makeAuthorListing: () => ActorRef = _
@@ -80,7 +98,6 @@ object PostModule extends AggregateRootModule { module =>
     }
 
     override def aggregateProps: Props = trace.block( "aggregateProps" ) {
-//      throw new IllegalArgumentException( "LOOK AT FN STACK" )
       log.debug( "PostModule: making PostActor Props with model:[{}] rootType:[{}] makeAuthorListing:[{}]", model, rootType, makeAuthorListing )
       PostActor.props( model, rootType, makeAuthorListing )
     }
@@ -100,7 +117,7 @@ object PostModule extends AggregateRootModule { module =>
 
   object PostActor {
     def props( model: DomainModel, rt: AggregateRootType, makeAuthorListing: () => ActorRef ): Props = trace.block(s"props(_,${rt}, $makeAuthorListing)") {
-      import peds.akka.publish._
+      import omnibus.akka.publish._
 
       Props(
         new PostActor( model, rt )
@@ -112,7 +129,7 @@ object PostModule extends AggregateRootModule { module =>
           lazy val authorListing: ActorRef = makeAuthorListing()
           log.debug( "POST CTOR authorListing = [{}]", authorListing )
 
-          import peds.commons.util.Chain._
+          import omnibus.commons.util.Chain._
 
           override def publish: Publisher = trace.block( "publish" ) {
             super.publish +> filter +> reliablePublisher( authorListing.path )
@@ -127,60 +144,31 @@ object PostModule extends AggregateRootModule { module =>
         }
       )
     }
-
-    case class State(
-      id: TaggedID[ShortUUID] = ShortUUID.nilUUID,
-      content: PostContent = PostContent.empty,
-      published: Boolean = false
-    )
-
-    object State {
-      val bodyLens = lens[State] >> 'content >> 'body
-      val titleLens = lens[State] >> 'content >> 'title
-    }
-
-    implicit val postIdentifying: Identifying[State] = new Identifying[State] {
-      override type ID = ShortUUID
-      override val idTag: Symbol = 'post
-      override val evID: ClassTag[ID] = classTag[ShortUUID]
-      override def idOf( o: State ): TID = o.id
-      override def fromString( idstr: String ): ID = ShortUUID( idstr )
-      override def nextId: TryV[TID] = tag( ShortUUID() ).right
-      override val evTID: ClassTag[TID] = classTag[TaggedID[ShortUUID]]
-    }
   }
 
 
   class PostActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[PostActor.State, ShortUUID] with AggregateRoot.Provider { outer: EventPublisher =>
-    import PostActor._
-
+  ) extends AggregateRoot[Post, Post#ID] with AggregateRoot.Provider { outer: EventPublisher =>
     private val trace = Trace( "Post", log )
 
-//    override def tidFromPersistenceId(idstr: String ): TID = {
-//      val identifying = implicitly[Identifying[State]]
-//      identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-//    }
-
-    override var state: State = State()
-    override val evState: ClassTag[State] = ClassTag( classOf[State] )
+    override var state: Post = _
 
     override val acceptance: Acceptance = {
-      case ( P.PostAdded(id, c), _ )=> State( id = id, content = c, published = false )
-      case ( P.BodyChanged(_, body: String), state ) => State.bodyLens.set( state )( body )
-      case ( P.TitleChanged(_, _, newTitle), state ) => State.titleLens.set( state )( newTitle )
+      case ( P.PostAdded(id, c), _ )=> Post( id = id, content = c, published = false )
+      case ( P.BodyChanged(_, body: String), state ) => Post.bodyLens.set( state )( body )
+      case ( P.TitleChanged(_, _, newTitle), state ) => Post.titleLens.set( state )( newTitle )
       case ( _: P.PostPublished, state ) => state.copy( published = true )
-      case ( _: P.Deleted, _ ) => State()
+      case ( _: P.Deleted, s ) if Option(s).nonEmpty => s.copy( isActive = false )
     }
 
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
-    import peds.akka.envelope._
+    import omnibus.akka.envelope._
 
     val quiescent: Receive = {
-      case P.GetContent(_)  => sender() !+ state.content
+      case P.GetContent(_)  => sender() !+ Option(state).map{ _.content }.getOrElse{ PostContent.empty }
       case P.AddPost( id, content ) if !content.isIncomplete  => trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
         persist( P.PostAdded( id, content ) ) { event =>
           trace.block( s"persist(${event})" ) {

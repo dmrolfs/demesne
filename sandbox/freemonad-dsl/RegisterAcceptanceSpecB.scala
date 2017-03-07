@@ -14,10 +14,10 @@ import demesne.index.local.RegisterLocalAgent
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
-import peds.akka.envelope._
-import peds.commons.identifier._
-import peds.commons.log.Trace
-import peds.akka.publish.{ EventPublisher, StackableStreamPublisher }
+import omnibus.akka.envelope._
+import omnibus.commons.identifier._
+import omnibus.commons.log.Trace
+import omnibus.akka.publish.{ EventPublisher, StackableStreamPublisher }
 
 
 class RegisterAcceptanceSpecB extends AggregateRootSpec[RegisterAcceptanceSpecB] with ScalaFutures with LazyLogging {

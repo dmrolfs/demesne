@@ -15,10 +15,10 @@ import com.typesafe.scalalogging.StrictLogging
 import demesne._
 import demesne.testkit._
 import org.scalatest.{Outcome, Tag}
-import peds.akka.envelope.{ComponentPath => EnvComponentPath, ComponentType => EnvComponentType, _}
-import peds.akka.publish.ReliablePublisher.ReliableMessage
-import peds.commons.identifier.{ShortUUID, TaggedID}
-import peds.commons.log.Trace
+import omnibus.akka.envelope.{ComponentPath => EnvComponentPath, ComponentType => EnvComponentType, _}
+import omnibus.akka.publish.ReliablePublisher.ReliableMessage
+import omnibus.commons.identifier.{ShortUUID, TaggedID}
+import omnibus.commons.log.Trace
 import sample.blog.author.AuthorListingModule.{GetPosts, Posts}
 import sample.blog.post.PostPrototol.PostPublished
 

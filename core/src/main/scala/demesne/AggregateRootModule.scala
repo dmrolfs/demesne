@@ -2,31 +2,29 @@ package demesne
 
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
-import peds.commons.TryV
-import peds.commons.identifier.{Identifying, TaggedID}
-import peds.commons.util._
+import omnibus.commons.TryV
+import omnibus.commons.identifier.{Identifying, TaggedID}
+import omnibus.commons.util._
 
 
-abstract class AggregateRootModule extends AggregateRootType.Provider with LazyLogging { module =>
-//  val identifying: Identifying[_]
+abstract class AggregateRootModule[S, I]( implicit val identifying: Identifying.Aux[S, I] )
+  extends AggregateRootType.Provider with LazyLogging { module =>
 
-  type ID
-
+  type ID = I
   type TID = TaggedID[ID]
-  def nextId: TryV[TID]
 
-  def aggregateIdTag: Symbol = _aggregateIdTag
+  def nextId: TryV[TID] = identifying.nextTID
+
   def shardName: String = _shardName
 
   def aggregateOf( id: Any  )( implicit model: DomainModel ): ActorRef = model( rootType = module.rootType, id )
 
-  implicit def tagId( id: ID ): TID = TaggedID( aggregateIdTag, id )
+  implicit def tagId( id: ID ): TID = identifying tag id
 
-  override def toString: String = s"${getClass.safeSimpleName}(${aggregateIdTag})"
+  override def toString: String = s"${getClass.safeSimpleName}(${identifying.idTag.name})"
 
 
-  private[this] lazy val _shardName: String = org.atteo.evo.inflector.English.plural( aggregateIdTag.name ).capitalize
-  private[this] lazy val _aggregateIdTag: Symbol = AggregateRootModule tagify getClass()
+  private[this] lazy val _shardName: String = org.atteo.evo.inflector.English.plural( identifying.idTag.name ).capitalize
 }
 
 object AggregateRootModule {
@@ -40,22 +38,5 @@ object AggregateRootModule {
 
   trait Event[I] extends EventLike {
     override type ID = I
-  }
-
-
-  val Module = """(\w+)Module""".r
-  val Actor = """(\w+)Actor""".r
-  val PersistentActor = """(\w+)PersistentActor""".r
-
-  def tagify( clazz: Class[_] ): Symbol = {
-    val tag = clazz.safeSimpleName match {
-      case Module(n) => n
-      case Actor(n) => n
-      case PersistentActor(n) => n
-      case n => n
-    }
-
-//    Symbol( tag(0).toLower + tag.drop(1) )
-    Symbol( tag )
   }
 }

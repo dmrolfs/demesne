@@ -3,8 +3,8 @@ package demesne.scaladsl
 import scala.reflect.ClassTag
 import scalaz.{ Lens => _, _ }, Scalaz._
 import shapeless.Lens
-import peds.commons.log.Trace
-import peds.commons.util._
+import omnibus.commons.log.Trace
+import omnibus.commons.util._
 import demesne.module.{ AggregateRootProps, DemesneModuleError }
 
 

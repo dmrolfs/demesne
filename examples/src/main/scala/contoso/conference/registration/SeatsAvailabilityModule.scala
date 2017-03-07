@@ -11,10 +11,10 @@ import contoso.registration.SeatQuantity
 import demesne._
 import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
 import demesne.repository.EnvelopingAggregateRootRepository
-import peds.commons.TryV
-import peds.commons.identifier._
-import peds.akka.publish.EventPublisher
-import peds.commons.log.Trace
+import omnibus.commons.TryV
+import omnibus.commons.identifier._
+import omnibus.akka.publish.EventPublisher
+import omnibus.commons.log.Trace
 import squants.{Dimensionless, Each}
 
 
@@ -83,19 +83,54 @@ object SeatsAvailabilityProtocol extends AggregateProtocol[ShortUUID] {
   ) extends Event
 }
 
+
+// Conference/Registration/SeatsAvailability.cs
+case class SeatsAvailabilityState(
+  id: SeatsAvailabilityState#TID,
+  remainingSeats: SeatsAvailabilityState.SeatTypesRemaining = Map(),
+  pendingReservations: SeatsAvailabilityState.PendingReservations = Map()
+) {
+  type ID = ConferenceModule.ID
+  type TID = TaggedID[ID]
+}
+
+
+object SeatsAvailabilityState {
+  type SeatTypesRemaining = Map[SeatType.TID, Dimensionless]
+  type PendingReservations = Map[OrderModule.TID, Seq[SeatQuantity]]
+
+  def addToRemainingSeats( original: SeatTypesRemaining, newAvailable: Set[SeatQuantity] ): SeatTypesRemaining = {
+    val newRemainingSeats = for {
+      avail <- newAvailable.toSeq
+      o <- original.get( avail.seatTypeId )
+    } yield {
+      val updatedSeats = o + avail.quantity
+      (avail.seatTypeId -> updatedSeats)
+    }
+    original ++ newRemainingSeats
+  }
+
+  implicit val identifying = new Identifying[SeatsAvailabilityState] with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
+    override val idTag: Symbol = 'seatsAvailability
+
+    override def nextTID: TryV[TID] = {
+      new IllegalStateException( "SeatsAvailability supports corresponding Conference so does not have independent ID" ).left
+    }
+
+    override def tidOf(o: SeatsAvailabilityState): TID = o.id
+  }
+}
+
+
+
 /**
  * Manages the availability of conference seats. Currently there is one SeatsAvailability instance per conference.
  *
  * Some of the instances of SeatsAvailability are highly contentious, as there could be several users trying to index
  * for the same conference at the same time.
  */
-object SeatsAvailabilityModule extends AggregateRootModule { module =>
+object SeatsAvailabilityModule extends AggregateRootModule[SeatsAvailabilityState, SeatsAvailabilityState#ID] { module =>
   val trace = Trace[SeatsAvailabilityModule.type]
-
-  override type ID = ConferenceModule.ID // SeatsAvailability supports corresponding Conference
-  override def nextId: TryV[TID] = {
-    new IllegalStateException( "SeatsAvailability supports corresponding Conference so does not have independent ID" ).left
-  }
 
 
   object Repository {
@@ -110,44 +145,13 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
 
   object SeatsAvailabilityType extends AggregateRootType {
     override def name: String = module.shardName
-    override lazy val identifying: Identifying[_] = seatsAvailabilityIdentifying
+    override type S = SeatsAvailabilityState
+    override val identifying: Identifying[S] = SeatsAvailabilityState.identifying
+
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
   override val rootType: AggregateRootType = SeatsAvailabilityType
-
-
-  implicit val seatsAvailabilityIdentifying: Identifying[SeatsAvailabilityState] = {
-    new Identifying[SeatsAvailabilityState] with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
-      override val idTag: Symbol = 'seatsAvailability
-      override def idOf( o: SeatsAvailabilityState ): TID = o.id
-    }
-  }
-
-
-  // Conference/Registration/SeatsAvailability.cs
-  case class SeatsAvailabilityState(
-    id: TID,
-    remainingSeats: SeatsAvailabilityState.SeatTypesRemaining = Map(),
-    pendingReservations: SeatsAvailabilityState.PendingReservations = Map()
-  )
-
-
-  object SeatsAvailabilityState {
-    type SeatTypesRemaining = Map[SeatType.TID, Dimensionless]
-    type PendingReservations = Map[OrderModule.TID, Seq[SeatQuantity]]
-
-    def addToRemainingSeats( original: SeatTypesRemaining, newAvailable: Set[SeatQuantity] ): SeatTypesRemaining = {
-      val newRemainingSeats = for {
-        avail <- newAvailable.toSeq
-        o <- original.get( avail.seatTypeId )
-      } yield {
-        val updatedSeats = o + avail.quantity
-        (avail.seatTypeId -> updatedSeats)
-      }
-      original ++ newRemainingSeats
-    }
-  }
 
 
   object SeatsAvailability {
@@ -166,13 +170,7 @@ object SeatsAvailabilityModule extends AggregateRootModule { module =>
 
     // override val indexBus: IndexBus = model.indexBus
 
-    // override def tidFromPersistenceId(idstr: String ): TID = {
-    //   val identifying = implicitly[Identifying[SeatsAvailabilityState]]
-    //   identifying.safeParseId[ID]( idstr )( classTag[ShortUUID] )
-    // }
-
     override var state: SeatsAvailabilityState = _
-    override val evState: ClassTag[SeatsAvailabilityState] = ClassTag( classOf[SeatsAvailabilityState] )
 
     override def acceptance: Acceptance = {
       // Conference/Registration/SeatsAvailability.cs[185-198]

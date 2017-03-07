@@ -6,9 +6,9 @@ import akka.cluster.Cluster
 import akka.cluster.pubsub.DistributedPubSub
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
-import peds.commons.util._
+import omnibus.commons.util._
 import demesne.EventLike
-import peds.commons.identifier.TaggedID
+import omnibus.commons.identifier.TaggedID
 
 
 object IndexAggregateProtocol {
@@ -58,6 +58,7 @@ object IndexAggregate {
   )
 }
 
+//todo maybe leverage agent projection?
 /**
  * [[IndexAggregate]] maintains the logical index for an Aggregate Root. Index keys to identifier values are
  * [[demesne.index.Directive.Record]]ed. Recorded events are published via a distrubuted pub/sub mechanism to a relay who

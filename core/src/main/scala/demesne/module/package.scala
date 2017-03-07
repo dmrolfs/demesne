@@ -1,7 +1,7 @@
 package demesne
 
 import scala.reflect.ClassTag
-import peds.commons.util._
+import omnibus.commons.util._
 
 
 /**

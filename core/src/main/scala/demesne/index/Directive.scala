@@ -1,6 +1,6 @@
 package demesne.index
 
-import peds.commons.util._
+import omnibus.commons.util._
 
 
 object Directive {
