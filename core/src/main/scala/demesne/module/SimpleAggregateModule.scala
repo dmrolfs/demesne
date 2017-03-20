@@ -46,7 +46,18 @@ abstract class SimpleAggregateModule[S0, I0](
 
     override def repositoryProps( implicit model: DomainModel ): Props = {
       environment match {
-        case ClusteredAggregate => CommonClusteredRepository.props( model, this, module.aggregateRootPropsOp )
+        case ClusteredAggregate( toSettings, toExtractEntityId, toExtractShardId ) => {
+          CommonClusteredRepository.props(
+            model,
+            this,
+            module.aggregateRootPropsOp
+          )(
+            toSettings( model.system ),
+            toExtractEntityId( this ),
+            toExtractShardId( this )
+          )
+        }
+
         case LocalAggregate => CommonLocalRepository.props( model, this, module.aggregateRootPropsOp )
       }
     }

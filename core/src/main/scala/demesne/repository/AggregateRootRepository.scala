@@ -3,18 +3,18 @@ package demesne.repository
 import scala.concurrent.{ExecutionContext, Future}
 import akka.Done
 import akka.actor._
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
+import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.cluster.sharding.ShardRegion.Passivate
 import akka.event.LoggingReceive
 import akka.pattern.pipe
 
 import scalaz._
 import Scalaz._
+import omnibus.akka.ActorStack
 import omnibus.akka.envelope._
 import omnibus.commons.Valid
 import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
-import omnibus.akka.ActorStack
 
 
 abstract class EnvelopingAggregateRootRepository(
@@ -55,6 +55,10 @@ object AggregateRootRepository {
   }
 
   trait ClusteredAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
+    def settings: ClusterShardingSettings = ClusterShardingSettings( model.system )
+    def extractEntityId: ShardRegion.ExtractEntityId = rootType.aggregateIdFor
+    def extractShardId: ShardRegion.ExtractShardId = rootType.shardIdFor
+
     override def initializeContext( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[Done] = {
       Future {
         val region = {
@@ -62,9 +66,9 @@ object AggregateRootRepository {
           .start(
             typeName = rootType.name,
             entityProps = aggregateProps,
-            settings = ClusterShardingSettings( model.system ),
-            extractEntityId = rootType.aggregateIdFor,
-            extractShardId = rootType.shardIdFor
+            settings = this.settings,
+            extractEntityId = this.extractEntityId,
+            extractShardId = this.extractShardId
           )
         }
 

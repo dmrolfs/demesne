@@ -3,7 +3,7 @@ import sbt._
 
 object Dependencies {
   object omnibus {
-    val version = "0.5.2"
+    val version = "0.5.3-SNAPSHOT"
     def module( id: String ) = "com.github.dmrolfs" %% s"omnibus-$id" % version
 
     val commons = module( "commons" )
@@ -50,9 +50,11 @@ object Dependencies {
   }
 
   object facility {
-    val uuid = "com.eaio.uuid" % "uuid" % "3.4"
+    // val uuid = "com.eaio.uuid" % "uuid" % "3.4"
+    val uuid = "com.github.stephenc.eaio-uuid" % "uuid" % "3.4.0"
     val bloomFilter = "com.github.alexandrnikitin" % "bloom-filter_2.11" % "0.8.0" withSources() withJavadoc()
     val config = "com.typesafe" % "config" % "1.3.1"
+    val ficus = "com.iheart" %% "ficus" % "1.4.0"
     val shapeless = "com.chuusai" %% "shapeless" % "2.3.2"
     val inflector = "org.atteo" % "evo-inflector" % "1.2.2"
     val squants = "org.typelevel"  %% "squants"  % "1.1.0"
@@ -76,6 +78,7 @@ object Dependencies {
   val commonDependencies = Seq(
     facility.uuid,
     facility.config,
+    facility.ficus,
     facility.shapeless,
     log.typesafe,
     log.logback.classic,
