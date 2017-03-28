@@ -11,7 +11,6 @@ import demesne.AggregateRootType
 sealed trait AggregateEnvironment
 
 case class ClusteredAggregate(
-  toSettings: ActorSystem => ClusterShardingSettings = (s: ActorSystem) => ClusterShardingSettings( s ),
   toExtractEntityId: AggregateRootType => ShardRegion.ExtractEntityId = (rt: AggregateRootType) => rt.aggregateIdFor,
   toExtractShardId: AggregateRootType => ShardRegion.ExtractShardId = (rt: AggregateRootType) => rt.shardIdFor
 ) extends AggregateEnvironment

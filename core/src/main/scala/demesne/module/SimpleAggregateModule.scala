@@ -3,6 +3,7 @@ package demesne.module
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.reflect._
 import akka.actor.Props
+import akka.cluster.sharding.ClusterShardingSettings
 
 import scalaz._
 import Scalaz._
@@ -31,9 +32,12 @@ abstract class SimpleAggregateModule[S0, I0](
 
   def environment: AggregateEnvironment
 
+  def clusterRoles: Set[String]
+
   class SimpleAggregateRootType(
     override val name: String,
     override val indexes: Seq[IndexSpecification],
+    override val clusterRoles: Set[String],
     environment: AggregateEnvironment
   ) extends AggregateRootType {
     override val passivateTimeout: Duration = module.passivateTimeout
@@ -46,13 +50,13 @@ abstract class SimpleAggregateModule[S0, I0](
 
     override def repositoryProps( implicit model: DomainModel ): Props = {
       environment match {
-        case ClusteredAggregate( toSettings, toExtractEntityId, toExtractShardId ) => {
+        case ClusteredAggregate( toExtractEntityId, toExtractShardId ) => {
           CommonClusteredRepository.props(
             model,
             this,
             module.aggregateRootPropsOp
           )(
-            toSettings( model.system ),
+            adaptClusterShardSettings( ClusterShardingSettings( model.system ) ),
             toExtractEntityId( this ),
             toExtractShardId( this )
           )
@@ -69,7 +73,7 @@ abstract class SimpleAggregateModule[S0, I0](
 
 
   override val rootType: AggregateRootType = {
-    new SimpleAggregateRootType( name = module.shardName, indexes = module.indexes, environment )
+    new SimpleAggregateRootType( name = module.shardName, indexes = module.indexes, clusterRoles = clusterRoles, environment )
   }
 }
 
@@ -90,6 +94,7 @@ object SimpleAggregateModule {
           demesne.StartTask.empty( s"start ${the[ClassTag[S]].runtimeClass.getCanonicalName}" )
         )
         object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
+        object ClusterRoles extends OptParam[Set[String]]( Set.empty[String] )
         object Indexes extends OptParam[Seq[IndexSpecification]]( Seq.empty[IndexSpecification] )
       }
 
@@ -100,6 +105,7 @@ object SimpleAggregateModule {
         P.SnapshotPeriod ::
         P.StartTask ::
         P.Environment ::
+        P.ClusterRoles ::
         P.Indexes ::
         HNil
       )
@@ -113,6 +119,7 @@ object SimpleAggregateModule {
     override val snapshotPeriod: Option[FiniteDuration],
     override val startTask: demesne.StartTask,
     override val environment: AggregateEnvironment,
+    override val clusterRoles: Set[String],
     override val indexes: Seq[IndexSpecification]
   )(
     implicit override val identifying: Identifying.Aux[S, I],

@@ -89,12 +89,7 @@ with ActorLogging {
 
   lazy val aggregateId: TID = aggregateIdFromPath()
 
-  def aggregateIdFromPath(): TID = {
-    val p = self.path.toStringWithoutAddress
-    val sepPos = p lastIndexOf '/'
-    val aidRep = p drop ( sepPos + 1 )
-    identifying.tidFromString( aidRep )
-  }
+  def aggregateIdFromPath(): TID = identifying tidFromString java.net.URLDecoder.decode( self.path.name, "utf-8" )
 
   override lazy val persistenceId: String = persistenceIdFromPath() // self.path.toStringWithoutAddress
 

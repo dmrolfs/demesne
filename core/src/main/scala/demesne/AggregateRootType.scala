@@ -2,7 +2,7 @@ package demesne
 
 import scala.concurrent.duration._
 import akka.actor.Props
-import akka.cluster.sharding.ShardRegion
+import akka.cluster.sharding.{ ClusterShardingSettings, ShardRegion }
 import akka.cluster.sharding.ShardRegion.Passivate
 import com.typesafe.scalalogging.LazyLogging
 import demesne.index.IndexSpecification
@@ -41,6 +41,10 @@ abstract class AggregateRootType extends Equals with LazyLogging {
     case r @ ReliableMessage( _, msg ) if aggregateIdFor.isDefinedAt( msg ) => ( aggregateIdFor(msg)._1, r )  // want MatchError on msg if not found
     case p @ Passivate( stop ) if aggregateIdFor.isDefinedAt( stop ) => ( aggregateIdFor(stop)._1, p )
   }
+
+  def clusterRoles: Set[String] = Set.empty[String]
+
+  def adaptClusterShardSettings( settings: ClusterShardingSettings ): ClusterShardingSettings = clusterRoles.foldLeft( settings ){ _ withRole _ }
 
   /**
     * Specify the maximum planned number of cluster nodes.
