@@ -1,11 +1,15 @@
 package demesne
 
+import akka.Done
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ActorRef, ActorSystem, Terminated}
+import akka.cluster.sharding.ShardRegion
 import akka.pattern.ask
 import akka.util.Timeout
+
 import scalaz._
 import Scalaz._
 import com.typesafe.config.Config
@@ -139,6 +143,14 @@ object DomainModel {
       }
     }
 
+    def shutdown: Future[Done] = {
+      aggregateRefs.values foreach { case RootTypeRef( ref, rt )  =>
+        logger.info( "shutting down aggregate: {}", rt.name )
+        ref ! ShardRegion.GracefulShutdown
+      }
+
+      Future successful Done
+    }
 
     /**
       * Returns the individual timeout budget components for aggregate type registration.

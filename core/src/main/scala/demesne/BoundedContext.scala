@@ -384,7 +384,14 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    override def shutdown(): Future[Terminated] = system.terminate()
+    override def shutdown(): Future[Terminated] = {
+      implicit val ec = system.dispatcher
+
+      for {
+        _ <- modelCell.shutdown
+        s <- system.terminate()
+      } yield s
+    }
 
     private def setupSupervisors()( implicit ec: ExecutionContext ): Future[Supervisors] = {
       import scala.concurrent.duration._
