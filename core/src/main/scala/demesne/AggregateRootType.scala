@@ -42,9 +42,11 @@ abstract class AggregateRootType extends Equals with LazyLogging {
     case p @ Passivate( stop ) if aggregateIdFor.isDefinedAt( stop ) => ( aggregateIdFor(stop)._1, p )
   }
 
-  def clusterRoles: Set[String] = Set.empty[String]
+  def clusterRole: Option[String] = None
 
-  def adaptClusterShardSettings( settings: ClusterShardingSettings ): ClusterShardingSettings = clusterRoles.foldLeft( settings ){ _ withRole _ }
+  def adaptClusterShardSettings( settings: ClusterShardingSettings ): ClusterShardingSettings = {
+    clusterRole.foldLeft( settings ){ _ withRole _ }
+  }
 
   /**
     * Specify the maximum planned number of cluster nodes.
@@ -107,5 +109,5 @@ abstract class AggregateRootType extends Equals with LazyLogging {
 
   override val hashCode: Int = 41 * ( 41 + name.## )
 
-  override def toString: String = name + "AggregateRootType"
+  override def toString: String = name
 }

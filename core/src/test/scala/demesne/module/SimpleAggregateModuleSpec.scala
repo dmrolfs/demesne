@@ -153,6 +153,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
         snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
         startTask = StartTask.empty( "simple" ),
         environment = LocalAggregate,
+        clusterRole = None,
         indexes = Seq.empty[IndexSpecification]
       )
 
@@ -176,6 +177,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
         snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
         startTask = StartTask.empty( "expected" ),
         environment = LocalAggregate,
+        clusterRole = None,
         indexes = Seq.empty[IndexSpecification]
       )
 

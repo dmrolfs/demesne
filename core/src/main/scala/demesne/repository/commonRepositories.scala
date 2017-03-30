@@ -1,16 +1,15 @@
 package demesne.repository
 
-import demesne.{AggregateRootType, DomainModel}
-import AggregateRootRepository.{ClusteredAggregateContext, LocalAggregateContext}
 import akka.actor.Props
 import akka.cluster.sharding.{ClusterShardingSettings, ShardRegion}
+import demesne.{AggregateRootType, DomainModel}
 
 
 /**
   * Created by rolfsd on 8/31/16.
   */
 abstract class CommonRepository( model: DomainModel, rootType: AggregateRootType, makeAggregateProps: AggregateRootProps )
-  extends EnvelopingAggregateRootRepository( model, rootType ) { outer: AggregateRootRepository.AggregateContext =>
+  extends EnvelopingAggregateRootRepository( model, rootType ) { outer: AggregateContext =>
   override def aggregateProps: Props = makeAggregateProps( model, rootType )
 }
 

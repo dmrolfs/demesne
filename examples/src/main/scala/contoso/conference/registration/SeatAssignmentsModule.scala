@@ -9,8 +9,7 @@ import contoso.conference.SeatType
 import contoso.conference.registration.SeatAssignmentsProtocol.{SeatAssignment, SeatAssignmentRef}
 import contoso.registration.{PersonalInfo, SeatQuantity}
 import demesne._
-import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
-import demesne.repository.EnvelopingAggregateRootRepository
+import demesne.repository._
 import omnibus.akka.publish.EventPublisher
 import omnibus.commons.identifier._
 import omnibus.commons.log.Trace

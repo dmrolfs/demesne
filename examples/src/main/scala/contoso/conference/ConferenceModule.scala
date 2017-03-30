@@ -18,8 +18,7 @@ import omnibus.akka.publish._
 import omnibus.commons.identifier._
 import omnibus.commons.log.Trace
 import demesne._
-import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
-import demesne.repository.EnvelopingAggregateRootRepository
+import demesne.repository._
 
 
 object ConferenceProtocol extends AggregateProtocol[ShortUUID] {

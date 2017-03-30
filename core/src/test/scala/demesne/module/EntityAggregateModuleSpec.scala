@@ -208,6 +208,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
         protocol = Protocol,
         startTask = StartTask.empty( "expected" ),
         environment = LocalAggregate,
+        clusterRole = None,
         _indexes = FooAggregateRoot.myIndexes,
         idLens = Foo.idLens,
         nameLens = Foo.nameLens,

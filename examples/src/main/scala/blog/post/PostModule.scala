@@ -17,8 +17,7 @@ import omnibus.commons.log.Trace
 import demesne._
 import demesne.index.local.IndexLocalAgent
 import demesne.index._
-import demesne.repository.AggregateRootRepository.{ClusteredAggregateContext, LocalAggregateContext}
-import demesne.repository.{AggregateRootRepository, EnvelopingAggregateRootRepository}
+import demesne.repository._
 import sample.blog.post.{PostPrototol => P}
 
 
@@ -78,7 +77,7 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
   }
 
   abstract class Repository( model: DomainModel )
-  extends EnvelopingAggregateRootRepository( model, module.rootType ) { actor: AggregateRootRepository.AggregateContext =>
+  extends EnvelopingAggregateRootRepository( model, module.rootType ) { actor: AggregateContext =>
     import sample.blog.author.AuthorListingModule
     import demesne.repository.{ StartProtocol => SP }
 
