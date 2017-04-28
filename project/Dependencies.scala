@@ -12,7 +12,7 @@ object Dependencies {
   }
 
   object akka {
-    val version = "2.4.17"
+    val version = "2.5.0"
     def module( id: String ) = "com.typesafe.akka" %% s"akka-$id" % version
 
     val actor = module( "actor" )
@@ -70,7 +70,7 @@ object Dependencies {
     }
 
     object persistence {
-      val inMemory = "com.github.dnvriend" %% "akka-persistence-inmemory" % "2.4.16.0"
+      val inMemory = "com.github.dnvriend" %% "akka-persistence-inmemory" % "2.5.0.0"
       // val testkit = "com.github.krasserm" % "akka-persistence-testkit_2.11" % "0.3.4"
     }
   }

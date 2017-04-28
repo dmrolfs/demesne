@@ -10,7 +10,7 @@ object BuildSettings {
     Seq(
       version := VERSION,
       organization := "com.github.dmrolfs",
-      crossScalaVersions := Seq( "2.12.1" ),
+      crossScalaVersions := Seq( "2.12.2" ),
       scalaVersion := crossScalaVersions{ (vs: Seq[String]) => vs.head }.value,
       // updateOptions := updateOptions.value.withCachedResolution(true),
       scalacOptions ++= Seq(
@@ -22,9 +22,9 @@ object BuildSettings {
         "-language:implicitConversions",
         // "-language:postfixOps",
         // "-Xlog-implicits",
-        "-Xlog-reflective-calls",
+        "-Xlog-reflective-calls"
         // "-Ywarn-adapted-args",
-        "-Xfatal-warnings"
+        // "-Xfatal-warnings"
       ),
       javacOptions ++= Seq( "-source", "1.7", "-target", "1.7" ),
       homepage := Some( url("http://github.com/dmrolfs/demesne") ),
