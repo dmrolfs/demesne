@@ -152,7 +152,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
         passivateTimeout = AggregateRootType.DefaultPassivation,
         snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
         startTask = StartTask.empty( "simple" ),
-        environment = LocalAggregate,
+        environment = AggregateEnvironment.Resolver.local,
         clusterRole = None,
         indexes = Seq.empty[IndexSpecification]
       )
@@ -176,7 +176,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
         passivateTimeout = AggregateRootType.DefaultPassivation,
         snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
         startTask = StartTask.empty( "expected" ),
-        environment = LocalAggregate,
+        environment = AggregateEnvironment.Resolver.local,
         clusterRole = None,
         indexes = Seq.empty[IndexSpecification]
       )

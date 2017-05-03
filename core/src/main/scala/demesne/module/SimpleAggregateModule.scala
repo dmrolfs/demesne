@@ -3,7 +3,7 @@ package demesne.module
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.reflect._
 import akka.actor.Props
-import akka.cluster.sharding.ClusterShardingSettings
+import akka.cluster.sharding.{ClusterShardingSettings, ShardRegion}
 
 import scalaz._
 import Scalaz._
@@ -30,7 +30,7 @@ abstract class SimpleAggregateModule[S0, I0](
 
   def startTask: demesne.StartTask = StartTask.empty( evState.runtimeClass.getCanonicalName )
 
-  def environment: AggregateEnvironment
+  def environment: AggregateEnvironment.Resolver
 
   def clusterRole: Option[String]
 
@@ -38,7 +38,7 @@ abstract class SimpleAggregateModule[S0, I0](
     override val name: String,
     override val indexes: Seq[IndexSpecification],
     override val clusterRole: Option[String],
-    environment: AggregateEnvironment
+    environment: AggregateEnvironment.Resolver
   ) extends AggregateRootType {
     override val passivateTimeout: Duration = module.passivateTimeout
     override val snapshotPeriod: Option[FiniteDuration] = module.snapshotPeriod
@@ -49,7 +49,7 @@ abstract class SimpleAggregateModule[S0, I0](
     override val identifying: Identifying[S] = module.identifying
 
     override def repositoryProps( implicit model: DomainModel ): Props = {
-      environment match {
+      environment( model ) match {
         case ClusteredAggregate( toExtractEntityId, toExtractShardId ) => {
           CommonClusteredRepository.props(
             model,
@@ -70,8 +70,13 @@ abstract class SimpleAggregateModule[S0, I0](
   }
 
 
-  override val rootType: AggregateRootType = {
-    new SimpleAggregateRootType( name = module.shardName, indexes = module.indexes, clusterRole = module.clusterRole, environment )
+  override def rootType: AggregateRootType = {
+    new SimpleAggregateRootType(
+      name = module.shardName,
+      indexes = module.indexes,
+      clusterRole = module.clusterRole,
+      environment = module.environment
+    )
   }
 }
 
@@ -91,7 +96,7 @@ object SimpleAggregateModule {
         object StartTask extends OptParam[demesne.StartTask](
           demesne.StartTask.empty( s"start ${the[ClassTag[S]].runtimeClass.getCanonicalName}" )
         )
-        object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
+        object Environment extends OptParam[AggregateEnvironment.Resolver]( AggregateEnvironment.Resolver.local )
         object ClusterRole extends OptParam[Option[String]]( None )
         object Indexes extends OptParam[Seq[IndexSpecification]]( Seq.empty[IndexSpecification] )
       }
@@ -112,13 +117,13 @@ object SimpleAggregateModule {
 
 
   final case class SimpleAggregateModuleImpl[S, I](
-    override val aggregateRootPropsOp: AggregateRootProps,
-    override val passivateTimeout: Duration,
-    override val snapshotPeriod: Option[FiniteDuration],
-    override val startTask: demesne.StartTask,
-    override val environment: AggregateEnvironment,
-    override val clusterRole: Option[String],
-    override val indexes: Seq[IndexSpecification]
+                                                    override val aggregateRootPropsOp: AggregateRootProps,
+                                                    override val passivateTimeout: Duration,
+                                                    override val snapshotPeriod: Option[FiniteDuration],
+                                                    override val startTask: demesne.StartTask,
+                                                    override val environment: AggregateEnvironment.Resolver,
+                                                    override val clusterRole: Option[String],
+                                                    override val indexes: Seq[IndexSpecification]
   )(
     implicit override val identifying: Identifying.Aux[S, I],
     evState: ClassTag[S]

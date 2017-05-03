@@ -123,7 +123,7 @@ object EntityAggregateModule extends LazyLogging {
         object StartTask extends OptParam[demesne.StartTask](
           demesne.StartTask.empty(s"start ${the[ClassTag[E]].runtimeClass.safeSimpleName}")
         )
-        object Environment extends OptParam[AggregateEnvironment]( LocalAggregate )
+        object Environment extends OptParam[AggregateEnvironment.Resolver]( AggregateEnvironment.Resolver.local )
         object ClusterRole extends OptParam[Option[String]]( None )
         object Indexes extends OptParam[MakeIndexSpec]( makeEmptyIndexSpec )
         object IdLens extends Param[Lens[E, E#TID]]
@@ -162,7 +162,7 @@ object EntityAggregateModule extends LazyLogging {
       override val snapshotPeriod: Option[FiniteDuration],
       override val protocol: EP,
       override val startTask: demesne.StartTask,
-      override val environment: AggregateEnvironment,
+      override val environment: AggregateEnvironment.Resolver,
       override val clusterRole: Option[String],
       _indexes: MakeIndexSpec,
       override val idLens: Lens[E, E#TID],
@@ -222,13 +222,13 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
   class EntityAggregateRootType(
     name: String,
     indexes: Seq[IndexSpecification],
-    environment: AggregateEnvironment
+    environment: AggregateEnvironment.Resolver
   ) extends SimpleAggregateRootType( name, indexes, module.clusterRole, environment ) {
     override def canEqual( that: Any ): Boolean = that.isInstanceOf[EntityAggregateRootType]
   }
 
-  override val rootType: AggregateRootType = {
-    new EntityAggregateRootType( name = module.shardName, indexes = module.indexes, environment )
+  override def rootType: AggregateRootType = {
+    new EntityAggregateRootType( name = module.shardName, indexes = module.indexes, environment = module.environment )
   }
 
 

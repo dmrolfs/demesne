@@ -207,7 +207,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
         snapshotPeriod = Some( AggregateRootType.DefaultSnapshotPeriod ),
         protocol = Protocol,
         startTask = StartTask.empty( "expected" ),
-        environment = LocalAggregate,
+        environment = AggregateEnvironment.Resolver.local,
         clusterRole = None,
         _indexes = FooAggregateRoot.myIndexes,
         idLens = Foo.idLens,
