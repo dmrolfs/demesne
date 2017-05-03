@@ -12,7 +12,7 @@ object Dependencies {
   }
 
   object akka {
-    val version = "2.5.0"
+    val version = "2.5.1"
     def module( id: String ) = "com.typesafe.akka" %% s"akka-$id" % version
 
     val actor = module( "actor" )

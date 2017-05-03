@@ -60,6 +60,8 @@ package object testkit {
       |  }
       |}
       |
+      |akka.cluster.distributed-data.durable.lmdb.dir = "./target/ddata"
+      |
       |akka.actor.debug {
       |  # enable function of Actor.loggable(), which is to log any received message
       |  # at DEBUG level, see the “Testing Actor Systems” section of the Akka
