@@ -3,7 +3,7 @@ package demesne.module.entity
 import demesne.{AggregateProtocol, AggregateRootModule}
 
 
-trait EntityProtocol[I] extends AggregateProtocol[I] { protocol =>
+abstract class EntityProtocol[I] extends AggregateProtocol[I] { protocol =>
 
   case class Add( override val targetId: Add#TID, info: Option[Any] = None ) extends Command
   case class Rename( override val targetId: Rename#TID, name: String ) extends Command
@@ -13,7 +13,7 @@ trait EntityProtocol[I] extends AggregateProtocol[I] { protocol =>
 
 
   def tags: Set[String] = Set.empty[String]
-  
+
   abstract class TaggedEvent extends Event {
     override def tags: Set[String] = protocol.tags
   }

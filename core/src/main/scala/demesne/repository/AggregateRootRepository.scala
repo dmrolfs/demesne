@@ -3,25 +3,24 @@ package demesne.repository
 import scala.concurrent.{ExecutionContext, Future}
 import akka.Done
 import akka.actor._
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
+import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.cluster.sharding.ShardRegion.Passivate
 import akka.event.LoggingReceive
 import akka.pattern.pipe
 
 import scalaz._
 import Scalaz._
+import omnibus.akka.ActorStack
 import omnibus.akka.envelope._
 import omnibus.commons.Valid
 import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
-import omnibus.akka.ActorStack
 
 
 abstract class EnvelopingAggregateRootRepository(
   model: DomainModel,
   rootType: AggregateRootType
-) extends AggregateRootRepository( model, rootType) with EnvelopingActor {
-  outer: AggregateRootRepository.AggregateContext =>
+) extends AggregateRootRepository( model, rootType) with EnvelopingActor { outer: AggregateContext =>
 
   override def repository: Receive = {
     case message => {
@@ -34,54 +33,6 @@ abstract class EnvelopingAggregateRootRepository(
 }
 
 
-object AggregateRootRepository {
-  trait AggregateContext {
-    def model: DomainModel
-    def rootType: AggregateRootType
-    def aggregateProps: Props
-    def aggregateFor( command: Any ): ActorRef
-    def loadContext()( implicit ec: ExecutionContext ): Future[Done] = Future successful Done
-    def initializeContext( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[Done] = Future successful Done
-  }
-
-  trait LocalAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
-    override def aggregateFor( command: Any ): ActorRef = {
-      if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
-        log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
-      }
-      val (id, _) = rootType aggregateIdFor command
-      context.child( id ) getOrElse { context.actorOf( aggregateProps, id ) }
-    }
-  }
-
-  trait ClusteredAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
-    override def initializeContext( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[Done] = {
-      Future {
-        val region = {
-          ClusterSharding( model.system )
-          .start(
-            typeName = rootType.name,
-            entityProps = aggregateProps,
-            settings = ClusterShardingSettings( model.system ),
-            extractEntityId = rootType.aggregateIdFor,
-            extractShardId = rootType.shardIdFor
-          )
-        }
-
-        log.debug( "cluster shard started for root-type:[{}] region:[{}]", rootType.name, region )
-        Done
-      }
-    }
-
-    override def aggregateFor( command: Any ): ActorRef = {
-      if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
-        log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
-      }
-      ClusterSharding( model.system ) shardRegion rootType.name
-    }
-  }
-}
-
 /** AggregateRootRepository for aggregate root actors. All client commands will go through this actor, who resolves/extracts the
   * aggregate's id from the command and either finds the aggregate or (if there is no such aggregate) creates the new
   * aggregate and delegates the command.
@@ -93,7 +44,7 @@ abstract class AggregateRootRepository( override val model: DomainModel, overrid
 extends Actor
 with ActorStack
 with ActorLogging {
-  outer: AggregateRootRepository.AggregateContext =>
+  outer: AggregateContext =>
 
   def handleLoad()( implicit ec: ExecutionContext ): Future[SP.Loaded] = outer.loadContext() map { _ => doLoad() }
 

@@ -9,8 +9,7 @@ import Scalaz._
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
-import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
-import demesne.repository.EnvelopingAggregateRootRepository
+import demesne.repository._
 import omnibus.commons.TryV
 import omnibus.commons.identifier._
 import omnibus.akka.publish.EventPublisher

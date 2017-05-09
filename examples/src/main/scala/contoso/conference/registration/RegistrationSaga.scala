@@ -10,8 +10,7 @@ import contoso.conference.ConferenceModule
 import contoso.conference.payments.PaymentSourceModule
 import contoso.registration.SeatQuantity
 import demesne._
-import demesne.repository.AggregateRootRepository.ClusteredAggregateContext
-import demesne.repository.EnvelopingAggregateRootRepository
+import demesne.repository._
 import omnibus.akka.envelope._
 import omnibus.akka.publish.EventPublisher
 import omnibus.commons.identifier._
