@@ -3,7 +3,7 @@ import sbt._
 
 object Dependencies {
   object omnibus {
-    val version = "0.5.3-SNAPSHOT"
+    val version = "0.5.3"
     def module( id: String ) = "com.github.dmrolfs" %% s"omnibus-$id" % version
 
     val commons = module( "commons" )
@@ -25,7 +25,7 @@ object Dependencies {
     val slf4j = module( "slf4j" )
     val testkit = module( "testkit" )
 
-    val kyro = "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.1"
+    val kyro = "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2"
     val leveldb = "org.iq80.leveldb" % "leveldb" % "0.9"
     val leveldbNative = "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8"
   }
@@ -42,22 +42,22 @@ object Dependencies {
     val typesafe = "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0"
 
     object logback {
-      val version = "1.2.1"
+      val version = "1.2.2"
       val classic = "ch.qos.logback" % "logback-classic" % version
     }
 
-    val slf4j = "org.slf4j" % "slf4j-api" % "1.7.21"
+    val slf4j = "org.slf4j" % "slf4j-api" % "1.7.25"
   }
 
   object facility {
     // val uuid = "com.eaio.uuid" % "uuid" % "3.4"
     val uuid = "com.github.stephenc.eaio-uuid" % "uuid" % "3.4.0"
-    val bloomFilter = "com.github.alexandrnikitin" % "bloom-filter_2.11" % "0.8.0" withSources() withJavadoc()
+    // val bloomFilter = "com.github.alexandrnikitin" % "bloom-filter_2.11" % "0.8.0" withSources() withJavadoc()
     val config = "com.typesafe" % "config" % "1.3.1"
     val ficus = "com.iheart" %% "ficus" % "1.4.0"
     val shapeless = "com.chuusai" %% "shapeless" % "2.3.2"
     val inflector = "org.atteo" % "evo-inflector" % "1.2.2"
-    val squants = "org.typelevel"  %% "squants"  % "1.1.0"
+    val squants = "org.typelevel"  %% "squants"  % "1.2.0"
     val accord = "com.wix" %% "accord-core" % "0.6.1"
   }
 
@@ -65,12 +65,12 @@ object Dependencies {
     val scalatest = "org.scalatest" %% "scalatest" % "3.0.1"
 
     object mockito {
-      val version = "2.7.5"
-      val core = "org.mockito" % "mockito-core" % "1.10.19"
+      val version = "2.7.22"
+      val core = "org.mockito" % "mockito-core" % version
     }
 
     object persistence {
-      val inMemory = "com.github.dnvriend" %% "akka-persistence-inmemory" % "2.5.0.0"
+      val inMemory = "com.github.dnvriend" %% "akka-persistence-inmemory" % "2.5.1.0"
       // val testkit = "com.github.krasserm" % "akka-persistence-testkit_2.11" % "0.3.4"
     }
   }
