@@ -6,7 +6,6 @@ import akka.actor._
 import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
 
-import scalaz.Scalaz._
 import com.github.nscala_time.time.Imports._
 import com.github.nscala_time.time.{Imports => joda}
 import com.typesafe.config.ConfigFactory
@@ -15,7 +14,6 @@ import contoso.registration.{OrderLine, SeatQuantity}
 import demesne._
 import demesne.repository._
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.TryV
 import omnibus.commons.identifier._
 import squants._
 

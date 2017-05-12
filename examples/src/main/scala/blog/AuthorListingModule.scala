@@ -2,12 +2,10 @@ package sample.blog.author
 
 import scala.collection.immutable
 import scala.concurrent.duration._
-import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, PoisonPill, Props, ReceiveTimeout}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.event.LoggingReceive
 
-import scalaz._
 import com.typesafe.scalalogging.LazyLogging
 import demesne.{BoundedContext, StartTask}
 import omnibus.akka.envelope.EnvelopingActor

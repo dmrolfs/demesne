@@ -2,7 +2,7 @@ package demesne
 
 import akka.actor.ActorRef
 import com.typesafe.scalalogging.LazyLogging
-import omnibus.commons.TryV
+import omnibus.commons.ErrorOr
 import omnibus.commons.identifier.{Identifying, TaggedID}
 import omnibus.commons.util._
 
@@ -13,7 +13,7 @@ abstract class AggregateRootModule[S, I]( implicit val identifying: Identifying.
   type ID = I
   type TID = TaggedID[ID]
 
-  def nextId: TryV[TID] = identifying.nextTID
+  def nextId: ErrorOr[TID] = identifying.nextTID
 
   def shardName: String = _shardName
 

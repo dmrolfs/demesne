@@ -3,7 +3,6 @@ package contoso.conference.registration
 import scala.concurrent.duration._
 import akka.actor._
 
-import scalaz.Scalaz._
 import com.github.nscala_time.time.Imports._
 import com.github.nscala_time.time.{Imports => joda}
 import contoso.conference.ConferenceModule

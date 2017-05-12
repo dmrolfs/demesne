@@ -1,21 +1,16 @@
 package demesne.index
 
-import akka.actor.ActorSystem
 
 import scala.concurrent.duration._
-import scala.reflect._
 import akka.testkit._
+import akka.actor.ActorSystem
 import com.typesafe.config.Config
 
-import scalaz._
-import Scalaz._
-import shapeless.the
 import org.scalatest.concurrent.ScalaFutures
 import omnibus.akka.envelope._
 import omnibus.commons.identifier._
 import omnibus.commons.log.Trace
 import omnibus.archetype.domain.model.core.Entity
-import omnibus.commons.TryV
 import demesne._
 import demesne.index.local.IndexLocalAgent
 import demesne.testkit.{AggregateRootSpec, SimpleTestModule}
@@ -156,7 +151,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
   override type Fixture = TestFixture
 
   class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
-    override def nextId(): TID = TryV.unsafeGet( Foo.fooIdentifying.nextTID )
+    override def nextId(): TID = Foo.fooIdentifying.nextTID.unsafeGet
 //    {
 //      Foo.fooIdentifying.nextIdAs[TID] match {
 //        case \/-( r ) => r

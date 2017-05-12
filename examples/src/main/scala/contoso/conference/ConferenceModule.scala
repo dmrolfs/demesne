@@ -7,12 +7,10 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
-
-import scalaz._
-import Scalaz._
+import cats.syntax.validated._
 import shapeless._
 import com.github.nscala_time.time.{Imports => joda}
-import omnibus.commons.Valid
+import omnibus.commons.AllIssuesOr
 import omnibus.akka.AskRetry._
 import omnibus.akka.publish._
 import omnibus.commons.identifier._
@@ -129,7 +127,7 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
       SP.Loaded( rootType, dependencies = Set(ConferenceContext.ResourceKey) )
     }
 
-    override def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = {
+    override def doInitialize( resources: Map[Symbol, Any] ): AllIssuesOr[Done] = {
       checkConferenceContext( resources ) map { confCtx =>
         logger.info( "initializing conference context:[{}]", confCtx.path.name )
         conferenceContext = confCtx
@@ -137,13 +135,13 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
       }
     }
 
-    private def checkConferenceContext( resources: Map[Symbol, Any] ): Valid[ActorRef] = {
+    private def checkConferenceContext( resources: Map[Symbol, Any] ): AllIssuesOr[ActorRef] = {
       val result = for {
         cc <- resources get ConferenceContext.ResourceKey
         r <- scala.util.Try[ActorRef]{ cc.asInstanceOf[ActorRef] }.toOption
-      } yield r.successNel[Throwable]
+      } yield r.validNel
 
-      result getOrElse Validation.failureNel( UnspecifiedConferenceContextError('ConferenceContext) )
+      result getOrElse UnspecifiedConferenceContextError('ConferenceContext).invalidNel
     }
   }
 

@@ -3,16 +3,14 @@ package demesne.repository
 import scala.concurrent.{ExecutionContext, Future}
 import akka.Done
 import akka.actor._
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.cluster.sharding.ShardRegion.Passivate
 import akka.event.LoggingReceive
 import akka.pattern.pipe
-
-import scalaz._
-import Scalaz._
+import cats.data.Validated.{Invalid, Valid}
+import cats.syntax.validated._
 import omnibus.akka.ActorStack
 import omnibus.akka.envelope._
-import omnibus.commons.Valid
+import omnibus.commons.AllIssuesOr
 import demesne.{AggregateRootType, DomainModel}
 import demesne.repository.{StartProtocol => SP}
 
@@ -52,15 +50,15 @@ with ActorLogging {
 
   def handleInitialize( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[SP.Started.type] = {
     doInitialize( resources ) match {
-      case scalaz.Success( _ ) => outer.initializeContext( resources ) map { _ => SP.Started }
-      case scalaz.Failure( exs ) => {
-        exs foreach { ex => log.error( ex, "initialization failed for resources:[{}]", resources.mkString(", ") ) }
+      case Valid( _ ) => outer.initializeContext( resources ) map { _ => SP.Started }
+      case Invalid( exs ) => {
+        exs map { ex => log.error( ex, "initialization failed for resources:[{}]", resources.mkString(", ") ) }
         Future.failed( exs.head )
       }
     }
   }
 
-  def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = Done.successNel
+  def doInitialize( resources: Map[Symbol, Any] ): AllIssuesOr[Done] = Done.validNel
 
   override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.defaultStrategy
 

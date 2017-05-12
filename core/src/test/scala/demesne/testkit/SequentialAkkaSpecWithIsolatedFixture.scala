@@ -1,11 +1,12 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
+import scala.util.Try
 import scala.concurrent.duration._
 import scala.concurrent.Await
-import scalaz.{-\/, \/, \/-}
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
+import cats.syntax.either._
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
 import org.scalatest.{MustMatchers, Outcome, fixture}
@@ -48,7 +49,7 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
     val config = testConfiguration( test, slug )
     val system = testSystem( test, config, slug )
 
-    val fixture = \/ fromTryCatchNonFatal { createAkkaFixture( test, config, system, slug ) }
+    val fixture = Either fromTry { Try { createAkkaFixture( test, config, system, slug ) } }
 
     val results = fixture map { f =>
       logger.debug( ".......... before test .........." )
@@ -71,11 +72,11 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
     }
 
     outcome match {
-      case \/-( o ) => {
+      case Right( o ) => {
         Await.ready( system.terminate(), 5.seconds )
         o
       }
-      case -\/( ex ) => {
+      case Left( ex ) => {
         Await.ready( system.terminate(), 5.seconds )
         logger.error( s"test[${test.name}] failed", ex )
         throw ex

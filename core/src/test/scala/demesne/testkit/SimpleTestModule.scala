@@ -2,7 +2,7 @@ package demesne.testkit
 
 import akka.actor.Props
 import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
-import omnibus.commons.TryV
+import omnibus.commons.ErrorOr
 import omnibus.commons.identifier.Identifying
 import demesne._
 import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
@@ -48,7 +48,7 @@ abstract class SimpleTestModule[T, I0]( implicit override val identifying: Ident
     override type ID = I0
     override val idTag: Symbol = module.identifying.idTag
     override def tidOf( s: SimpleTestActor.State ): TID = s( 'id ).asInstanceOf[TID]
-    override def nextTID: TryV[TID] = module.identifying.nextTID
+    override def nextTID: ErrorOr[TID] = module.identifying.nextTID
     override def idFromString( idRep: String ): ID = module.identifying idFromString idRep
   }
 

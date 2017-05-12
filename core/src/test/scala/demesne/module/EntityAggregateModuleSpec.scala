@@ -6,8 +6,7 @@ import akka.actor.{ActorSystem, Props}
 import akka.testkit._
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-
-import scalaz.Scalaz._
+import cats.syntax.either._
 import shapeless._
 import org.scalatest.Tag
 import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
@@ -15,7 +14,7 @@ import omnibus.akka.envelope._
 import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
 import omnibus.commons.log.Trace
 import omnibus.commons.identifier._
-import omnibus.commons.TryV
+import omnibus.commons.ErrorOr
 import org.scalatest.concurrent.ScalaFutures
 import demesne._
 import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
@@ -42,7 +41,7 @@ object EntityAggregateModuleSpec extends LazyLogging {
 
   object Foo extends EntityLensProvider[Foo] {
     implicit val identifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
-      override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+      override def nextTID: ErrorOr[TID] = tag( ShortUUID() ).asRight
       override def idFromString( idRep: String ): ID = ShortUUID fromString idRep 
     }
 
@@ -176,7 +175,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[EntityAggregateModuleS
 
   class TestFixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[TestFixture]
-    override def nextId(): TID = TryV.unsafeGet( Foo.identifying.nextTID )
+    override def nextId(): TID = Foo.identifying.nextTID.unsafeGet
 
     override val module: AggregateRootModule[Foo, Foo#ID] = FooAggregateRoot.module
 

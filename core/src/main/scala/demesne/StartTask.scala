@@ -1,7 +1,7 @@
 package demesne
 
 import akka.Done
-import scalaz.concurrent.Task
+import monix.eval.Task
 import com.typesafe.scalalogging.StrictLogging
 
 
@@ -59,7 +59,7 @@ object StartTask extends StrictLogging {
         )
         Task now r
       }
-      .onFinish { ex =>
+      .doOnFinish { ex =>
         ex foreach { x => logger.error( s"StartTask:[${description}] failed", x ) }
         Task now { () }
       }

@@ -5,10 +5,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
 import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
-
-import scalaz.{-\/, \/-}
 import demesne.DomainModel
-import omnibus.commons.TryV
 import omnibus.commons.identifier._
 import omnibus.commons.log.Trace
 import sample.blog.author.AuthorListingModule
@@ -56,7 +53,8 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
 
   val create: Receive = LoggingReceive {
     case Tick => {
-      val postId = TryV unsafeGet Post.identifying.nextTID
+      //      val postId = TryV unsafeGet Post.identifying.nextTID
+      val postId = Post.identifying.nextTID.unsafeGet
       n += 1
       log.info( s"bot CREATING post $n" )
       val title = s"Post $n from $from"

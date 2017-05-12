@@ -2,7 +2,7 @@ package contoso.conference
 
 import scala.concurrent._
 import scala.concurrent.duration._
-import scalaz.concurrent.Task
+import monix.eval.Task
 import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props}
 import akka.pattern.pipe

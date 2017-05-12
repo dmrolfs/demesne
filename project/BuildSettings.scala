@@ -4,7 +4,7 @@ import sbt._
 import spray.revolver.RevolverPlugin._
 
 object BuildSettings {
-  val VERSION = "2.2.3"
+  val VERSION = "2.3.0-SNAPSHOT"
 
   val defaultBuildSettings = Defaults.coreDefaultSettings ++ Format.settings ++ Revolver.settings ++
     Seq(
@@ -33,24 +33,24 @@ object BuildSettings {
       dependencyOverrides := Dependencies.defaultDependencyOverrides,
 
       // AllenAi Public Resolver
-      resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",
-      resolvers += "omen at bintray" at "http://dl.bintray.com/omen/maven",
+      resolvers ++= Dependencies.resolutionRepos,
       resolvers += Resolver.jcenterRepo,
-      resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven",
-      resolvers += "dnvriend at bintray" at "http://dl.bintray.com/dnvriend/maven",
+      // resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",
+      // resolvers += "omen at bintray" at "http://dl.bintray.com/omen/maven",
+      // resolvers += Resolver.jcenterRepo,
+      // resolvers += "krasserm at bintray" at "http://dl.bintray.com/krasserm/maven",
+      // resolvers += "dnvriend at bintray" at "http://dl.bintray.com/dnvriend/maven",
       // Factorie Resolver
-      resolvers += "IESL Releases" at "http://dev-iesl.cs.umass.edu/nexus/content/groups/public",
-      resolvers += "spray repo" at "http://repo.spray.io",
-      resolvers += "Typesafe releases" at "http://repo.typesafe.com/typesafe/releases",
-      resolvers += "eaio releases" at "http://eaio.com/maven2",
-      resolvers += "Sonatype OSS Releases"  at "http://oss.sonatype.org/content/repositories/releases/",
+      // resolvers += "IESL Releases" at "http://dev-iesl.cs.umass.edu/nexus/content/groups/public",
+      // resolvers += "spray repo" at "http://repo.spray.io",
+      // resolvers += "Typesafe releases" at "http://repo.typesafe.com/typesafe/releases",
+      // resolvers += "eaio releases" at "http://eaio.com/maven2",
+      // resolvers += "Sonatype OSS Releases"  at "http://oss.sonatype.org/content/repositories/releases/",
       // resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
-      resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases",
-      resolvers += "bintray-allenai-sbt-plugin-releases" at "http://dl.bintray.com/content/allenai/sbt-plugins",
-      resolvers += Resolver.sonatypeRepo( "snapshots" ),
-      // resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/stew/snapshots",
-      resolvers += Classpaths.sbtPluginReleases,
-      resolvers += "OSS JFrog Artifactory" at "http://oss.jfrog.org/artifactory/oss-snapshot-local",
+      // resolvers += "bintray-allenai-sbt-plugin-releases" at "http://dl.bintray.com/content/allenai/sbt-plugins",
+      // resolvers += Resolver.sonatypeRepo( "snapshots" ),
+      // resolvers += Classpaths.sbtPluginReleases,
+      // resolvers += "OSS JFrog Artifactory" at "http://oss.jfrog.org/artifactory/oss-snapshot-local",
 
       // SLF4J initializes itself upon the first logging call.  Because sbt
       // runs tests in parallel it is likely that a second thread will

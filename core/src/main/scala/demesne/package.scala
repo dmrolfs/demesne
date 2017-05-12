@@ -1,3 +1,9 @@
+import scala.concurrent.ExecutionContext
+import akka.actor.ActorSystem
+import akka.util.Timeout
+import monix.execution.Scheduler
+
+
 /**
   == Overview ==
   Demesne extends Akka's Persistence frameworks to provide structure to consistently build and use CQRS+ES based
@@ -23,5 +29,11 @@
   envelope capability at each point otherwise the meta envelope will not follow the unit of work.
  */
 package object demesne {
+  type EC[_] = ExecutionContext
+  type AS[_] = ActorSystem
+  type S[_] = Scheduler
+  type T[_] = Timeout
+
+
   trait DemesneError
 }
