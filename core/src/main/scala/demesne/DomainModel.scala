@@ -1,28 +1,24 @@
 package demesne
 
-import akka.Done
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-import akka.actor.{ActorRef, ActorSystem, Terminated}
+import akka.Done
+import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.sharding.ShardRegion
 import akka.pattern.ask
 import akka.util.Timeout
-
-import scalaz._
-import Scalaz._
+import cats.syntax.either._
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
-import omnibus.commons.TryV
+import omnibus.commons.ErrorOr
 import demesne.index._
 import demesne.index.IndexSupervisor.{IndexRegistered, RegisterIndex}
+import DomainModel.NoSuchAggregateRootError
 
 
 abstract class DomainModel {
-  import DomainModel.NoSuchAggregateRootError
-
   def name: String
 
   def system: ActorSystem
@@ -44,11 +40,11 @@ abstract class DomainModel {
   def get( rootName: String, id: Any ): Option[ActorRef]
 
   import DomainModel.AggregateIndex
-  def aggregateIndexFor[K, TID, V]( rootType: AggregateRootType, name: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
+  def aggregateIndexFor[K, TID, V]( rootType: AggregateRootType, name: Symbol ): ErrorOr[AggregateIndex[K, TID, V]] = {
     aggregateIndexFor[K, TID, V]( rootType.name, name )
   }
 
-  def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]]
+  def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): ErrorOr[AggregateIndex[K, TID, V]]
 
   def rootTypes: Set[AggregateRootType]
 
@@ -83,7 +79,7 @@ object DomainModel {
 
     override def get( rootName: String, id: Any ): Option[ActorRef] = aggregateRefs.get( rootName ) map { _.repositoryRef }
 
-    override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
+    override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): ErrorOr[AggregateIndex[K, TID, V]] = {
       val result = {
         for {
           RootTypeRef( _, rootType ) <- aggregateRefs get rootName
@@ -93,8 +89,8 @@ object DomainModel {
       }
 
       result
-      .map { _.mapTo[K, TID, V].right }
-      .getOrElse { NoIndexForAggregateError( rootName, specAgents ).left[Index[K, TID, V]] }
+      .map { _.mapTo[K, TID, V].asRight }
+      .getOrElse { NoIndexForAggregateError( rootName, specAgents ).asLeft }
     }
 
     def addAggregateType( rootType: AggregateRootType ): DomainModelCell = {

@@ -2,21 +2,23 @@ package demesne
 
 import scala.reflect._
 import scala.concurrent.duration.Duration
+import scala.util.Try
 import akka.actor.{ActorLogging, ActorPath, ActorRef, ReceiveTimeout}
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
 import com.typesafe.scalalogging.LazyLogging
-
-import scalaz._
-import scalaz.Kleisli._
+import cats.data.Kleisli
+import cats.instances.either._
+import cats.syntax.either._
 import shapeless.the
 import omnibus.akka.envelope._
 import omnibus.akka.publish.EventPublisher
 import omnibus.akka.ActorStack
 import omnibus.commons.identifier.{Identifying, TaggedID}
-import omnibus.commons.{KOp, TryV}
+import omnibus.commons.{ErrorOr, KOp}
 import omnibus.commons.util._
 import demesne.PassivationSpecification.StopAggregateRoot
+
 
 
 //////////////////////////////////////
@@ -145,13 +147,13 @@ with ActorLogging {
 
   def accept( event: Any ): S = {
     acceptOp(event) run state match {
-      case \/-(s) => s
-      case -\/(ex) => throw ex
+      case Right(s) => s
+      case Left(ex) => throw ex
     }
   }
 
-  def acceptOp( event: Any ): StateOperation = kleisli[TryV, S, S] { s =>
-    \/.fromTryCatchNonFatal[S] {
+  def acceptOp( event: Any ): StateOperation = Kleisli[ErrorOr, S, S] { s =>
+    Either catchNonFatal {
       val eventState = (event, s)
       if ( acceptance.isDefinedAt( eventState ) ) {
         state = acceptance( eventState )
@@ -163,14 +165,14 @@ with ActorLogging {
     }
   }
 
-  def publishOp( event: Any ): StateOperation = kleisli[TryV, S, S] { s => \/.fromTryCatchNonFatal[S] { publish( event ); s } }
+  def publishOp( event: Any ): StateOperation = Kleisli[ErrorOr, S, S] { s => Either catchNonFatal { publish( event ); s } }
 
   def acceptAndPublishOp( event: Any ): StateOperation = acceptOp( event ) andThen publishOp( event )
 
   def acceptAndPublish( event: Any ): S = {
     acceptAndPublishOp( event ) run state match {
-      case \/-(s) => s
-      case -\/(ex) => throw ex
+      case Right(s) => s
+      case Left(ex) => throw ex
     }
   }
 

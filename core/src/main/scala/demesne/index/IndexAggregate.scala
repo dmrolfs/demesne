@@ -1,14 +1,16 @@
 package demesne.index
 
 import scala.reflect._
+import scala.util.Try
 import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
 import akka.cluster.pubsub.DistributedPubSub
 import akka.event.LoggingReceive
 import akka.persistence.{PersistentActor, SnapshotOffer}
+import cats.syntax.either._
 import omnibus.commons.util._
-import demesne.EventLike
 import omnibus.commons.identifier.TaggedID
+import demesne.EventLike
 
 
 object IndexAggregateProtocol {
@@ -204,25 +206,24 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
     }
 
     case av @ D.AlterValue( KeyType(key) ) if state contains key => {
-      import scalaz._, Scalaz.{ state => _, _ }
-
       val event = for {
-        oldIndexedValue <- state.get(key).toRightDisjunction[Throwable](
+        oldIndexedValue <- Either.fromOption(
+          state.get(key),
           new java.util.NoSuchElementException( s"IndexAggregate does not contain a state entry for key:[${key}]" )
         )
 
-        newValue <- \/ fromTryCatchNonFatal { av.alter( oldIndexedValue.value ).asInstanceOf[V] }
+        newValue <- Either catchNonFatal { av.alter( oldIndexedValue.value ).asInstanceOf[V] }
       } yield P.ValueRevised( sourceId = tid, key = key, oldValue = oldIndexedValue.value, newValue = newValue )
 
       event match {
-        case \/-( evt ) => {
+        case Right( evt ) => {
           persistAsync( evt ) { e =>
             updateState( e )
             mediator ! Publish( topic = topic, msg = e )
           }
         }
 
-        case -\/( ex ) => log.error( ex, "IndexAggregate[{}]: key:[{}] alteration failed", self.path, key )
+        case Left( ex ) => log.error( ex, "IndexAggregate[{}]: key:[{}] alteration failed", self.path, key )
       }
     }
 

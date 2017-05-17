@@ -1,17 +1,14 @@
 package sample.blog.post
 
-import scala.reflect._
 import akka.Done
 import akka.actor.{ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.persistence.AtLeastOnceDelivery
-
-import scalaz._
-import Scalaz._
+import cats.syntax.validated._
 import shapeless._
 import omnibus.akka.envelope.Envelope
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.{TryV, Valid}
+import omnibus.commons.AllIssuesOr
 import omnibus.commons.identifier._
 import omnibus.commons.log.Trace
 import demesne._
@@ -88,7 +85,7 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
       SP.Loaded( rootType, dependencies = Set(AuthorListingModule.ResourceKey) )
     }
 
-    override def doInitialize( resources: Map[Symbol, Any] ): Valid[Done] = {
+    override def doInitialize( resources: Map[Symbol, Any] ): AllIssuesOr[Done] = {
       checkAuthorListing( resources ) map { al =>
         logger.info( "initializing makeAuthorListing:[{}]", al )
         makeAuthorListing = al
@@ -101,16 +98,16 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
       PostActor.props( model, rootType, makeAuthorListing )
     }
 
-    private def checkAuthorListing( resources: Map[Symbol, Any] ): Valid[() => ActorRef] = trace.block("checkAuthListing()") {
+    private def checkAuthorListing( resources: Map[Symbol, Any] ): AllIssuesOr[() => ActorRef] = trace.block("checkAuthListing()") {
       log.debug( "resources[{}] = [{}]", AuthorListingModule.ResourceKey, resources get AuthorListingModule.ResourceKey )
       val result = for {
         alValue <- resources get AuthorListingModule.ResourceKey
         al <- Option( alValue )
         r <- scala.util.Try[() => ActorRef]{ al.asInstanceOf[() => ActorRef] }.toOption
-      } yield r.successNel[Throwable]
+      } yield r.validNel
 
       log.debug( "[{}] resource result = [{}]", AuthorListingModule.ResourceKey, result )
-      result getOrElse Validation.failureNel( UnspecifiedMakeAuthorListError(AuthorListingModule.ResourceKey) )
+      result getOrElse UnspecifiedMakeAuthorListError(AuthorListingModule.ResourceKey).invalidNel
     }
   }
 

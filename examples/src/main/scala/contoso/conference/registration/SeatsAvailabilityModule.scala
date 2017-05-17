@@ -3,14 +3,12 @@ package contoso.conference.registration
 import scala.reflect._
 import akka.actor.Props
 import akka.event.LoggingReceive
-
-import scalaz._
-import Scalaz._
+import cats.syntax.either._
 import contoso.conference.{ConferenceModule, SeatType}
 import contoso.registration.SeatQuantity
 import demesne._
 import demesne.repository._
-import omnibus.commons.TryV
+import omnibus.commons.ErrorOr
 import omnibus.commons.identifier._
 import omnibus.akka.publish.EventPublisher
 import omnibus.commons.log.Trace
@@ -112,8 +110,8 @@ object SeatsAvailabilityState {
   implicit val identifying = new Identifying[SeatsAvailabilityState] with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
     override val idTag: Symbol = 'seatsAvailability
 
-    override def nextTID: TryV[TID] = {
-      new IllegalStateException( "SeatsAvailability supports corresponding Conference so does not have independent ID" ).left
+    override def nextTID: ErrorOr[TID] = {
+      new IllegalStateException( "SeatsAvailability supports corresponding Conference so does not have independent ID" ).asLeft
     }
 
     override def tidOf(o: SeatsAvailabilityState): TID = o.id

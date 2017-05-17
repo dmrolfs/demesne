@@ -4,7 +4,6 @@ import scala.annotation.tailrec
 import akka.actor.Props
 import akka.event.LoggingReceive
 
-import scalaz.Scalaz._
 import contoso.conference.SeatType
 import contoso.conference.registration.SeatAssignmentsProtocol.{SeatAssignment, SeatAssignmentRef}
 import contoso.registration.{PersonalInfo, SeatQuantity}

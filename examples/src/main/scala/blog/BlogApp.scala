@@ -3,8 +3,6 @@ package sample.blog
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.{Success, Failure}
-import scalaz._
-import Scalaz._
 import akka.actor._
 import akka.pattern.ask
 import akka.persistence.journal.leveldb.{SharedLeveldbJournal, SharedLeveldbStore}

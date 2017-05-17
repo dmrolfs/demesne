@@ -2,19 +2,19 @@ package demesne.module.entity
 
 import scala.reflect._
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.util.Try
 import akka.event.LoggingReceive
-
-import scalaz.{-\/, \/, \/-}
+import cats.syntax.either._
 import shapeless._
 import com.typesafe.scalalogging.LazyLogging
 import omnibus.archetype.domain.model.core.Entity
 import omnibus.akka.publish.EventPublisher
 import omnibus.commons.builder.HasBuilder
-import omnibus.commons.TryV
+import omnibus.commons.ErrorOr
 import demesne.{AggregateRoot, AggregateRootType}
 import demesne.index.{Directive, IndexSpecification}
 import demesne.index.local.IndexLocalAgent
-import demesne.module.{AggregateEnvironment, LocalAggregate, SimpleAggregateModule}
+import demesne.module.{AggregateEnvironment, SimpleAggregateModule}
 import demesne.repository.AggregateRootProps
 import omnibus.commons.identifier.Identifying
 import omnibus.commons.util._
@@ -87,9 +87,9 @@ object EntityAggregateModule extends LazyLogging {
 
       None
     } else {
-      \/ fromTryCatchNonFatal { toEntity(from) } match {
-        case \/-( to ) => to
-        case -\/( ex ) => {
+      Either
+      .catchNonFatal { toEntity( from ) }
+      .valueOr{ ex =>
           logger.error(
             s"failed to convert Added.info type[${from.getClass.getName}] " +
               s"to entity type[${the[ClassTag[E]].runtimeClass.getName}]",
@@ -97,7 +97,6 @@ object EntityAggregateModule extends LazyLogging {
           )
 
           None
-        }
       }
     }
   }
@@ -217,7 +216,8 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
     case module.evState(s) => Option( s )
   }
 
-  final def triedToEntity( from: Any ): Option[E] = TryV.unsafeGet( \/ fromTryCatchNonFatal { toEntity( from ) } )
+  final def triedToEntity( from: Any ): Option[E] = Either.catchNonFatal{ toEntity( from ) }.toOption.flatten
+
 
   class EntityAggregateRootType(
     name: String,

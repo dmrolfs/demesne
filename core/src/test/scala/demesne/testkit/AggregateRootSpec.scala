@@ -9,8 +9,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit._
 
-import scalaz._
-import Scalaz._
 import com.typesafe.config.Config
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar

@@ -6,9 +6,9 @@ import scala.reflect._
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.event.LoggingReceive
 import akka.testkit._
+import cats.syntax.either._
 import org.scalatest.concurrent.ScalaFutures
 
-import scalaz.Scalaz._
 import shapeless._
 import com.typesafe.config.{Config, ConfigFactory}
 import demesne.repository.CommonLocalRepository
@@ -16,7 +16,7 @@ import org.scalatest.OptionValues
 import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
 import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
 import omnibus.akka.envelope._
-import omnibus.commons.TryV
+import omnibus.commons._
 import omnibus.commons.identifier.{Identifying, ShortUUID, TaggedID}
 import omnibus.commons.log.Trace
 
@@ -51,7 +51,7 @@ with OptionValues {
 
     override def rootTypes: Set[AggregateRootType] = trace.block("rootTypes") { Set( AggregateRootFunctionalSpec.FooModule.rootType ) }
 
-    override def nextId(): TID = TryV.unsafeGet( State.stateIdentifying.nextTID )
+    override def nextId(): TID = State.stateIdentifying.nextTID.unsafeGet
 
     def infoFrom( ar: ActorRef )( implicit ec: ExecutionContext ): Future[Option[State]] = {
       import akka.pattern.ask
@@ -197,7 +197,7 @@ object AggregateRootFunctionalSpec {
 
 
     implicit val fooIdentifying = new EntityIdentifying[Foo] {
-      override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+      override def nextTID: ErrorOr[TID] = tag( ShortUUID() ).asRight
       override def idFromString( idRep: String ): ShortUUID = ShortUUID fromString idRep
     }
 

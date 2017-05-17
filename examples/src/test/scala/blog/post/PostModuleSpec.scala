@@ -9,15 +9,12 @@ import demesne.testkit.concurrent.CountDownFunction
 import org.scalatest.Tag
 import omnibus.akka.envelope._
 import omnibus.akka.publish.ReliablePublisher.ReliableMessage
-import omnibus.commons.TryV
 import omnibus.commons.log.Trace
 
 import scala.concurrent.duration._
 import org.scalatest.concurrent.ScalaFutures
 import sample.blog.author.AuthorListingModule
 import sample.blog.post.{PostPrototol => P}
-
-import scalaz.{-\/, \/-}
 
 
 /**
@@ -47,7 +44,7 @@ class PostModuleSpec extends AggregateRootSpec[PostModuleSpec] with ScalaFutures
 
     val author: TestProbe = TestProbe()
 
-    override def nextId(): TID = TryV unsafeGet Post.identifying.nextTID
+    override def nextId(): TID = Post.identifying.nextTID.unsafeGet
 
     object TestPostRootType extends PostModule.PostType {
       override def repositoryProps( implicit model: DomainModel ): Props = PostModule.Repository.localProps( model )

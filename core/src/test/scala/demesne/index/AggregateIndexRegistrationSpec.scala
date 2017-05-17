@@ -3,18 +3,16 @@ package demesne.index
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.duration._
-import scala.reflect.ClassTag
 import akka.actor._
 import akka.testkit._
 import com.typesafe.config.Config
 
-import scalaz._
-import Scalaz._
+import cats.syntax.either._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.Tag
 import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
-import omnibus.commons.TryV
-import omnibus.commons.identifier.{Identifying, ShortUUID, TaggedID}
+import omnibus.commons.ErrorOr
+import omnibus.commons.identifier.{Identifying, ShortUUID}
 import omnibus.commons.log.Trace
 import demesne._
 import demesne.index.IndexSupervisor._
@@ -62,7 +60,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
           override type ID = ShortUUID
           override val idTag: Symbol = 'foo
           override def tidOf( o: ShortUUID ): TID = tag( o )
-          override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+          override def nextTID: ErrorOr[TID] = tag( ShortUUID() ).asRight
           override def idFromString( idRep: String ): ID = ShortUUID.fromString( idRep )
         }
 

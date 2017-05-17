@@ -4,8 +4,7 @@ import scala.reflect._
 import akka.actor.{ActorSystem, Props}
 import com.typesafe.config.Config
 
-import scalaz.{-\/, \/-}
-import scalaz.Scalaz._
+import cats.syntax.either._
 import shapeless.Lens
 import demesne._
 import demesne.testkit.AggregateRootSpec
@@ -36,7 +35,7 @@ object SimpleAggregateModuleSpec {
   object Foo extends EntityLensProvider[Foo] {
     implicit val fooIdentifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
       override lazy val idTag: Symbol = 'fooTAG
-      override def nextTID: TryV[TID] = tag( ShortUUID() ).right
+      override def nextTID: ErrorOr[TID] = tag( ShortUUID() ).asRight
       override def idFromString( idRep: String ): ShortUUID = ShortUUID fromString idRep
     }
 
@@ -122,7 +121,7 @@ abstract class SimpleAggregateModuleSpec extends AggregateRootSpec[SimpleAggrega
 
     override def rootTypes: Set[AggregateRootType] = Set( module.rootType )
 
-    override def nextId(): TID = TryV.unsafeGet( SimpleAggregateModuleSpec.Foo.fooIdentifying.nextTID )
+    override def nextId(): TID = SimpleAggregateModuleSpec.Foo.fooIdentifying.nextTID.unsafeGet
 //    {
 //      import SimpleAggregateModuleSpec.Foo.{fooIdentifying => identifying}
 //

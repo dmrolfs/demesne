@@ -2,8 +2,18 @@ import sbt.Keys._
 import sbt._
 
 object Dependencies {
+  val resolutionRepos = Seq(
+    "spray repo" at "http://repo.spray.io",
+    "eaio.com" at "http://repo.eaio.com/maven2",
+    "omen-bintray" at "http://dl.bintray.com/omen/maven",
+    "Typesafe releases" at "http://repo.typesafe.com/typesafe/releases",
+    "dl-john-ky" at "http://dl.john-ky.io/maven/releases",
+    "OSS JFrog Artifactory" at "http://oss.jfrog.org/artifactory/oss-snapshot-local"
+  )
+
+
   object omnibus {
-    val version = "0.5.3"
+    val version = "0.60"
     def module( id: String ) = "com.github.dmrolfs" %% s"omnibus-$id" % version
 
     val commons = module( "commons" )
@@ -30,12 +40,25 @@ object Dependencies {
     val leveldbNative = "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8"
   }
 
-  object scalaz {
-    val version = "7.2.8"
-    def module( id: String ) = "org.scalaz" %% s"scalaz-$id" % version
+  object cats {
+    val version = "0.9.0"
+    def module( id: String ) = "org.typelevel" %% s"cats-${id}" % version
 
     val core = module( "core" )
-    val concurrent = module( "concurrent" )
+    val kernel = module( "kernel" )
+    val macros = module( "macros" )
+
+    val all = Seq( core, kernel, macros )
+  }
+
+  object monix {
+    val version = "2.3.0"
+    def module( id: String ) = "io.monix" %% s"""monix${if (id.nonEmpty) '-'+id else "" }""" % version
+
+    val core = module( "" )
+    val cats = module( "cats" )
+
+    val all = Seq( core, cats )
   }
 
   object log {
@@ -75,7 +98,7 @@ object Dependencies {
     }
   }
 
-  val commonDependencies = Seq(
+  val commonDependencies = cats.all ++ monix.all ++ Seq(
     facility.uuid,
     facility.config,
     facility.ficus,
@@ -89,7 +112,6 @@ object Dependencies {
     akka.persistence,
     akka.agent,
     akka.slf4j,
-    scalaz.core,
     omnibus.commons,
     omnibus.archetype,
     omnibus.akka
@@ -103,9 +125,7 @@ object Dependencies {
     qa.mockito.core
   )
 
-  val defaultDependencyOverrides = Set(
-    scalaz.core
-  )
+  val defaultDependencyOverrides = Set.empty[sbt.ModuleID]
 
   // val sprayJson = "io.spray" %% "spray-json" % "1.3.1"
   // val scopt = "com.github.scopt" %% "scopt" % "3.3.0"

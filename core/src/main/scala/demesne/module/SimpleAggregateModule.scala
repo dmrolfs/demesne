@@ -3,10 +3,8 @@ package demesne.module
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.reflect._
 import akka.actor.Props
-import akka.cluster.sharding.{ClusterShardingSettings, ShardRegion}
+import akka.cluster.sharding.ClusterShardingSettings
 
-import scalaz._
-import Scalaz._
 import shapeless._
 import omnibus.commons.identifier.Identifying
 import omnibus.commons.builder._

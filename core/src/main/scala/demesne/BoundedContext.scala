@@ -7,15 +7,15 @@ import akka.actor.{ActorIdentity, ActorRef, ActorSystem, Identify, Terminated}
 import akka.agent.Agent
 import akka.pattern.{AskableActorSelection, ask}
 import akka.util.Timeout
-
-import scalaz._, Scalaz._
-import scalaz.concurrent.Task
+import monix.eval.Task
+import monix.execution.Scheduler
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
-import omnibus.commons.TryV
+import omnibus.commons.ErrorOr
 import demesne.repository.{RepositorySupervisor, StartProtocol}
 import demesne.DomainModel.{AggregateIndex, DomainModelCell, Supervisors}
 import demesne.index.{IndexBus, IndexSupervisor}
+import shapeless.the
 
 
 /**
@@ -28,16 +28,19 @@ abstract class BoundedContext {
   def futureModel: Future[DomainModel]
   def resources: BoundedContext.Resources
   def configuration: Config
-  def addAggregateType( rootType: AggregateRootType )( implicit ec: ExecutionContext ): Future[BoundedContext] = addAggregateTypes( Set(rootType) )
-  def addAggregateTypes( rootTypes: Set[AggregateRootType] )( implicit ec: ExecutionContext ): Future[BoundedContext]
+  def addAggregateType[_: EC]( rootType: AggregateRootType ): Future[BoundedContext] = addAggregateTypes( Set(rootType) )
+  def addAggregateTypes[_: EC]( rootTypes: Set[AggregateRootType] ): Future[BoundedContext]
   def withResources( rs: BoundedContext.Resources ): BoundedContext
-  def withStartTask( task: StartTask ): BoundedContext
-  def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext]
+  def withStartTask[_: EC]( task: StartTask ): BoundedContext
+  def start[_: EC : T](): Future[BoundedContext]
   def shutdown(): Future[Terminated]
 }
 
 object BoundedContext extends StrictLogging { outer =>
-  import scala.concurrent.ExecutionContext.global
+  import Scheduler.global
+
+  def toScheduler[_: EC]: Scheduler = Scheduler apply the[ExecutionContext]
+
   val timeoutDuration = 10.seconds
 
 
@@ -106,9 +109,9 @@ object BoundedContext extends StrictLogging { outer =>
   }
 
 
-  private val contextsExecutionPool: ExecutionContext = global
+  private val contextsScheduler: ExecutionContext = global
   private val contexts: Agent[Map[Symbol, BoundedContextCell]] = {
-    Agent( Map.empty[Symbol, BoundedContextCell] )( contextsExecutionPool )
+    Agent( Map.empty[Symbol, BoundedContextCell] )( contextsScheduler )
   }
 
   private def sendContextCell( key: Symbol )( f: BoundedContextCell => BoundedContextCell ): Unit = {
@@ -133,7 +136,7 @@ object BoundedContext extends StrictLogging { outer =>
   )(
     f: BoundedContextCell => BoundedContextCell
   )(
-    implicit ec: ExecutionContext = contextsExecutionPool
+    implicit ec: ExecutionContext = contextsScheduler
   ): Future[BoundedContextCell] = {
     contexts
     .alterOff { cells =>
@@ -162,7 +165,7 @@ object BoundedContext extends StrictLogging { outer =>
 
     private def unsafeCell: BoundedContextCell = contexts()( key )
     private def futureCell: Future[BoundedContextCell] = {
-      implicit val ec = contextsExecutionPool
+      implicit val ec = contextsScheduler
       contexts.future() map { ctxs => ctxs( key ) }
     }
 
@@ -170,7 +173,7 @@ object BoundedContext extends StrictLogging { outer =>
     override def system: ActorSystem = unsafeCell.system
     override def unsafeModel: DomainModel = unsafeCell.unsafeModel
     override def futureModel: Future[DomainModel] = {
-      implicit val ec = contextsExecutionPool
+      implicit val ev = contextsScheduler
       futureCell flatMap { _.futureModel }
     }
 
@@ -178,11 +181,7 @@ object BoundedContext extends StrictLogging { outer =>
 
     override def configuration: Config = unsafeCell.configuration
 
-    override def addAggregateTypes(
-      rootTypes: Set[AggregateRootType]
-    )(
-      implicit ec: ExecutionContext
-    ): Future[BoundedContext] = {
+    override def addAggregateTypes[_: EC]( rootTypes: Set[AggregateRootType] ): Future[BoundedContext] = {
       alterContextCell( key ){ cell =>
         Await.result( cell.addAggregateTypes(rootTypes).mapTo[BoundedContextCell], timeoutDuration )
       } map { _ =>
@@ -195,20 +194,19 @@ object BoundedContext extends StrictLogging { outer =>
       this
     }
 
-    override def withStartTask( task: StartTask ): BoundedContext = {
+    override def withStartTask[_: EC]( task: StartTask ): BoundedContext = {
       sendContextCell( key ){ _.withStartTask( task ).asInstanceOf[BoundedContextCell] }
       this
     }
 
-    override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = {
+    override def start[_: EC : T](): Future[BoundedContext] = {
       for {
-        cell <- alterContextCell( key ){ cell => Await.result(cell.start().mapTo[BoundedContextCell], timeout.duration) }
-//        m <- cell.futureModel
+        cell <- alterContextCell( key ){ cell => Await.result(cell.start().mapTo[BoundedContextCell], the[Timeout].duration) }
       } yield this
     }
 
     override def shutdown(): Future[Terminated] = {
-      implicit val ec = contextsExecutionPool
+      implicit val ec = contextsScheduler
       for {
         cell <- futureCell
         terminated <- cell.shutdown()
@@ -240,7 +238,7 @@ object BoundedContext extends StrictLogging { outer =>
       aggregate
     }
 
-    override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): TryV[AggregateIndex[K, TID, V]] = {
+    override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): ErrorOr[AggregateIndex[K, TID, V]] = {
       unsafeCell.aggregateIndexFor[K, TID, V]( rootName, indexName )
     }
   }
@@ -255,6 +253,8 @@ object BoundedContext extends StrictLogging { outer =>
     startTasks: Seq[StartTask] = Seq.empty[StartTask],
     supervisors: Option[Supervisors] = None
   ) extends BoundedContext {
+//    implicit def toScheduler[_: EC]: Scheduler = BoundedContext toScheduler the[ExecutionContext]
+
     override def toString: String = s"""BoundedContext(${name}, system:[${system}], model:[${modelCell}]"""
 
     override val name: String = key.name
@@ -273,11 +273,7 @@ object BoundedContext extends StrictLogging { outer =>
 
     override def withResources( rs: Resources ): BoundedContext = this.copy( userResources = userResources ++ rs )
 
-    override def addAggregateTypes(
-      rootTypes: Set[AggregateRootType]
-    )(
-      implicit ec: ExecutionContext
-    ): Future[BoundedContext] = {
+    override def addAggregateTypes[_: EC]( rootTypes: Set[AggregateRootType] ): Future[BoundedContext] = {
       Future successful {
         val newModel = rootTypes.foldLeft( modelCell ){ (m, rt) =>m addAggregateType rt }
         logger.info(
@@ -290,13 +286,16 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    override def withStartTask( startTask: StartTask ): BoundedContext = {
+    override def withStartTask[_: EC]( startTask: StartTask ): BoundedContext = {
+      implicit val scheduler = toScheduler( the[ExecutionContext] )
+
       if ( started ) {
         startTask
         .task( this )
-        .unsafePerformAsync {
-          case scalaz.\/-( result )=> logger.debug( "start task completed with result: [{}]", result )
-          case scalaz.-\/( ex ) => { logger.error( "start task failed", ex ); throw ex }
+        .runAsync
+        .onComplete {
+          case Success( result )=> logger.debug( "start task completed with result: [{}]", result )
+          case Failure( ex ) => { logger.error( "start task failed", ex ); throw ex }
         }
 
         this
@@ -308,8 +307,10 @@ object BoundedContext extends StrictLogging { outer =>
     def started: Boolean = supervisors.isDefined
 
 
-    override def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[BoundedContext] = {
+    override def start[_: EC : T](): Future[BoundedContext] = {
       import omnibus.commons.concurrent._
+
+      implicit val scheduler = toScheduler( the[ExecutionContext] )
 
       for {
         taskResults <- this.gatherAllTasks().unsafeToFuture
@@ -378,14 +379,14 @@ object BoundedContext extends StrictLogging { outer =>
 
         aggregate
       }
-      .onFinish { ex =>
+      .doOnFinish { ex =>
         ex foreach { x => logger.error( s"BoundedContext[${name}]: at least one start task failed", x ) }
         Task now { () }
       }
     }
 
     override def shutdown(): Future[Terminated] = {
-      implicit val ec = system.dispatcher
+      implicit val ec = contextsScheduler
 
       for {
         _ <- modelCell.shutdown
@@ -393,7 +394,7 @@ object BoundedContext extends StrictLogging { outer =>
       } yield s
     }
 
-    private def setupSupervisors()( implicit ec: ExecutionContext ): Future[Supervisors] = {
+    private def setupSupervisors[_ : EC](): Future[Supervisors] = {
       import scala.concurrent.duration._
       val (repositoryBudget, indexBudget) = timeoutBudgets( 5.seconds )
       val repositorySupervisor = setupRepositorySupervisor( repositoryBudget )
@@ -411,7 +412,7 @@ object BoundedContext extends StrictLogging { outer =>
       ( Timeout( baseline / 1 ), Timeout( baseline / 1 ) )
     }
 
-    private def setupRepositorySupervisor( budget: Timeout )( implicit ec: ExecutionContext ): Future[ActorRef] = {
+    private def setupRepositorySupervisor[_: EC]( budget: Timeout ): Future[ActorRef] = {
       implicit val to = budget
       val repositorySupervisorName = name + "-repositories" //todo would like to change this but attempt below fails
 //      val repositorySupervisorName = name + ":repositories"
@@ -423,12 +424,7 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    private def findRepositorySupervisor(
-      repositorySupervisorName: String
-    )(
-      implicit ec: ExecutionContext,
-      to: Timeout
-    ): Future[Option[ActorRef]] = {
+    private def findRepositorySupervisor[_: EC : T]( repositorySupervisorName: String ): Future[Option[ActorRef]] = {
       val sel = system.actorSelection( "/user/"+repositorySupervisorName )
       val asker = new AskableActorSelection( sel )
       ( asker ? new Identify(repositorySupervisorName.##) ).mapTo[ActorIdentity]
@@ -438,12 +434,9 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    private def makeRepositorySupervisor(
+    private def makeRepositorySupervisor[_: EC : T](
       repositorySupervisorName: String,
       rootTypes: Set[AggregateRootType]
-    )(
-      implicit ec: ExecutionContext,
-      to: Timeout
     ): Future[ActorRef] = {
       val supervisor = futureModel map { model =>
         import scala.collection.JavaConversions._
@@ -491,7 +484,7 @@ object BoundedContext extends StrictLogging { outer =>
       started
     }
 
-    private def setupIndexSupervisor( budget: Timeout )( implicit ec: ExecutionContext ): Future[ActorRef] = {
+    private def setupIndexSupervisor[_: EC]( budget: Timeout ): Future[ActorRef] = {
       implicit val to = budget
       val indexSupervisorName = modelCell.name + "-indexes"
 
@@ -502,12 +495,7 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    private def findIndexSupervisor(
-      indexSupervisorName: String
-    )(
-      implicit ec: ExecutionContext,
-      to: Timeout
-    ): Future[Option[ActorRef]] = {
+    private def findIndexSupervisor[_: EC : T]( indexSupervisorName: String ): Future[Option[ActorRef]] = {
       val sel = system.actorSelection( "/user/"+indexSupervisorName )
       val asker = new AskableActorSelection( sel )
       ( asker ? new Identify(indexSupervisorName.##) ).mapTo[ActorIdentity]
