@@ -153,21 +153,19 @@ with ActorLogging {
   }
 
   def acceptOp( event: Any ): StateOperation = Kleisli[ErrorOr, S, S] { s =>
-    Either fromTry {
-      Try {
-        val eventState = (event, s)
-        if ( acceptance.isDefinedAt( eventState ) ) {
-          state = acceptance( eventState )
-          state
-        } else {
-          log.debug( "{} does not accept event {}", Option(s).map{_.getClass.safeSimpleName}, event.getClass.safeSimpleName )
-          s
-        }
+    Either catchNonFatal {
+      val eventState = (event, s)
+      if ( acceptance.isDefinedAt( eventState ) ) {
+        state = acceptance( eventState )
+        state
+      } else {
+        log.debug( "{} does not accept event {}", Option(s).map{_.getClass.safeSimpleName}, event.getClass.safeSimpleName )
+        s
       }
     }
   }
 
-  def publishOp( event: Any ): StateOperation = Kleisli[ErrorOr, S, S] { s => Either fromTry { Try { publish( event ); s } } }
+  def publishOp( event: Any ): StateOperation = Kleisli[ErrorOr, S, S] { s => Either catchNonFatal { publish( event ); s } }
 
   def acceptAndPublishOp( event: Any ): StateOperation = acceptOp( event ) andThen publishOp( event )
 

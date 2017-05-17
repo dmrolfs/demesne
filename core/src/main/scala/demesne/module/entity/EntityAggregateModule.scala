@@ -88,7 +88,7 @@ object EntityAggregateModule extends LazyLogging {
       None
     } else {
       Either
-      .fromTry { Try { toEntity( from ) } }
+      .catchNonFatal { toEntity( from ) }
       .valueOr{ ex =>
           logger.error(
             s"failed to convert Added.info type[${from.getClass.getName}] " +
@@ -216,14 +216,7 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
     case module.evState(s) => Option( s )
   }
 
-  final def triedToEntity( from: Any ): Option[E] = {
-    Either
-    .fromTry {
-      Try { toEntity( from ) }
-    }
-    .toOption
-    .flatten
-  }
+  final def triedToEntity( from: Any ): Option[E] = Either.catchNonFatal{ toEntity( from ) }.toOption.flatten
 
 
   class EntityAggregateRootType(

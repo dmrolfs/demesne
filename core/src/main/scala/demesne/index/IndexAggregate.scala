@@ -212,7 +212,7 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ) ext
           new java.util.NoSuchElementException( s"IndexAggregate does not contain a state entry for key:[${key}]" )
         )
 
-        newValue <- Either.fromTry{ Try { av.alter( oldIndexedValue.value ).asInstanceOf[V] } }
+        newValue <- Either catchNonFatal { av.alter( oldIndexedValue.value ).asInstanceOf[V] }
       } yield P.ValueRevised( sourceId = tid, key = key, oldValue = oldIndexedValue.value, newValue = newValue )
 
       event match {

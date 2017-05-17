@@ -59,7 +59,7 @@ abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with 
     val config = testConfiguration( test, slug )
     val system = testSystem( test, config, slug )
 
-    val fixture = Either fromTry { Try { createAkkaFixture( test, config, system, slug ) } }
+    val fixture = Either catchNonFatal { createAkkaFixture( test, config, system, slug ) }
 
     val results = fixture map { f =>
       logger.debug( ".......... before test .........." )
