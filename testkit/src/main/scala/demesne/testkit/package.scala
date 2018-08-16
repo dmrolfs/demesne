@@ -1,13 +1,13 @@
 package demesne
 
 import akka.actor.ActorSystem
-import com.typesafe.config.{Config, ConfigFactory}
-
+import com.typesafe.config.{ Config, ConfigFactory }
 
 /**
- * Created by damonrolfs on 9/18/14.
- */
+  * Created by damonrolfs on 9/18/14.
+  */
 package object testkit {
+
   val config: Config = ConfigFactory.parseString(
     """
       |#akka.loggers = ["akka.testkit.TestEventListener"]

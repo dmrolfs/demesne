@@ -1,11 +1,10 @@
 package demesne.index
 
-import scala.concurrent.{ExecutionContext, Future}
-
+import scala.concurrent.{ ExecutionContext, Future }
 
 /**
- * Created by damonrolfs on 11/5/14.
- */
+  * Created by damonrolfs on 11/5/14.
+  */
 abstract class Index[K, I, V] {
   //todo: path dependent types for local and shared (via Future[]) work? PredicateResult seems to be the difficult part
 //  type Result
@@ -26,13 +25,15 @@ abstract class Index[K, I, V] {
   def futureIndexedValueEntries: Future[Map[K, IndexedValue[I, V]]]
 
   /** Optionally returns the aggregate id associated with a key.
-   * @param key the key aggregate id
-   * @return an option value containing the aggregate id associated with key in this map, or None if none exists.
-   */
+    * @param key the key aggregate id
+    * @return an option value containing the aggregate id associated with key in this map, or None if none exists.
+    */
   def get( key: K ): Option[V] = getIndexedValue( key ) map { _.value }
   def getIndexedValue( key: K ): Option[IndexedValue[I, V]]
 
-  def futureGet( key: K ): Future[Option[V]] = futureGetIndexedValue( key ) map { _ map { _.value } }
+  def futureGet( key: K ): Future[Option[V]] = futureGetIndexedValue( key ) map {
+    _ map { _.value }
+  }
   def futureGetIndexedValue( key: K ): Future[Option[IndexedValue[I, V]]]
 
   /** Retrieves the value which is associated with the given key. This
@@ -81,12 +82,11 @@ abstract class Index[K, I, V] {
 //
 //  def foreach[U]( f: Entry => U ): Unit
 
-
   /** Defines the default value computation for the map, returned when a key is not found
     *  The method implemented here throws an exception, but it might be overridden in subclasses.
     *  @param key the given key value for which a binding is missing.
-    *  
+    *
     */
-  @throws(classOf[NoSuchElementException])
+  @throws( classOf[NoSuchElementException] )
   def default( key: K ): V = throw new NoSuchElementException( "key not found: " + key )
 }

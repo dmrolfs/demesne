@@ -1,6 +1,6 @@
 package demesne.module
 
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration.{ Duration, FiniteDuration }
 import scala.reflect._
 import akka.actor.Props
 import akka.cluster.sharding.ClusterShardingSettings
@@ -10,8 +10,7 @@ import omnibus.commons.identifier.Identifying
 import omnibus.commons.builder._
 import demesne._
 import demesne.index.IndexSpecification
-import demesne.repository.{AggregateRootProps, CommonClusteredRepository, CommonLocalRepository}
-
+import demesne.repository.{ AggregateRootProps, CommonClusteredRepository, CommonLocalRepository }
 
 abstract class SimpleAggregateModule[S0, I0](
   implicit override val identifying: Identifying.Aux[S0, I0],
@@ -60,13 +59,13 @@ abstract class SimpleAggregateModule[S0, I0](
           )
         }
 
-        case LocalAggregate => CommonLocalRepository.props( model, this, module.aggregateRootPropsOp )
+        case LocalAggregate =>
+          CommonLocalRepository.props( model, this, module.aggregateRootPropsOp )
       }
     }
 
     override def canEqual( that: Any ): Boolean = that.isInstanceOf[SimpleAggregateRootType]
   }
-
 
   override def rootType: AggregateRootType = {
     new SimpleAggregateRootType(
@@ -79,7 +78,10 @@ abstract class SimpleAggregateModule[S0, I0](
 }
 
 object SimpleAggregateModule {
-  def builderFor[S: ClassTag, I]( implicit identifying: Identifying.Aux[S, I] ): BuilderFactory[S, I] = new BuilderFactory[S, I]
+
+  def builderFor[S: ClassTag, I](
+    implicit identifying: Identifying.Aux[S, I]
+  ): BuilderFactory[S, I] = new BuilderFactory[S, I]
 
   class BuilderFactory[S: ClassTag, I]( implicit identifying: Identifying.Aux[S, I] ) {
     type CC = SimpleAggregateModuleImpl[S, I]
@@ -87,14 +89,23 @@ object SimpleAggregateModule {
     def make: ModuleBuilder = new ModuleBuilder
 
     class ModuleBuilder extends HasBuilder[CC] {
+
       object P {
         object Props extends Param[AggregateRootProps]
         object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
-        object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
-        object StartTask extends OptParam[demesne.StartTask](
-          demesne.StartTask.empty( s"start ${the[ClassTag[S]].runtimeClass.getCanonicalName}" )
-        )
-        object Environment extends OptParam[AggregateEnvironment.Resolver]( AggregateEnvironment.Resolver.local )
+
+        object SnapshotPeriod
+            extends OptParam[Option[FiniteDuration]](
+              Some( AggregateRootType.DefaultSnapshotPeriod )
+            )
+
+        object StartTask
+            extends OptParam[demesne.StartTask](
+              demesne.StartTask.empty( s"start ${the[ClassTag[S]].runtimeClass.getCanonicalName}" )
+            )
+
+        object Environment
+            extends OptParam[AggregateEnvironment.Resolver]( AggregateEnvironment.Resolver.local )
         object ClusterRole extends OptParam[Option[String]]( None )
         object Indexes extends OptParam[Seq[IndexSpecification]]( Seq.empty[IndexSpecification] )
       }
@@ -113,29 +124,29 @@ object SimpleAggregateModule {
     }
   }
 
-
   final case class SimpleAggregateModuleImpl[S, I](
-                                                    override val aggregateRootPropsOp: AggregateRootProps,
-                                                    override val passivateTimeout: Duration,
-                                                    override val snapshotPeriod: Option[FiniteDuration],
-                                                    override val startTask: demesne.StartTask,
-                                                    override val environment: AggregateEnvironment.Resolver,
-                                                    override val clusterRole: Option[String],
-                                                    override val indexes: Seq[IndexSpecification]
+    override val aggregateRootPropsOp: AggregateRootProps,
+    override val passivateTimeout: Duration,
+    override val snapshotPeriod: Option[FiniteDuration],
+    override val startTask: demesne.StartTask,
+    override val environment: AggregateEnvironment.Resolver,
+    override val clusterRole: Option[String],
+    override val indexes: Seq[IndexSpecification]
   )(
     implicit override val identifying: Identifying.Aux[S, I],
     evState: ClassTag[S]
-  ) extends SimpleAggregateModule[S, I]()( identifying, evState ) with Equals { module =>
+  ) extends SimpleAggregateModule[S, I]()( identifying, evState )
+      with Equals { module =>
 
     override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S, I]]
 
     override def equals( rhs: Any ): Boolean = rhs match {
       case that: SimpleAggregateModuleImpl[S, I] => {
-        if ( this eq that ) true
+        if (this eq that) true
         else {
-          ( that.## == this.## ) &&
-          ( that canEqual this ) &&
-          ( this.indexes == that.indexes )
+          (that.## == this.##) &&
+          (that canEqual this) &&
+          (this.indexes == that.indexes)
         }
       }
 

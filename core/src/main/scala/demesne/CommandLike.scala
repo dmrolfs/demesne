@@ -1,6 +1,5 @@
 package demesne
 
-
 trait CommandLike extends MessageLike
 
 object CommandLike {

@@ -24,6 +24,8 @@ lazy val examples= ( project in file("./examples") )
   .dependsOn( core, testkit )
 
 
+scalafmtOnCompile in ThisBuild := true
+
 licenses := ("MIT", url("http://opensource.org/licenses/MIT")) :: Nil // this is required! otherwise Bintray will reject the code
 
 credentials := List(Path.userHome / ".bintray" / ".jfrog-oss").filter(_.exists).map(Credentials(_))

@@ -7,7 +7,6 @@ import com.wix.accord.dsl._
 import omnibus.commons.identifier._
 import contoso.conference._
 
-
 package object registration {
   //Registration.Contracts/PersonalInfo.cs
   case class PersonalInfo( firstName: String, lastName: String, email: String ) extends Equals {
@@ -21,13 +20,13 @@ package object registration {
 
     override def equals( rhs: Any ): Boolean = rhs match {
       case that: PersonalInfo => {
-        if ( this eq that ) true
+        if (this eq that) true
         else {
-          ( that.## == this.## ) &&
-          ( that canEqual this ) &&
-          ( that.firstName == this.firstName ) &&
-          ( that.lastName == this.lastName ) &&
-          ( that.email.equalsIgnoreCase( this.email ) )
+          (that.## == this.##) &&
+          (that canEqual this) &&
+          (that.firstName == this.firstName) &&
+          (that.lastName == this.lastName) &&
+          (that.email.equalsIgnoreCase( this.email ) )
         }
       }
 
@@ -53,12 +52,10 @@ package object registration {
     def count: Int = quantity.toEach.toInt
   }
 
-
   //Conference/Registration.Contracts/OrderLine.cs
   trait OrderLine {
     def total: Money
   }
-
 
   //Conference/Registration.Contracts/OrderLine.cs
   case class SeatOrderLine(

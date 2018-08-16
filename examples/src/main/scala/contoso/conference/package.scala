@@ -9,7 +9,6 @@ import com.wix.accord._
 import com.wix.accord.dsl._
 import omnibus.commons.identifier._
 
-
 package object conference {
   // Conference/Conference/SeatType.cs
   case class SeatType(
@@ -19,15 +18,15 @@ package object conference {
     quantity: Dimensionless,
     price: Price[Dimensionless]
   ) extends Equals {
-    override def hashCode: Int = 41 * ( 41 + id.## )
+    override def hashCode: Int = 41 * (41 + id.##)
 
     override def equals( rhs: Any ): Boolean = rhs match {
       case that: SeatType => {
-        if ( this eq that ) true
+        if (this eq that) true
         else {
-          ( that.## == this.## ) &&
-          ( that canEqual this ) &&
-          ( that.id == this.id )
+          (that.## == this.##) &&
+          (that canEqual this) &&
+          (that.id == this.id)
         }
       }
 
@@ -47,10 +46,9 @@ package object conference {
       st.description is notEmpty
       st.description has size <= 250
       st.quantity is between( Each( 0 ), Each( 100000 ) )
-      (st.price * Each(1)) as "seat type price" is between( USD(0), USD(50000) ) // squants doesn't impl Ordering[Price[Dimensionless]] so need to convert to Money
+      (st.price * Each( 1 )) as "seat type price" is between( USD( 0 ), USD( 50000 ) ) // squants doesn't impl Ordering[Price[Dimensionless]] so need to convert to Money
     }
   }
-
 
   // Conference/Conference/ConferenceInfo.cs
   case class ConferenceInfo(
@@ -62,7 +60,7 @@ package object conference {
     scheduled: joda.Interval,
     seats: Set[SeatType] = Set(),
     description: Option[String] = None,
-    location: Option[String],  //DMR: Geolocation Archetype
+    location: Option[String], //DMR: Geolocation Archetype
     tagline: Option[String] = None,
     accessCode: Option[String] = None,
     wasEverPublished: Boolean = false,
@@ -76,14 +74,14 @@ package object conference {
       c.slug should matchRegex( """^\w+$""".r )
       c.accessCode has size >= 6
       c.ownerName as "owner's name" is notEmpty
-      c.ownerEmail as "owner's email" should matchRegex( """[\w-]+(\.?[\w-])*\@[\w-]+(\.[\w-]+)+""".r ) //DMR: Incorporate email validation into EmailAddress Archetype
+      c.ownerEmail as "owner's email" should matchRegex(
+        """[\w-]+(\.?[\w-])*\@[\w-]+(\.[\w-]+)+""".r
+      ) //DMR: Incorporate email validation into EmailAddress Archetype
     }
   }
 
-
   // Conference/Registration/ReadModel/ConferenceAlias.cs
   case class ConferenceAlias( id: ConferenceModule.ID, code: String, name: String, tagline: String )
-
 
   trait ContosoError
 }

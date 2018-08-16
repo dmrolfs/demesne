@@ -1,16 +1,15 @@
 package demesne.testkit
 
 import akka.actor.Props
-import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
+import omnibus.akka.publish.{ EventPublisher, StackableStreamPublisher }
 import omnibus.commons.ErrorOr
 import omnibus.commons.identifier.Identifying
 import demesne._
-import demesne.index.{IndexSpecification, StackableIndexBusPublisher}
+import demesne.index.{ IndexSpecification, StackableIndexBusPublisher }
 import demesne.repository.CommonLocalRepository
 
-
 abstract class SimpleTestModule[T, I0]( implicit override val identifying: Identifying.Aux[T, I0] )
-  extends AggregateRootModule[T, I0] { module =>
+    extends AggregateRootModule[T, I0] { module =>
   def name: String
   def indexes: Seq[IndexSpecification]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
@@ -26,20 +25,20 @@ abstract class SimpleTestModule[T, I0]( implicit override val identifying: Ident
       override val identifying: Identifying[T] = module.identifying
 
       override def repositoryProps( implicit model: DomainModel ): Props = {
-        CommonLocalRepository.props( model, this, SimpleTestActor.props(_, _) )
+        CommonLocalRepository.props( model, this, SimpleTestActor.props( _, _ ) )
       }
 
       override def indexes: Seq[IndexSpecification] = module.indexes
     }
   }
 
-
   object SimpleTestActor {
     type State = Map[Symbol, Any]
 
     def props( model: DomainModel, rt: AggregateRootType ): Props = {
-      Props( 
-        new SimpleTestActor( model, rt ) with StackableStreamPublisher with StackableIndexBusPublisher
+      Props(
+        new SimpleTestActor( model, rt ) with StackableStreamPublisher
+        with StackableIndexBusPublisher
       )
     }
   }
@@ -55,16 +54,19 @@ abstract class SimpleTestModule[T, I0]( implicit override val identifying: Ident
   class SimpleTestActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SimpleTestActor.State, ID] with AggregateRoot.Provider { outer: EventPublisher =>
+  ) extends AggregateRoot[SimpleTestActor.State, ID]
+      with AggregateRoot.Provider { outer: EventPublisher =>
     import SimpleTestActor._
 
     override var state: State = Map.empty[Symbol, Any]
 
     override val acceptance: Acceptance = module.acceptance
-    
+
     override def receiveCommand: Receive = around {
-      case command if module.eventFor(state).isDefinedAt( command ) => {
-        persist( module.eventFor(state)(command) ) { event => acceptAndPublish( event ) }
+      case command if module.eventFor( state ).isDefinedAt( command ) => {
+        persist( module.eventFor( state )( command ) ) { event =>
+          acceptAndPublish( event )
+        }
       }
     }
   }

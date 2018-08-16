@@ -1,22 +1,21 @@
 package demesne
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
+import scala.util.{ Failure, Success }
 import akka.Done
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ ActorRef, ActorSystem }
 import akka.cluster.sharding.ShardRegion
 import akka.pattern.ask
 import akka.util.Timeout
 import cats.syntax.either._
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
-import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
+import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ ChildStarted, StartChild }
 import omnibus.commons.ErrorOr
 import demesne.index._
-import demesne.index.IndexSupervisor.{IndexRegistered, RegisterIndex}
+import demesne.index.IndexSupervisor.{ IndexRegistered, RegisterIndex }
 import DomainModel.NoSuchAggregateRootError
-
 
 abstract class DomainModel {
   def name: String
@@ -40,11 +39,18 @@ abstract class DomainModel {
   def get( rootName: String, id: Any ): Option[ActorRef]
 
   import DomainModel.AggregateIndex
-  def aggregateIndexFor[K, TID, V]( rootType: AggregateRootType, name: Symbol ): ErrorOr[AggregateIndex[K, TID, V]] = {
+
+  def aggregateIndexFor[K, TID, V](
+    rootType: AggregateRootType,
+    name: Symbol
+  ): ErrorOr[AggregateIndex[K, TID, V]] = {
     aggregateIndexFor[K, TID, V]( rootType.name, name )
   }
 
-  def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): ErrorOr[AggregateIndex[K, TID, V]]
+  def aggregateIndexFor[K, TID, V](
+    rootName: String,
+    indexName: Symbol
+  ): ErrorOr[AggregateIndex[K, TID, V]]
 
   def rootTypes: Set[AggregateRootType]
 
@@ -52,97 +58,121 @@ abstract class DomainModel {
 }
 
 object DomainModel {
+
   trait Provider {
     def model: DomainModel
   }
 
-
   type AggregateIndex[K, TID, V] = Index[K, TID, V]
 
-
-  final case class DomainModelCell private[demesne](
+  final case class DomainModelCell private[demesne] (
     key: Symbol,
     override val system: ActorSystem,
     override val configuration: Config,
     override val indexBus: IndexBus = new IndexBus,
     override val rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType],
     aggregateRefs: Map[String, RootTypeRef] = Map.empty[String, RootTypeRef],
-    specAgents: Map[IndexSpecification, IndexEnvelope] = Map.empty[IndexSpecification, IndexEnvelope],
+    specAgents: Map[IndexSpecification, IndexEnvelope] =
+      Map.empty[IndexSpecification, IndexEnvelope],
     supervisors: Option[Supervisors] = None
-  ) extends DomainModel with LazyLogging {
+  ) extends DomainModel
+      with LazyLogging {
     override def toString: String = {
-      s"""DomainModelCell(name=${name}, system=${system}, root-types=[${rootTypes.mkString(", ")}], """ +
-      s"""aggregate-refs=[${aggregateRefs.mkString(", ")}]), spec-agents=[${specAgents.mkString(", ")}]"""
+      s"""DomainModelCell(name=${name}, system=${system}, root-types=[${rootTypes.mkString( ", " )}], """ +
+      s"""aggregate-refs=[${aggregateRefs.mkString( ", " )}]), spec-agents=[${specAgents.mkString(
+        ", "
+      )}]"""
     }
 
     override def name: String = key.name
 
-    override def get( rootName: String, id: Any ): Option[ActorRef] = aggregateRefs.get( rootName ) map { _.repositoryRef }
+    override def get( rootName: String, id: Any ): Option[ActorRef] =
+      aggregateRefs.get( rootName ) map { _.repositoryRef }
 
-    override def aggregateIndexFor[K, TID, V]( rootName: String, indexName: Symbol ): ErrorOr[AggregateIndex[K, TID, V]] = {
+    override def aggregateIndexFor[K, TID, V](
+      rootName: String,
+      indexName: Symbol
+    ): ErrorOr[AggregateIndex[K, TID, V]] = {
       val result = {
         for {
           RootTypeRef( _, rootType ) <- aggregateRefs get rootName
-          spec <- rootType.indexes find { _.name == indexName }
-          agent <- specAgents get spec
+          spec                       <- rootType.indexes find { _.name == indexName }
+          agent                      <- specAgents get spec
         } yield agent
       }
 
       result
-      .map { _.mapTo[K, TID, V].asRight }
-      .getOrElse { NoIndexForAggregateError( rootName, specAgents ).asLeft }
+        .map { _.mapTo[K, TID, V].asRight }
+        .getOrElse { NoIndexForAggregateError( rootName, specAgents ).asLeft }
     }
 
     def addAggregateType( rootType: AggregateRootType ): DomainModelCell = {
       implicit val timeout = Timeout( 5.seconds ) //todo consider better wait timeout
       supervisors foreach { supervisor =>
-        val ref = ( supervisor.repository ? StartChild(rootType.repositoryProps(this), rootType.repositoryName) )
+        val ref = (supervisor.repository ? StartChild(
+          rootType.repositoryProps( this ),
+          rootType.repositoryName
+        ))
         scala.concurrent.Await.ready( ref, timeout.duration )
       }
       this.copy( rootTypes = rootTypes + rootType )
     }
 
-
     def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[DomainModelCell] = {
       logger.debug(
         "starting with supervisors:[{}] and rootTypes:[{}]",
-        supervisors.map{ s => s"repository:[${s.repository.path.name}] index:[${s.index.path.name}]"},
-        rootTypes.mkString(", ")
+        supervisors.map { s =>
+          s"repository:[${s.repository.path.name}] index:[${s.index.path.name}]"
+        },
+        rootTypes.mkString( ", " )
       )
 
       supervisors
-      .map { s =>
-        val (indexBudget, agentBudget, repositoryBudget) = timeoutBudgets( timeout )
+        .map { s =>
+          val ( indexBudget, agentBudget, repositoryBudget ) = timeoutBudgets( timeout )
 
-        val indexes = rootTypes.toSeq map { rt => establishIndexes( rt, s.index, indexBudget, agentBudget )( ec ) }
-        val aggregates = rootTypes map { rt => registerAggregate( rt, s.repository )( ec, repositoryBudget ) }
-
-        val result = for {
-          is <- Future.sequence( indexes ).map { _.flatten }
-          as <- Future sequence aggregates
-        } yield {
-          this.copy( aggregateRefs = aggregateRefs ++ as, specAgents = specAgents ++ is )
-        }
-
-        result onComplete {
-          case Success(cell) => {
-            logger.debug( "Registering root-types[{}]@[{}] Completed", rootTypes.map{_.name}.mkString(", "), name )
+          val indexes = rootTypes.toSeq map { rt =>
+            establishIndexes( rt, s.index, indexBudget, agentBudget )( ec )
+          }
+          val aggregates = rootTypes map { rt =>
+            registerAggregate( rt, s.repository )( ec, repositoryBudget )
           }
 
-          case Failure( ex ) => logger error s"failed to start domain model: ${ex}"
-        }
+          val result = for {
+            is <- Future.sequence( indexes ).map { _.flatten }
+            as <- Future sequence aggregates
+          } yield {
+            this.copy( aggregateRefs = aggregateRefs ++ as, specAgents = specAgents ++ is )
+          }
 
-        result
-      }
-      .getOrElse {
-        Future.failed( new IllegalStateException("DomainModel must have repository and index supervisors set before starting") )
-      }
+          result onComplete {
+            case Success( cell ) => {
+              logger.debug(
+                "Registering root-types[{}]@[{}] Completed",
+                rootTypes.map { _.name }.mkString( ", " ),
+                name
+              )
+            }
+
+            case Failure( ex ) => logger error s"failed to start domain model: ${ex}"
+          }
+
+          result
+        }
+        .getOrElse {
+          Future.failed(
+            new IllegalStateException(
+              "DomainModel must have repository and index supervisors set before starting"
+            )
+          )
+        }
     }
 
     def shutdown: Future[Done] = {
-      aggregateRefs.values foreach { case RootTypeRef( ref, rt )  =>
-        logger.info( "shutting down aggregate: {}", rt.name )
-        ref ! ShardRegion.GracefulShutdown
+      aggregateRefs.values foreach {
+        case RootTypeRef( ref, rt ) =>
+          logger.info( "shutting down aggregate: {}", rt.name )
+          ref ! ShardRegion.GracefulShutdown
       }
 
       Future successful Done
@@ -153,7 +183,7 @@ object DomainModel {
       *
       * @return (Index Index, Get Agent Index, Start Supervised Child)
       */
-    private def timeoutBudgets( to: Timeout ): (Timeout, Timeout, Timeout) = {
+    private def timeoutBudgets( to: Timeout ): ( Timeout, Timeout, Timeout ) = {
       val baseline = FiniteDuration( (0.9 * to.duration.toNanos).toLong, NANOSECONDS )
       ( Timeout( baseline / 2 ), Timeout( baseline / 2 ), Timeout( baseline / 1 ) )
     }
@@ -164,20 +194,24 @@ object DomainModel {
     )(
       implicit ec: ExecutionContext,
       timeout: Timeout
-    ): Future[(String, RootTypeRef)] = {
+    ): Future[( String, RootTypeRef )] = {
       aggregateRefs
-      .get( rootType.name )
-      .map { ref =>
-        logger.debug( "aggregate ref found for root-type:[{}]", rootType.name )
-        Future successful (rootType.name -> ref)
-      }
-      .getOrElse {
-        retrieveAggregate( rootType, supervisor )
+        .get( rootType.name )
         .map { ref =>
-          logger.debug( "Registering root-type[{}]@[{}] - aggregate registry established ", rootType.name, name )
-          ( rootType.name -> ref )
+          logger.debug( "aggregate ref found for root-type:[{}]", rootType.name )
+          Future successful (rootType.name -> ref)
         }
-      }
+        .getOrElse {
+          retrieveAggregate( rootType, supervisor )
+            .map { ref =>
+              logger.debug(
+                "Registering root-type[{}]@[{}] - aggregate registry established ",
+                rootType.name,
+                name
+              )
+              (rootType.name -> ref)
+            }
+        }
     }
 
     private def retrieveAggregate(
@@ -188,12 +222,15 @@ object DomainModel {
       to: Timeout
     ): Future[RootTypeRef] = {
       aggregateRefs
-      .get( rootType.name )
-      .map { Future successful _ }
-      .getOrElse {
-        ( supervisor ? StartChild(rootType.repositoryProps(this), rootType.repositoryName) ).mapTo[ChildStarted]
-        .map { repoStarted => RootTypeRef( repoStarted.child, rootType ) }
-      }
+        .get( rootType.name )
+        .map { Future successful _ }
+        .getOrElse {
+          (supervisor ? StartChild( rootType.repositoryProps( this ), rootType.repositoryName ))
+            .mapTo[ChildStarted]
+            .map { repoStarted =>
+              RootTypeRef( repoStarted.child, rootType )
+            }
+        }
     }
 
     private def establishIndexes(
@@ -203,16 +240,22 @@ object DomainModel {
       agentBudget: Timeout
     )(
       implicit ec: ExecutionContext
-    ): Future[Seq[(IndexSpecification, IndexEnvelope)]] = {
-      if ( rootType.indexes.isEmpty ) {
+    ): Future[Seq[( IndexSpecification, IndexEnvelope )]] = {
+      if (rootType.indexes.isEmpty) {
         logger.debug( "no indexes for rootType:[{}]", rootType )
-        Future successful Seq.empty[(IndexSpecification, IndexEnvelope)]
+        Future successful Seq.empty[( IndexSpecification, IndexEnvelope )]
       } else {
-        logger.debug( "establishing indexes for rootType:[{}] with supervisor:[{}]", rootType, supervisor.path.name )
+        logger.debug(
+          "establishing indexes for rootType:[{}] with supervisor:[{}]",
+          rootType,
+          supervisor.path.name
+        )
 
         val result = rootType.indexes map { spec =>
           for {
-            registration <- supervisor.ask( RegisterIndex(rootType, spec) )( indexBudget ).mapTo[IndexRegistered]
+            registration <- supervisor
+              .ask( RegisterIndex( rootType, spec ) )( indexBudget )
+              .mapTo[IndexRegistered]
             ref = registration.agentRef
             envelope <- ref.ask( GetIndex )( agentBudget ).mapTo[IndexEnvelope]
           } yield {
@@ -223,7 +266,7 @@ object DomainModel {
               envelope.payload.toString
             )
 
-            ( spec -> envelope )
+            (spec -> envelope)
           }
         }
 
@@ -232,23 +275,28 @@ object DomainModel {
     }
   }
 
+  final case class RootTypeRef private[DomainModel] (
+    repositoryRef: ActorRef,
+    rootType: AggregateRootType
+  )
 
-  final case class RootTypeRef private[DomainModel]( repositoryRef: ActorRef, rootType: AggregateRootType )
+  final case class Supervisors private[demesne] ( repository: ActorRef, index: ActorRef )
 
-
-  final case class Supervisors private[demesne]( repository: ActorRef, index: ActorRef )
-
-
-  final case class NoSuchAggregateRootError private[demesne](
+  final case class NoSuchAggregateRootError private[demesne] (
     model: DomainModel,
     rootName: String
   ) extends NoSuchElementException(
-    s"DomainModel:[${model.name}] aggregate registry does not have aggregate root:[${rootName}]; " +
-    s"""root-types:[${model.rootTypes.mkString(", ")}]"""
-  ) with DemesneError
+        s"DomainModel:[${model.name}] aggregate registry does not have aggregate root:[${rootName}]; " +
+        s"""root-types:[${model.rootTypes.mkString( ", " )}]"""
+      )
+      with DemesneError
 
-  final case class NoIndexForAggregateError private[demesne](name: String, registry: Map[IndexSpecification, IndexEnvelope] )
-  extends IllegalStateException(
-    s"""DomainModel does not have index for root type [${name}]:: specAgentRegistry [${registry.mkString("[",",","]")}]"""
-  ) with DemesneError
+  final case class NoIndexForAggregateError private[demesne] (
+    name: String,
+    registry: Map[IndexSpecification, IndexEnvelope]
+  ) extends IllegalStateException(
+        s"""DomainModel does not have index for root type [${name}]:: specAgentRegistry [${registry
+          .mkString( "[", ",", "]" )}]"""
+      )
+      with DemesneError
 }

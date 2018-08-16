@@ -6,30 +6,28 @@ import scala.concurrent.duration._
 import scala.reflect.ClassTag
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ ActorRef, ActorSystem }
 import akka.testkit._
 
 import com.typesafe.config.Config
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar
-import omnibus.commons.identifier.{Identifying, TaggedID}
+import omnibus.commons.identifier.{ Identifying, TaggedID }
 import omnibus.commons.log.Trace
 import demesne._
 import demesne.repository.StartProtocol
-
 
 object AggregateRootSpec {
   val sysId = new AtomicInteger()
 }
 
 /**
- * Created by damonrolfs on 9/17/14.
- */
+  * Created by damonrolfs on 9/17/14.
+  */
 abstract class AggregateRootSpec[A: ClassTag]
-extends SequentialAkkaSpecWithIsolatedFixture
-with MockitoSugar
-with BeforeAndAfterAll
-{
+    extends SequentialAkkaSpecWithIsolatedFixture
+    with MockitoSugar
+    with BeforeAndAfterAll {
   private val trace = Trace[AggregateRootSpec[A]]
 
   type State
@@ -41,7 +39,7 @@ with BeforeAndAfterAll
   val protocol: Protocol
 
   abstract class AggregateFixture( _config: Config, _system: ActorSystem, _slug: String )
-  extends AkkaFixture( _config, _system, _slug ) { fixture =>
+      extends AkkaFixture( _config, _system, _slug ) { fixture =>
     private val trace = Trace[AggregateFixture]
 
     val module: AggregateRootModule[State, ID]
@@ -51,13 +49,15 @@ with BeforeAndAfterAll
 
     override def before( test: OneArgTest ): Unit = trace.block( "before" ) {
       import akka.pattern.AskableActorSelection
-      val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
+      val supervisorSel = new AskableActorSelection(
+        system actorSelection s"/user/${boundedContext.name}-repositories"
+      )
 
-      Await.ready( ( supervisorSel ? StartProtocol.WaitForStart ), 5.seconds )
+      Await.ready( (supervisorSel ? StartProtocol.WaitForStart), 5.seconds )
       logger.debug(
         "model from started BoundedContext = [{}] with root-types=[{}]",
         boundedContext.unsafeModel,
-        boundedContext.unsafeModel.rootTypes.mkString(", ")
+        boundedContext.unsafeModel.rootTypes.mkString( ", " )
       )
     }
 
@@ -65,18 +65,21 @@ with BeforeAndAfterAll
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
 
     def rootTypes: Set[AggregateRootType]
-    def resources: Map[Symbol, Any] = Map( Symbol("dummy-user-resource") -> 3.14159 )
+    def resources: Map[Symbol, Any] = Map( Symbol( "dummy-user-resource" ) -> 3.14159 )
+
     def startTasks( system: ActorSystem ): Set[StartTask] = {
       Set(
-        StartTask.withFunction( "start-task-1" ){ bc =>
-          logger.info("test-start-task1: bounded context:[{}]", bc.name)
-          Map( Symbol("from-start-task-1") -> "resource sourced from start task 1" )
+        StartTask.withFunction( "start-task-1" ) { bc =>
+          logger.info( "test-start-task1: bounded context:[{}]", bc.name )
+          Map( Symbol( "from-start-task-1" ) -> "resource sourced from start task 1" )
         },
-        StartTask.withFunction( "start-task-2" ){ bc =>
-          logger.info("test-start-task2: bounded context:[{}]", bc.name)
-          Map( Symbol("from-start-task-2") -> "resource sourced from start task 2" )
+        StartTask.withFunction( "start-task-2" ) { bc =>
+          logger.info( "test-start-task2: bounded context:[{}]", bc.name )
+          Map( Symbol( "from-start-task-2" ) -> "resource sourced from start task 2" )
         },
-        StartTask.withFunction( "unit-start-task-3" ){ bc => akka.Done }
+        StartTask.withFunction( "unit-start-task-3" ) { bc =>
+          akka.Done
+        }
       )
     }
 
@@ -85,33 +88,40 @@ with BeforeAndAfterAll
 
     lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
 
-    lazy val boundedContext: BoundedContext = trace.block(s"FIXTURE: boundedContext($slug)") {
+    lazy val boundedContext: BoundedContext = trace.block( s"FIXTURE: boundedContext($slug)" ) {
       val key = Symbol( s"BoundedContext-${slug}" )
 
       val bc = for {
-        made <- BoundedContext.make( key, config, userResources = resources, startTasks = startTasks(system) )
+        made <- BoundedContext.make(
+          key,
+          config,
+          userResources = resources,
+          startTasks = startTasks( system )
+        )
         filled <- made addAggregateTypes rootTypes
-        _ <- filled.futureModel map { m => logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString(", ") ); m }
+        _ <- filled.futureModel map { m =>
+          logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString( ", " ) ); m
+        }
         started <- filled.start()
       } yield started
 
       val result = Await.result( bc, 5.seconds )
-      logger.debug( "Bounded Context root-type:[{}]", result.unsafeModel.rootTypes.mkString(", ") )
+      logger.debug(
+        "Bounded Context root-type:[{}]",
+        result.unsafeModel.rootTypes.mkString( ", " )
+      )
       result
     }
 
-    implicit lazy val model: DomainModel = trace.block("model") { Await.result( boundedContext.futureModel, 6.seconds ) }
+    implicit lazy val model: DomainModel = trace.block( "model" ) {
+      Await.result( boundedContext.futureModel, 6.seconds )
+    }
   }
 
   override type Fixture <: AggregateFixture
 
-
   object WIP extends Tag( "wip" )
 }
-
-
-
-
 //todo: easy support for ReliableMessage( _, Envelope( payload: TARGET_CLASS, _ ) ) matching
 //todo: focus on the target class in usage
 //  def expectEventPublishedMatching[E: ClassTag]( matcher: PartialFunction[Any, Boolean] ): Unit = {

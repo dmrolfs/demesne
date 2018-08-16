@@ -1,7 +1,7 @@
 package demesne.module.entity
 
 import scala.reflect._
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration.{ Duration, FiniteDuration }
 import scala.util.Try
 import akka.event.LoggingReceive
 import cats.syntax.either._
@@ -11,14 +11,13 @@ import omnibus.archetype.domain.model.core.Entity
 import omnibus.akka.publish.EventPublisher
 import omnibus.commons.builder.HasBuilder
 import omnibus.commons.ErrorOr
-import demesne.{AggregateRoot, AggregateRootType}
-import demesne.index.{Directive, IndexSpecification}
+import demesne.{ AggregateRoot, AggregateRootType }
+import demesne.index.{ Directive, IndexSpecification }
 import demesne.index.local.IndexLocalAgent
-import demesne.module.{AggregateEnvironment, SimpleAggregateModule}
+import demesne.module.{ AggregateEnvironment, SimpleAggregateModule }
 import demesne.repository.AggregateRootProps
 import omnibus.commons.identifier.Identifying
 import omnibus.commons.util._
-
 
 object EntityAggregateModule extends LazyLogging {
   type MakeIndexSpec = Function0[Seq[IndexSpecification]]
@@ -33,7 +32,9 @@ object EntityAggregateModule extends LazyLogging {
     evE: ClassTag[E],
     evID: ClassTag[E#ID]
   ): IndexSpecification = {
-    def label( entity: E ): String = slugLens map { _.get( entity ) } getOrElse { idLens.get( entity ).get.toString }
+    def label( entity: E ): String = slugLens map { _.get( entity ) } getOrElse {
+      idLens.get( entity ).get.toString
+    }
 
     val AddedType = classTag[EntityProtocol[E#ID]#Added]
     val ResluggedType = classTag[EntityProtocol[E#ID]#Reslugged]
@@ -41,32 +42,34 @@ object EntityAggregateModule extends LazyLogging {
     val EnabledType = classTag[EntityProtocol[E#ID]#Enabled]
 
     IndexLocalAgent.spec[String, E#ID, E#ID]( 'slug ) { // or 'activeSlug
-      case AddedType(event) => {
+      case AddedType( event ) => {
         logger.debug( "#TEST #SLUG: Index handling Added event: [{}]", event )
         val sid = event.sourceId.id
 
         event.info
-        .map { i =>
-          triedToEntity( i )( infoToEntity )
-          .map { e => Directive.Record( label( e ), idLens.get( e ).id ) }
-          .getOrElse { Directive.Record( sid.toString, sid ) }
-        }
-        .getOrElse { Directive.Ignore }
+          .map { i =>
+            triedToEntity( i )( infoToEntity )
+              .map { e =>
+                Directive.Record( label( e ), idLens.get( e ).id )
+              }
+              .getOrElse { Directive.Record( sid.toString, sid ) }
+          }
+          .getOrElse { Directive.Ignore }
       }
 
-      case ResluggedType(event) => {
+      case ResluggedType( event ) => {
         logger.info( "#TEST #SLUG: Index handling Reslugged event: [{}]", event )
         Directive.ReviseKey( event.oldSlug, event.newSlug )
       }
-      case DisabledType(event) => {
+      case DisabledType( event ) => {
         logger.info( "#TEST #SLUG: Index handling Disabled event: [{}]", event )
         Directive.Withdraw( event.sourceId.id )
       }
-      case EnabledType(event) => {
+      case EnabledType( event ) => {
         logger.info( "#TEST #SLUG: Index handling Enabled event: [{}]", event )
         Directive.Record( event.slug, event.sourceId.id, event.sourceId.id )
       }
-    } (
+    }(
       ClassTag( classOf[String] ),
       evID,
       evID
@@ -78,7 +81,7 @@ object EntityAggregateModule extends LazyLogging {
   )(
     toEntity: PartialFunction[Any, Option[E]]
   ): Option[E] = {
-    if ( !toEntity.isDefinedAt( from ) ) {
+    if (!toEntity.isDefinedAt( from )) {
       logger.warn(
         "infoToEntity() is not defined for type:[{}] of from:[{}]",
         Option( from ) map { _.getClass.getCanonicalName } getOrElse "<null>",
@@ -88,41 +91,51 @@ object EntityAggregateModule extends LazyLogging {
       None
     } else {
       Either
-      .catchNonFatal { toEntity( from ) }
-      .valueOr{ ex =>
+        .catchNonFatal { toEntity( from ) }
+        .valueOr { ex =>
           logger.error(
             s"failed to convert Added.info type[${from.getClass.getName}] " +
-              s"to entity type[${the[ClassTag[E]].runtimeClass.getName}]",
+            s"to entity type[${the[ClassTag[E]].runtimeClass.getName}]",
             ex
           )
 
           None
-      }
+        }
     }
   }
 
-
-  def builderFor[E <: Entity : ClassTag, EP <: EntityProtocol[E#ID]](
+  def builderFor[E <: Entity: ClassTag, EP <: EntityProtocol[E#ID]](
     implicit identifying: Identifying.Aux[E, E#ID]
   ): BuilderFactory[E, EP] = {
     new BuilderFactory[E, EP]
   }
 
-  class BuilderFactory[E <: Entity : ClassTag, EP <: EntityProtocol[E#ID]]( implicit identifying: Identifying.Aux[E, E#ID] ) {
+  class BuilderFactory[E <: Entity: ClassTag, EP <: EntityProtocol[E#ID]](
+    implicit identifying: Identifying.Aux[E, E#ID]
+  ) {
     type CC = EntityAggregateModuleImpl
 
     def make: ModuleBuilder = new ModuleBuilder
 
-    class ModuleBuilder extends HasBuilder[CC]{
+    class ModuleBuilder extends HasBuilder[CC] {
+
       object P {
         object Props extends Param[AggregateRootProps]
         object PassivateTimeout extends OptParam[Duration]( AggregateRootType.DefaultPassivation )
-        object SnapshotPeriod extends OptParam[Option[FiniteDuration]]( Some(AggregateRootType.DefaultSnapshotPeriod) )
+
+        object SnapshotPeriod
+            extends OptParam[Option[FiniteDuration]](
+              Some( AggregateRootType.DefaultSnapshotPeriod )
+            )
         object Protocol extends Param[EP]
-        object StartTask extends OptParam[demesne.StartTask](
-          demesne.StartTask.empty(s"start ${the[ClassTag[E]].runtimeClass.safeSimpleName}")
-        )
-        object Environment extends OptParam[AggregateEnvironment.Resolver]( AggregateEnvironment.Resolver.local )
+
+        object StartTask
+            extends OptParam[demesne.StartTask](
+              demesne.StartTask.empty( s"start ${the[ClassTag[E]].runtimeClass.safeSimpleName}" )
+            )
+
+        object Environment
+            extends OptParam[AggregateEnvironment.Resolver]( AggregateEnvironment.Resolver.local )
         object ClusterRole extends OptParam[Option[String]]( None )
         object Indexes extends OptParam[MakeIndexSpec]( makeEmptyIndexSpec )
         object IdLens extends Param[Lens[E, E#TID]]
@@ -152,7 +165,6 @@ object EntityAggregateModule extends LazyLogging {
       )
     }
 
-
     // Impl CC required to be within BuilderFactory class in order to avoid the existential type issue preventing matching
     // of L <: HList inferred types in shapeless Generic[CC] and HasBuilder
     case class EntityAggregateModuleImpl(
@@ -170,7 +182,8 @@ object EntityAggregateModule extends LazyLogging {
       override val isActiveLens: Option[Lens[E, Boolean]]
     )(
       implicit override val identifying: Identifying.Aux[E, E#ID]
-    ) extends EntityAggregateModule[E] with Equals {
+    ) extends EntityAggregateModule[E]
+        with Equals {
       override val evState: ClassTag[E] = the[ClassTag[E]]
 
       override type Protocol = EP
@@ -180,24 +193,25 @@ object EntityAggregateModule extends LazyLogging {
 
       override def equals( rhs: Any ): Boolean = rhs match {
         case that: EntityAggregateModuleImpl => {
-          if ( this eq that ) true
+          if (this eq that) true
           else {
-            ( that.## == this.## ) &&
-            ( that canEqual this ) &&
-            ( this.identifying.idTag == that.identifying.idTag )
+            (that.## == this.##) &&
+            (that canEqual this) &&
+            (this.identifying.idTag == that.identifying.idTag)
           }
         }
 
         case _ => false
       }
 
-      override def hashCode: Int = 41 * ( 41 + identifying.idTag.## )
+      override def hashCode: Int = 41 * (41 + identifying.idTag.##)
     }
   }
 }
 
-abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override val identifying: Identifying.Aux[E, E#ID] )
-  extends SimpleAggregateModule[E, E#ID] { module =>
+abstract class EntityAggregateModule[E <: Entity: ClassTag](
+  implicit override val identifying: Identifying.Aux[E, E#ID]
+) extends SimpleAggregateModule[E, E#ID] { module =>
 
   type Protocol <: EntityProtocol[ID]
   val protocol: Protocol
@@ -207,17 +221,19 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
   def slugLens: Option[Lens[E, String]] = None
   def isActiveLens: Option[Lens[E, Boolean]] = None
 
-  def entityLabel( e: E ): String = slugLens map { _.get( e ) } getOrElse { idLens.get( e ).get.toString }
-
-  def toEntity: PartialFunction[Any, Option[E]] = {
-    case None => None
-    case Some( s ) if toEntity.isDefinedAt( s ) => toEntity( s )
-    case Some( s ) => None
-    case module.evState(s) => Option( s )
+  def entityLabel( e: E ): String = slugLens map { _.get( e ) } getOrElse {
+    idLens.get( e ).get.toString
   }
 
-  final def triedToEntity( from: Any ): Option[E] = Either.catchNonFatal{ toEntity( from ) }.toOption.flatten
+  def toEntity: PartialFunction[Any, Option[E]] = {
+    case None                                   => None
+    case Some( s ) if toEntity.isDefinedAt( s ) => toEntity( s )
+    case Some( s )                              => None
+    case module.evState( s )                    => Option( s )
+  }
 
+  final def triedToEntity( from: Any ): Option[E] =
+    Either.catchNonFatal { toEntity( from ) }.toOption.flatten
 
   class EntityAggregateRootType(
     name: String,
@@ -228,67 +244,83 @@ abstract class EntityAggregateModule[E <: Entity : ClassTag]( implicit override 
   }
 
   override def rootType: AggregateRootType = {
-    new EntityAggregateRootType( name = module.shardName, indexes = module.indexes, environment = module.environment )
+    new EntityAggregateRootType(
+      name = module.shardName,
+      indexes = module.indexes,
+      environment = module.environment
+    )
   }
 
-
   abstract class EntityAggregateActor( implicit identifying: Identifying.Aux[E, E#ID] )
-    extends AggregateRoot[E, E#ID]()(
-      identifying,
-      evState
-    ) {
+      extends AggregateRoot[E, E#ID]()(
+        identifying,
+        evState
+      ) {
     publisher: AggregateRoot.Provider with EventPublisher =>
     override def acceptance: Acceptance = entityAcceptance
 
     def entityAcceptance: Acceptance = {
-      case (protocol.Added(_, info), s) => {
+      case ( protocol.Added( _, info ), s ) => {
         preActivate()
-        context become LoggingReceive{ around( active ) }
+        context become LoggingReceive { around( active ) }
         module.triedToEntity( info ) getOrElse s
       }
-      case (protocol.Renamed(_, _, newName), s ) => module.nameLens.set( s )( newName )
-      case (protocol.Reslugged(_, _, newSlug), s ) => module.slugLens map { _.set( s )( newSlug ) } getOrElse s
-      case (_: protocol.Disabled, s) => {
+      case ( protocol.Renamed( _, _, newName ), s ) => module.nameLens.set( s )( newName )
+      case ( protocol.Reslugged( _, _, newSlug ), s ) =>
+        module.slugLens map { _.set( s )( newSlug ) } getOrElse s
+      case ( _: protocol.Disabled, s ) => {
         preDisable()
         context become LoggingReceive { around( disabled ) }
         module.isActiveLens map { _.set( s )( false ) } getOrElse s
       }
-      case (_: protocol.Enabled, s) => {
+      case ( _: protocol.Enabled, s ) => {
         preEnable()
         context become LoggingReceive { around( active ) }
         module.isActiveLens map { _.set( s )( true ) } getOrElse s
       }
     }
 
-    def preActivate(): Unit = { }
-    def preDisable(): Unit = { }
-    def preEnable(): Unit = { }
+    def preActivate(): Unit = {}
+    def preDisable(): Unit = {}
+    def preEnable(): Unit = {}
 
     override def receiveCommand: Receive = LoggingReceive { around( quiescent ) }
 
     def quiescent: Receive = {
       case protocol.Add( targetId, info ) if targetId == aggregateId => {
-        persist( protocol.Added(targetId, info) ) { e => acceptAndPublish( e ) }
+        persist( protocol.Added( targetId, info ) ) { e =>
+          acceptAndPublish( e )
+        }
       }
     }
 
     def active: Receive = {
       case protocol.Rename( id, name ) => {
-        persist( protocol.Renamed(id, module.nameLens.get(state), name) ) { e => acceptAndPublish( e ) }
+        persist( protocol.Renamed( id, module.nameLens.get( state ), name ) ) { e =>
+          acceptAndPublish( e )
+        }
       }
 
       case protocol.Reslug( id, slug ) if module.slugLens.isDefined => {
-        persist( protocol.Reslugged(id, module.slugLens.get.get(state), slug) ) { e => acceptAndPublish( e ) }
+        persist( protocol.Reslugged( id, module.slugLens.get.get( state ), slug ) ) { e =>
+          acceptAndPublish( e )
+        }
       }
 
-      case protocol.Disable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persist( protocol.Disabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
+      case protocol.Disable( id )
+          if module.isActiveLens.isDefined && id == module.idLens.get( state ) => {
+        persist( protocol.Disabled( id, module.entityLabel( state ) ) ) { e =>
+          acceptAndPublish( e )
+        }
       }
     }
 
     def disabled: Receive = {
-      case protocol.Enable( id ) if module.isActiveLens.isDefined && id == module.idLens.get(state) => {
-        persist( protocol.Enabled(id, module.entityLabel( state ) ) ) { e => acceptAndPublish( e ) }
+      case protocol.Enable( id )
+          if module.isActiveLens.isDefined && id == module.idLens.get( state ) => {
+        persist( protocol.Enabled( id, module.entityLabel( state ) ) ) { e =>
+          acceptAndPublish( e )
+        }
       }
     }
   }

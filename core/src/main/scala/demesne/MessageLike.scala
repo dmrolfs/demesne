@@ -2,7 +2,6 @@ package demesne
 
 import omnibus.commons.identifier.TaggedID
 
-
 trait MessageLike {
   type ID
   type TID = TaggedID[ID]

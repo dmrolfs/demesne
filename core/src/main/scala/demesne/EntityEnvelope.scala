@@ -2,7 +2,6 @@ package demesne
 
 import omnibus.commons.identifier.TaggedID
 
-
 /**
   * Created by rolfsd on 6/30/16.
   */

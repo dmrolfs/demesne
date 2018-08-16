@@ -1,6 +1,5 @@
 package demesne.index
 
-
 /**
   * base index protocol type
   */

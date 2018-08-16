@@ -1,12 +1,11 @@
 package contoso.conference.payments
 
 import demesne.AggregateProtocol
-import omnibus.commons.identifier.{ShortUUID, TaggedID}
-
+import omnibus.commons.identifier.{ ShortUUID, TaggedID }
 
 /**
- * Created by damonrolfs on 9/12/14.
- */
+  * Created by damonrolfs on 9/12/14.
+  */
 
 object PaymentSourceProtocol extends AggregateProtocol[ShortUUID] {
   case class PaymentCompleted(
@@ -14,7 +13,6 @@ object PaymentSourceProtocol extends AggregateProtocol[ShortUUID] {
     paymentSourceId: PaymentSourceModule.TID
   ) extends Event
 }
-
 
 trait PaymentSourceModule {
 //work here

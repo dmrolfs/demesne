@@ -2,7 +2,6 @@ package demesne
 
 import omnibus.commons.identifier.TaggedID
 
-
 trait EventLike extends Serializable {
   type ID
   type TID = TaggedID[ID]

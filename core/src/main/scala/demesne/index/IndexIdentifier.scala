@@ -4,11 +4,10 @@ import scala.language.existentials
 import scala.reflect.ClassTag
 import omnibus.commons.identifier.TaggedID
 
-
 /**
   * Created by rolfsd on 8/16/16.
   */
-final case class IndexIdentifier private[index](
+final case class IndexIdentifier private[index] (
   topic: String,
   keyTag: ClassTag[_],
   idTag: ClassTag[_],
@@ -18,6 +17,7 @@ final case class IndexIdentifier private[index](
 }
 
 object IndexIdentifier {
+
   def make[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String ): IndexIdentifier = {
     IndexIdentifier(
       topic,

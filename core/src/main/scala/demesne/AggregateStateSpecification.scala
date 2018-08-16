@@ -4,15 +4,13 @@
 // import akka.persistence.SnapshotOffer
 // import com.typesafe.scalalogging.LazyLogging
 // import omnibus.commons.util._
-
-
 // object AggregateStateSpecification {
 //   type Acceptance[S] = PartialFunction[(Any, S), S]
 // }
 
 // trait AggregateStateSpecification[S] extends LazyLogging { outer =>
 //   import AggregateStateSpecification._
-  
+
 //   def acceptance: Acceptance[S]
 
 //   def accept( state: S, event: Any ): S = {
