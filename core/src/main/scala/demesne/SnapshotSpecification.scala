@@ -3,7 +3,7 @@ package demesne
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import akka.actor.{ ActorRef, ActorSystem, Cancellable, NotInfluenceReceiveTimeout }
-import omnibus.commons.identifier.TaggedID
+import omnibus.identifier.Id
 
 object SnapshotSpecification {
   case object DoNotSnapshot extends SnapshotSpecification {
@@ -13,11 +13,11 @@ object SnapshotSpecification {
 }
 
 abstract class SnapshotSpecification { outer =>
-  def saveSnapshotCommand[ID]( tid: TaggedID[ID] ): Any = SaveSnapshot( targetId = tid )
+  def saveSnapshotCommand[S]( tid: Id[S] ): Any = SaveSnapshot[S]( targetId = tid )
   def snapshotInitialDelay: FiniteDuration
   def snapshotInterval: FiniteDuration
 
-  def schedule[ID]( system: ActorSystem, target: ActorRef, tid: TaggedID[ID] )(
+  def schedule[S]( system: ActorSystem, target: ActorRef, tid: Id[S] )(
     implicit ec: ExecutionContext
   ): Cancellable = {
     system.scheduler.schedule(
@@ -29,8 +29,9 @@ abstract class SnapshotSpecification { outer =>
   }
 }
 
-case class SaveSnapshot( override val targetId: TaggedID[Any] )
+case class SaveSnapshot[S]( override val targetId: Id[S] )
     extends CommandLike
     with NotInfluenceReceiveTimeout {
-  override type ID = Any
+
+  override type A = S
 }

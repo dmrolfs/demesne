@@ -7,15 +7,14 @@ import akka.actor.{ ActorIdentity, ActorRef, ActorSystem, Identify, Terminated }
 import akka.agent.Agent
 import akka.pattern.{ ask, AskableActorSelection }
 import akka.util.Timeout
+import shapeless.the
 import monix.eval.Task
 import monix.execution.Scheduler
 import com.typesafe.config.Config
-import com.typesafe.scalalogging.StrictLogging
-import omnibus.commons.ErrorOr
+import omnibus.core.{ EC, ErrorOr }
 import demesne.repository.{ RepositorySupervisor, StartProtocol }
 import demesne.DomainModel.{ AggregateIndex, DomainModelCell, Supervisors }
 import demesne.index.{ IndexBus, IndexSupervisor }
-import shapeless.the
 
 /**
   * Created by rolfsd on 8/26/16.
@@ -33,11 +32,11 @@ abstract class BoundedContext {
   def addAggregateTypes[_: EC]( rootTypes: Set[AggregateRootType] ): Future[BoundedContext]
   def withResources( rs: BoundedContext.Resources ): BoundedContext
   def withStartTask[_: EC]( task: StartTask ): BoundedContext
-  def start[_: EC: T](): Future[BoundedContext]
+  def start[_: EC: TO](): Future[BoundedContext]
   def shutdown(): Future[Terminated]
 }
 
-object BoundedContext extends StrictLogging { outer =>
+object BoundedContext { outer =>
   import Scheduler.global
 
   def toScheduler[_: EC]: Scheduler = Scheduler apply the[ExecutionContext]
@@ -115,6 +114,7 @@ object BoundedContext extends StrictLogging { outer =>
   }
 
   private val contextsScheduler: ExecutionContext = global
+
   private val contexts: Agent[Map[Symbol, BoundedContextCell]] = {
     Agent( Map.empty[Symbol, BoundedContextCell] )( contextsScheduler )
   }
@@ -128,25 +128,22 @@ object BoundedContext extends StrictLogging { outer =>
           .get( key )
           .map { c =>
             val newCell = f( c )
-            logger.debug( "Sending BoundedContext for key:[{}] to be [{}]", key.name, newCell )
+            scribe.debug( s"Sending BoundedContext for key:[${key.name}] to be [${newCell}]" )
             cells + (key -> newCell)
           }
           .getOrElse {
-            logger.error(
-              "BoundedContext not found: [{}]",
-              BoundedContextlNotRegisteredError( key )
+            scribe.error(
+              s"BoundedContext not found: [${BoundedContextlNotRegisteredError( key )}]"
             )
             cells //todo ? throw error instead of log and ignore?
           }
       }
   }
 
-  private def alterContextCell(
+  private def alterContextCell[_: EC](
     key: Symbol
   )(
     f: BoundedContextCell => BoundedContextCell
-  )(
-    implicit ec: ExecutionContext = contextsScheduler
   ): Future[BoundedContextCell] = {
     contexts
       .alterOff { cells =>
@@ -154,13 +151,12 @@ object BoundedContext extends StrictLogging { outer =>
           .get( key )
           .map { c =>
             val newCell = f( c )
-            logger.debug( "Altering BoundedContext key:[{}] to be [{}]", key.name, newCell )
+            scribe.debug( s"Altering BoundedContext key:[${key.name}] to be [${newCell}]" )
             cells + (key -> newCell)
           }
           .getOrElse {
-            logger.error(
-              "BoundedContext not found: [{}]",
-              BoundedContextlNotRegisteredError( key )
+            scribe.error(
+              s"BoundedContext not found: [${BoundedContextlNotRegisteredError( key )}]"
             )
             cells
           }
@@ -220,7 +216,7 @@ object BoundedContext extends StrictLogging { outer =>
       this
     }
 
-    override def start[_: EC: T](): Future[BoundedContext] = {
+    override def start[_: EC: TO](): Future[BoundedContext] = {
       for {
         cell <- alterContextCell( key ) { cell =>
           Await.result( cell.start().mapTo[BoundedContextCell], the[Timeout].duration )
@@ -250,12 +246,12 @@ object BoundedContext extends StrictLogging { outer =>
     override def toString: String = s"DomainModel(${name}, system:${system})"
 
     private def unsafeCell: DomainModelCell = contexts()( key ).modelCell
-    private def futureCell: Future[DomainModelCell] = {
-      implicit val ec: ExecutionContext = global
-      contexts.future() map { ctxs =>
-        ctxs( key ).modelCell
-      }
-    }
+//    private def futureCell: Future[DomainModelCell] = {
+//      implicit val ec: ExecutionContext = global
+//      contexts.future() map { ctxs =>
+//        ctxs( key ).modelCell
+//      }
+//    }
 
     override val name: String = key.name
     override def rootTypes: Set[AggregateRootType] = unsafeCell.rootTypes
@@ -314,10 +310,9 @@ object BoundedContext extends StrictLogging { outer =>
         val newModel = rootTypes.foldLeft( modelCell ) { ( m, rt ) =>
           m addAggregateType rt
         }
-        logger.info(
-          "BoundedContextCell: added rootTypes:[{}] to modelCell - new root-types=[{}]",
-          rootTypes,
-          newModel.rootTypes.mkString( ", " )
+        scribe.info(
+          s"BoundedContextCell: added rootTypes:[${rootTypes}] to modelCell - new root-types=[${newModel.rootTypes
+            .mkString( ", " )}]",
         )
 
         this.copy( modelCell = newModel )
@@ -332,9 +327,14 @@ object BoundedContext extends StrictLogging { outer =>
           .task( this )
           .runAsync
           .onComplete {
-            case Success( result ) =>
-              logger.debug( "start task completed with result: [{}]", result )
-            case Failure( ex ) => { logger.error( "start task failed", ex ); throw ex }
+            case Success( result ) => {
+              scribe.debug( s"start task completed with result: [${result}]" )
+            }
+
+            case Failure( ex ) => {
+              scribe.error( "start task failed", ex )
+              throw ex
+            }
           }
 
         this
@@ -345,42 +345,38 @@ object BoundedContext extends StrictLogging { outer =>
 
     def started: Boolean = supervisors.isDefined
 
-    override def start[_: EC: T](): Future[BoundedContext] = {
+    override def start[_: EC: TO](): Future[BoundedContext] = {
       import omnibus.commons.concurrent._
 
       implicit val scheduler = toScheduler( the[ExecutionContext] )
 
       for {
         taskResults <- this.gatherAllTasks().unsafeToFuture
-        _ = logger.info( "BoundedContext start tasks results: [{}]", taskResults )
+        _ = scribe.info( s"BoundedContext start tasks results: [${taskResults}]" )
         supervisors <- setupSupervisors()
         _           <- (supervisors.repository ? StartProtocol.WaitForStart).mapTo[StartProtocol.Started.type]
         dupRoots = taskResults.rootTypes intersect modelCell.rootTypes
         _ = if (dupRoots.nonEmpty) {
-          logger.info(
-            "BoundedContext start task resulting in duplicate root types :[{}]",
-            dupRoots.mkString( ", " )
+          scribe.info(
+            s"BoundedContext start task resulting in duplicate root types:[${dupRoots.mkString( ", " )}]"
           )
         }
         freshRoots = taskResults.rootTypes -- dupRoots
         updatedRoots = modelCell.rootTypes ++ freshRoots
         newModelCell = modelCell.copy( supervisors = Some( supervisors ), rootTypes = updatedRoots )
         startedModelCell <- newModelCell.start()
-        _ = logger.info(
-          "BoundedContext started modeCell root types:[{}]",
-          startedModelCell.rootTypes
+        _ = scribe.info(
+          s"BoundedContext started modeCell root types:[${startedModelCell.rootTypes}]"
         )
       } yield {
-        logger.info(
-          "started BoundedContext:[{}] model:[{}]",
-          ( name, system.name ),
-          startedModelCell
+        scribe.info(
+          s"started BoundedContext:[${( name, system.name )}] model:[${startedModelCell}]"
         )
         val dupResources = taskResults.resources.keySet intersect userResources.keySet
         if (dupResources.nonEmpty) {
-          logger.warn(
-            "duplicate resources resulting from start tasks replacing user provided: [{}]",
-            dupResources.mkString( ", " )
+          scribe.warn(
+            s"duplicate resources resulting from start tasks replacing user provided: [${dupResources
+              .mkString( ", " )}]"
           )
         }
 
@@ -407,9 +403,8 @@ object BoundedContext extends StrictLogging { outer =>
           val aggregate = results.foldLeft( StartTask.Result() ) { ( acc, r ) =>
             val dups = r.resources.keySet intersect acc.resources.keySet
             if (dups.nonEmpty) {
-              logger.warn(
-                "duplicate resources resulting from start tasks - selection undefined: [{}]",
-                dups.mkString( ", " )
+              scribe.warn(
+                s"duplicate resources resulting from start tasks - selection undefined: [${dups.mkString( ", " )}]"
               )
             }
 
@@ -419,19 +414,16 @@ object BoundedContext extends StrictLogging { outer =>
             )
           }
 
-          logger.info(
-            "BoundedContext[{}]: {} Start tasks completed with resources:[{}] and new root-types:[{}]",
-            name,
-            all.size.toString,
-            aggregate.resources.mkString( ", " ),
-            aggregate.rootTypes.mkString( ", " )
+          scribe.info(
+            s"BoundedContext[${name}]: ${all.size.toString} Start tasks completed with resources:[${aggregate.resources
+              .mkString( ", " )}] and new root-types:[${aggregate.rootTypes.mkString( ", " )}]"
           )
 
           aggregate
         }
         .doOnFinish { ex =>
           ex foreach { x =>
-            logger.error( s"BoundedContext[${name}]: at least one start task failed", x )
+            scribe.error( s"BoundedContext[${name}]: at least one start task failed", x )
           }
           Task now { () }
         }
@@ -478,7 +470,7 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    private def findRepositorySupervisor[_: EC: T](
+    private def findRepositorySupervisor[_: EC: TO](
       repositorySupervisorName: String
     ): Future[Option[ActorRef]] = {
       val sel = system.actorSelection( "/user/" + repositorySupervisorName )
@@ -486,23 +478,21 @@ object BoundedContext extends StrictLogging { outer =>
       (asker ? new Identify( repositorySupervisorName.## ))
         .mapTo[ActorIdentity]
         .map { identity =>
-          logger.debug( "finding repository-supervisor for [{}] = [{}]", sel, identity.ref )
+          scribe.debug( s"finding repository-supervisor for [${sel}] = [${identity.ref}]" )
           identity.ref
         }
     }
 
-    private def makeRepositorySupervisor[_: EC: T](
+    private def makeRepositorySupervisor[_: EC: TO](
       repositorySupervisorName: String,
       rootTypes: Set[AggregateRootType]
     ): Future[ActorRef] = {
       val supervisor = futureModel map { model =>
         import scala.collection.JavaConversions._
 
-        logger.debug(
-          "making repository supervisor:[{}] with root-types:[{}] resources:[{}]",
-          repositorySupervisorName,
-          rootTypes.map { _.name },
-          resources.keySet
+        scribe.debug(
+          s"making repository supervisor:[${repositorySupervisorName}] with root-types:[${rootTypes
+            .map { _.name }}] resources:[${resources.keySet}]"
         )
 
         val props = RepositorySupervisor.props( model, rootTypes, resources, configuration )
@@ -514,25 +504,21 @@ object BoundedContext extends StrictLogging { outer =>
         _      <- (s ? StartProtocol.WaitForStart).mapTo[StartProtocol.Started.type]
         status <- (s ? StartProtocol.GetStatus).mapTo[StartProtocol.StartStatus]
       } yield {
-        logger.debug(
-          "Repository Supervisor [{}] started - has status: [{}]",
-          repositorySupervisorName,
-          status
+        scribe.debug(
+          s"Repository Supervisor [${repositorySupervisorName}] started - has status: [${status}]"
         )
         s
       }
 
       started onComplete {
         case Success( _ ) => {
-          logger.debug(
-            "started repository supervisor:[{}] for root-types:[{}]",
-            repositorySupervisorName,
-            rootTypes.map { _.name }.mkString( ", " )
+          scribe.debug(
+            s"started repository supervisor:[${repositorySupervisorName}] for root-types:[${rootTypes.map { _.name }.mkString( ", " )}]"
           )
         }
 
         case Failure( ex ) => {
-          logger.error(
+          scribe.error(
             "starting repository supervisor failed. look for startup-status in log",
             ex
           )
@@ -540,9 +526,8 @@ object BoundedContext extends StrictLogging { outer =>
             s      <- supervisor
             status <- (s ? StartProtocol.GetStatus).mapTo[StartProtocol.StartStatus]
           } {
-            logger.error(
-              "Starting RepositorySupervisor timed out with startup-status:[{}]",
-              status
+            scribe.error(
+              s"Starting RepositorySupervisor timed out with startup-status:[${status}]"
             )
           }
         }
@@ -562,7 +547,7 @@ object BoundedContext extends StrictLogging { outer =>
       }
     }
 
-    private def findIndexSupervisor[_: EC: T](
+    private def findIndexSupervisor[_: EC: TO](
       indexSupervisorName: String
     ): Future[Option[ActorRef]] = {
       val sel = system.actorSelection( "/user/" + indexSupervisorName )
@@ -570,14 +555,14 @@ object BoundedContext extends StrictLogging { outer =>
       (asker ? new Identify( indexSupervisorName.## ))
         .mapTo[ActorIdentity]
         .map { identity =>
-          logger.debug( "finding index-supervisor for [{}] = [{}]", sel, identity.ref )
+          scribe.debug( s"finding index-supervisor for [${sel}] = [${identity.ref}]" )
           identity.ref
         }
     }
 
     private def makeIndexSupervisor( indexSupervisorName: String ): Future[ActorRef] = {
       Future successful {
-        system.actorOf( IndexSupervisor.props( modelCell.indexBus ), s"${modelCell.name}-indexes" )
+        system.actorOf( IndexSupervisor.props( modelCell.indexBus ), indexSupervisorName )
       }
     }
   }

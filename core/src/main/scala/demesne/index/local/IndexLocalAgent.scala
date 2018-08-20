@@ -7,11 +7,10 @@ import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
 import akka.agent.Agent
 import akka.cluster.pubsub.DistributedPubSub
 import akka.event.LoggingReceive
-import com.typesafe.scalalogging.LazyLogging
 import demesne.AggregateRootType
 import demesne.index.{ IndexAggregateProtocol => P, _ }
-import omnibus.commons.identifier.TaggedID
-import omnibus.commons.util._
+import omnibus.core.syntax.clazz._
+import omnibus.identifier.{ Id, Identifying }
 
 object IndexLocalAgent {
 
@@ -51,8 +50,7 @@ object IndexLocalAgent {
     agent: AkkaAgent[K, I, V]
   )(
     implicit override val ec: ExecutionContext
-  ) extends Index[K, I, V]
-      with LazyLogging {
+  ) extends Index[K, I, V] {
 
     /** Returns all of the current aggregate id key entries.
       *
@@ -76,7 +74,15 @@ class IndexLocalAgent[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
   import akka.cluster.pubsub.DistributedPubSubMediator.{ Subscribe, SubscribeAck }
   import demesne.index.local.IndexLocalAgent._
 
-  val tid: TaggedID[IndexIdentifier] = IndexIdentifier.make[K, I, V]( topic )
+  implicit val identifying = new Identifying[State] {
+    private val id = IndexIdentifier.make[K, I, V]( topic )
+    override type ID = IndexIdentifier
+    override val zeroValue: ID = id
+    override val nextValue: ID = id
+    override def valueFromRep( rep: String ): ID = id
+  }
+
+  val tid: Id[State] = identifying.next
   val KeyType: ClassTag[K] = implicitly[ClassTag[K]]
   val IdType: ClassTag[I] = implicitly[ClassTag[I]]
   val ValueType: ClassTag[V] = implicitly[ClassTag[V]]
@@ -92,8 +98,9 @@ class IndexLocalAgent[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
     result.get
   }
 
-  type IndexAgent = Agent[Map[K, IndexedValue[I, V]]]
-  val index: IndexAgent = Agent( Map[K, IndexedValue[I, V]]() )( dispatcher )
+  type State = Map[K, IndexedValue[I, V]]
+  type IndexAgent = Agent[State]
+  val index: IndexAgent = Agent( Map.empty[K, IndexedValue[I, V]] )( dispatcher )
 
   override def receive: Receive = LoggingReceive { starting( List() ) }
 
@@ -111,26 +118,26 @@ class IndexLocalAgent[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
   }
 
   val ready: Receive = {
-    case e @ P.Recorded( sid, KeyType( key ), IdType( id ), ValueType( value ) ) => {
+    case P.Recorded( _, KeyType( key ), IdType( id ), ValueType( value ) ) => {
       val iValue = IndexedValue[I, V]( id, value )
       index send { r =>
         r + (key -> iValue)
       }
     }
 
-    case P.Withdrawn( sid, Some( KeyType( key ) ), IdType( id ) ) =>
+    case P.Withdrawn( _, Some( KeyType( key ) ), IdType( _ ) ) =>
       index alter { i =>
         i - key
       }
 
-    case P.Withdrawn( sid, None, IdType( id ) ) => {
+    case P.Withdrawn( _, None, IdType( id ) ) => {
       index send { r =>
         val result = r collectFirst { case ( k, IndexedValue( i, _ ) ) if i == id => r - k }
         result getOrElse r
       }
     }
 
-    case P.KeyRevised( sid, KeyType( oldKey ), KeyType( newKey ) ) => {
+    case P.KeyRevised( _, KeyType( oldKey ), KeyType( newKey ) ) => {
       index send { r =>
         val result = r.get( oldKey ) map { value =>
           val rAdded = r + (newKey -> value)
@@ -141,7 +148,7 @@ class IndexLocalAgent[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
       }
     }
 
-    case P.ValueRevised( sid, KeyType( key ), ValueType( oldValue ), ValueType( newValue ) ) => {
+    case P.ValueRevised( _, KeyType( key ), ValueType( _ ), ValueType( newValue ) ) => {
       index send { r =>
         val result = r.get( key ) map { iValue =>
           r + (key -> iValue.copy( value = newValue ))

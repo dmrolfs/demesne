@@ -8,9 +8,9 @@ import akka.event.LoggingReceive
 import akka.pattern.pipe
 import cats.data.Validated.{ Invalid, Valid }
 import cats.syntax.validated._
+import omnibus.core.{ AllIssuesOr, EC }
 import omnibus.akka.ActorStack
 import omnibus.akka.envelope._
-import omnibus.commons.AllIssuesOr
 import demesne.{ AggregateRootType, DomainModel }
 import demesne.repository.{ StartProtocol => SP }
 
@@ -22,7 +22,7 @@ abstract class EnvelopingAggregateRootRepository(
 
   override def repository: Receive = {
     case message => {
-      val originalSender = sender()
+//      val originalSender = sender()
       val aggregate = aggregateFor( message )
       log.debug(
         "enveloping-repository:[{}] forwarding to aggregate:[{}] command:[{}]",
@@ -50,9 +50,8 @@ abstract class AggregateRootRepository(
     with ActorLogging {
   outer: AggregateContext =>
 
-  def handleLoad()( implicit ec: ExecutionContext ): Future[SP.Loaded] = outer.loadContext() map {
-    _ =>
-      doLoad()
+  def handleLoad[_: EC](): Future[SP.Loaded] = outer.loadContext() map { _ =>
+    doLoad()
   }
 
   def doLoad(): SP.Loaded =

@@ -9,11 +9,11 @@ object PassivationSpecification {
     override def inactivityTimeout: Duration = Duration.Undefined
   }
 
-  case class StopAggregateRoot[I0](
-    targetId: StopAggregateRoot[I0]#TID
+  case class StopAggregateRoot[S](
+    targetId: StopAggregateRoot[S]#TID
   ) extends MessageLike
       with NotInfluenceReceiveTimeout {
-    type ID = I0
+    override type A = S
   }
 }
 

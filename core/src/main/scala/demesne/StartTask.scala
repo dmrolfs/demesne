@@ -2,7 +2,6 @@ package demesne
 
 import akka.Done
 import monix.eval.Task
-import com.typesafe.scalalogging.StrictLogging
 
 /**
   * Created by rolfsd on 10/28/16.
@@ -12,7 +11,9 @@ sealed abstract class StartTask {
   def description: String
 }
 
-object StartTask extends StrictLogging {
+object StartTask {
+  import scala.language.implicitConversions
+
   case class Result(
     resources: Map[Symbol, Any] = Map.empty[Symbol, Any],
     rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
@@ -23,13 +24,19 @@ object StartTask extends StrictLogging {
     }
   }
 
-  implicit def resultFromResources( resources: Map[Symbol, Any] ): Result =
+  implicit def resultFromResources( resources: Map[Symbol, Any] ): Result = {
     Result( resources = resources )
-  implicit def resultFromRootTypes( rootTypes: Set[AggregateRootType] ): Result =
+  }
+
+  implicit def resultFromRootTypes( rootTypes: Set[AggregateRootType] ): Result = {
     Result( rootTypes = rootTypes )
+  }
+
   implicit def resultFromDone( done: Done ): Result = Result()
-  implicit def resultTaskfromDone( done: Task[Done] ): Task[Result] = done map { _ =>
-    Result()
+  implicit def resultTaskfromDone( done: Task[Done] ): Task[Result] = {
+    done map { _ =>
+      Result()
+    }
   }
 
   def withFunction( description: String )( fn: BoundedContext => StartTask.Result ): StartTask = {
@@ -55,22 +62,20 @@ object StartTask extends StrictLogging {
 
     def wrap( task: Task[Result] ): Task[Result] = {
       Task
-        .now { logger.info( "starting: {} ...", description ) }
+        .now { scribe.info( s"starting: ${description} ..." ) }
         .flatMap { _ =>
           task
         }
         .flatMap { r =>
-          logger.info(
-            "finished: {} with resources:[{}] and rootTypes:[{}]",
-            description,
-            r.resources.mkString( ", " ),
-            r.rootTypes.mkString( ", " )
+          scribe.info(
+            s"finished: ${description} with resources:[${r.resources
+              .mkString( ", " )}] and rootTypes:[${r.rootTypes.mkString( ", " )}]"
           )
           Task now r
         }
         .doOnFinish { ex =>
           ex foreach { x =>
-            logger.error( s"StartTask:[${description}] failed", x )
+            scribe.error( s"StartTask:[${description}] failed", x )
           }
           Task now { () }
         }

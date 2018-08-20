@@ -4,11 +4,10 @@ import scala.concurrent.duration._
 import akka.actor.Props
 import akka.cluster.sharding.{ ClusterShardingSettings, ShardRegion }
 import akka.cluster.sharding.ShardRegion.Passivate
-import com.typesafe.scalalogging.LazyLogging
 import demesne.index.IndexSpecification
 import omnibus.akka.envelope.Envelope
 import omnibus.akka.publish.ReliablePublisher.ReliableMessage
-import omnibus.commons.identifier.Identifying
+import omnibus.identifier.Identifying
 
 object AggregateRootType {
 
@@ -20,7 +19,7 @@ object AggregateRootType {
   val DefaultSnapshotPeriod: FiniteDuration = 15.minutes
 }
 
-abstract class AggregateRootType extends Equals with LazyLogging {
+abstract class AggregateRootType extends Equals {
   def name: String
   def repositoryName: String = name
 
@@ -33,9 +32,9 @@ abstract class AggregateRootType extends Equals with LazyLogging {
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {
-    case cmd: CommandLike  => ( cmd.targetId.id.toString, cmd )
-    case event: EventLike  => ( event.sourceId.id.toString, event )
-    case msg: MessageLike  => ( msg.targetId.id.toString, msg )
+    case cmd: CommandLike  => ( cmd.targetId.value.toString, cmd )
+    case event: EventLike  => ( event.sourceId.value.toString, event )
+    case msg: MessageLike  => ( msg.targetId.value.toString, msg )
     case e: EntityEnvelope => ( e.id.toString, e )
     case e @ Envelope( payload, _ ) if aggregateIdFor.isDefinedAt( payload ) =>
       ( aggregateIdFor( payload )._1, e ) // want MatchError on payload if not found
@@ -62,9 +61,9 @@ abstract class AggregateRootType extends Equals with LazyLogging {
   def numberOfShards: Int = 10 * maximumNrClusterNodes
 
   def shardIdFor: ShardRegion.ExtractShardId = {
-    case cmd: CommandLike          => (math.abs( cmd.targetId.id.## ) % numberOfShards).toString
-    case event: EventLike          => (math.abs( event.sourceId.id.## ) % numberOfShards).toString
-    case msg: MessageLike          => (math.abs( msg.targetId.id.## ) % numberOfShards).toString
+    case cmd: CommandLike          => (math.abs( cmd.targetId.## ) % numberOfShards).toString
+    case event: EventLike          => (math.abs( event.sourceId.## ) % numberOfShards).toString
+    case msg: MessageLike          => (math.abs( msg.targetId.## ) % numberOfShards).toString
     case e: EntityEnvelope         => (math.abs( e.id.## ) % numberOfShards).toString
     case Envelope( payload, _ )    => shardIdFor( payload )
     case ReliableMessage( _, msg ) => shardIdFor( msg )

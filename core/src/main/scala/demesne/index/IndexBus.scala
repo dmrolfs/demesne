@@ -2,11 +2,10 @@ package demesne.index
 
 import akka.event.{ ActorEventBus, SubchannelClassification }
 import akka.util.Subclassification
-import com.typesafe.scalalogging.LazyLogging
-import demesne.AggregateRootType
 import omnibus.akka.publish.Publisher
+import demesne.AggregateRootType
 
-object IndexBus extends LazyLogging {
+object IndexBus {
 
   /**
     * Message used to relay an event to the [[demesne.index.IndexAggregate]].
@@ -28,8 +27,9 @@ object IndexBus extends LazyLogging {
 }
 
 /**
-  * IndexBus connects the index mechanism via Akka's EventBus framework. The rebister bus is used to route aggregate
-  * events to the [[IndexAggregate]] who maintains the local index for the Aggregate Root.
+  * IndexBus connects the index mechanism via Akka's EventBus framework. The rebister bus is used to
+  * route aggregate events to the [[IndexAggregate]] who maintains the local index for the
+  * Aggregate Root.
   * Created by damonrolfs on 11/1/14.
   */
 class IndexBus extends ActorEventBus with SubchannelClassification {

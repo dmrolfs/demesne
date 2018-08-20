@@ -10,9 +10,9 @@ import com.typesafe.config.Config
 import cats.syntax.either._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.Tag
-import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
+import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ ChildStarted, StartChild }
 import omnibus.commons.ErrorOr
-import omnibus.commons.identifier.{Identifying, ShortUUID}
+import omnibus.commons.identifier.{ Identifying, ShortUUID }
 import omnibus.commons.log.Trace
 import demesne._
 import demesne.index.IndexSupervisor._
@@ -20,14 +20,13 @@ import demesne.index.local.IndexLocalAgent
 import demesne.repository.CommonLocalRepository
 import demesne.testkit.ParallelAkkaSpec
 
-
 object AggregateIndexRegistrationSpec {
   val sysId = new AtomicInteger()
 }
 
 /**
- * Created by damonrolfs on 9/18/14.
- */
+  * Created by damonrolfs on 9/18/14.
+  */
 class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar {
 
   private val trace = Trace[AggregateIndexRegistrationSpec]
@@ -36,12 +35,17 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
   type ConstituentProbes = Map[IndexConstituent, TestProbe]
 
-
-  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+  override def createAkkaFixture(
+    test: OneArgTest,
+    config: Config,
+    system: ActorSystem,
+    slug: String
+  ): Fixture = {
     new Fixture( config, system, slug )
   }
 
-  class Fixture( _config: Config, _system: ActorSystem, _slug: String ) extends AkkaFixture( _config, _system, _slug ) {
+  class Fixture( _config: Config, _system: ActorSystem, _slug: String )
+      extends AkkaFixture( _config, _system, _slug ) {
     private val trace = Trace[Fixture]
 
     override val rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
@@ -70,17 +74,20 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
           CommonLocalRepository.props( model, this, noAggregateProps )
         }
 
-        val noAggregateProps = (m: DomainModel, rt: AggregateRootType) => {
+        val noAggregateProps = ( m: DomainModel, rt: AggregateRootType ) => {
           throw new Exception( "rootType.aggregateRootProps should not be invoked" )
         }
       }
     }
   }
 
-
   object WIP extends Tag( "wip" )
 
-  def childNameFor( prefix: String, rootType: AggregateRootType, spec: IndexSpecification ): String = {
+  def childNameFor(
+    prefix: String,
+    rootType: AggregateRootType,
+    spec: IndexSpecification
+  ): String = {
     s"${prefix}_${rootType.name}-${spec topic rootType}"
   }
 
@@ -102,12 +109,13 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     spec: IndexSpecification,
     constituency: List[RegisterConstituentRef]
   )(
-    implicit system: ActorSystem, f: Fixture
+    implicit system: ActorSystem,
+    f: Fixture
   ): TestActorRef[IndexRegistration] = TestActorRef[IndexRegistration](
     IndexRegistration.props(
       supervisor = f.supervisor.ref,
       constituency = constituency,
-      subscription = Right( (f.bus, spec.relayClassifier(rootType)) ),
+      subscription = Right( ( f.bus, spec.relayClassifier( rootType ) ) ),
       spec = spec,
       registrant = f.registrant.ref,
       registrantType = rootType
@@ -120,7 +128,8 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     constituentProbes: Map[IndexConstituent, TestProbe],
     toCheck: Set[IndexConstituent]
   )(
-    implicit system: ActorSystem, f: Fixture
+    implicit system: ActorSystem,
+    f: Fixture
   ): Unit = trace.block( "expectStartWorkflow" ) {
     trace( s"rootType = $rootType" )
     trace( s"spec = $spec" )
@@ -129,7 +138,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
     trace( s"toCheck = $toCheck" )
 
     toCheck foreach { c =>
-      f.supervisor.expectMsgPF( hint="Start "+c.category.name ) {
+      f.supervisor.expectMsgPF( hint = "Start " + c.category.name ) {
         case StartChild( _, name ) => true
       }
       f.supervisor reply ChildStarted( f.constituent.ref )
@@ -146,7 +155,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
       3.seconds.dilated,
       s"registered[${constituentProbes.size}]"
     ) {
-      case IndexRegistered(_, rootType, spec) => true
+      case IndexRegistered( _, rootType, spec ) => true
     }
   }
 
@@ -154,14 +163,18 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
     "survey upon first create" in { implicit f: Fixture =>
       implicit val system = f.system
-      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ){
-        case FooAdded( name ) => Directive.Record(name, name.hashCode, name.hashCode)
+      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ) {
+        case FooAdded( name ) => Directive.Record( name, name.hashCode, name.hashCode )
       }
       val rt = f.rootType( spec )
-      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
+      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ) {
+        TestProbe()
+      } ): _* )
 
       val constituency = constituencyFor(
-        probes map { kp => (kp._1 -> kp._2.ref) },
+        probes map { kp =>
+          (kp._1 -> kp._2.ref)
+        },
         rt,
         spec
       )
@@ -173,13 +186,17 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
     "no startups after initial create in node" in { implicit f: Fixture =>
       implicit val system = f.system
-      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ){
-        case FooAdded( name ) => Directive.Record(name, name.hashCode, name.hashCode)
+      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ) {
+        case FooAdded( name ) => Directive.Record( name, name.hashCode, name.hashCode )
       }
       val rt = f.rootType( spec )
-      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
+      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ) {
+        TestProbe()
+      } ): _* )
       val constituency = constituencyFor(
-        probes map { kp => (kp._1 -> kp._2.ref) },
+        probes map { kp =>
+          (kp._1 -> kp._2.ref)
+        },
         rt,
         spec
       )
@@ -188,15 +205,19 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
       expectStartWorkflow( rt, spec, probes, Set() )
     }
 
-    "relay startup after initial create in node" taggedAs(WIP) in { implicit f: Fixture =>
+    "relay startup after initial create in node" taggedAs (WIP) in { implicit f: Fixture =>
       implicit val system = f.system
-      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ){
-        case FooAdded( name ) => Directive.Record(name, name.hashCode, name.hashCode)
+      val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ) {
+        case FooAdded( name ) => Directive.Record( name, name.hashCode, name.hashCode )
       }
       val rt = f.rootType( spec )
-      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ){ TestProbe() } ):_* )
+      val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ) {
+        TestProbe()
+      } ): _* )
       val constituency = constituencyFor(
-        probes map { kp => (kp._1 -> kp._2.ref) },
+        probes map { kp =>
+          (kp._1 -> kp._2.ref)
+        },
         rt,
         spec
       )

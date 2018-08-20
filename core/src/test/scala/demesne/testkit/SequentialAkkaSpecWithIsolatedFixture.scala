@@ -5,21 +5,23 @@ import scala.util.Try
 import scala.concurrent.duration._
 import scala.concurrent.Await
 import akka.actor.ActorSystem
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.testkit.{ ImplicitSender, TestKit }
 import cats.syntax.either._
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.StrictLogging
-import org.scalatest.{MustMatchers, Outcome, fixture}
+import org.scalatest.{ fixture, MustMatchers, Outcome }
 import omnibus.commons.log.Trace
 import omnibus.commons.util._
-
 
 object SequentialAkkaSpecWithIsolatedFixture {
   val testPosition: AtomicInteger = new AtomicInteger()
 }
 
 // Runs each test sequentially but provides fixture isolation
-abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec with MustMatchers with StrictLogging{
+abstract class SequentialAkkaSpecWithIsolatedFixture
+    extends fixture.WordSpec
+    with MustMatchers
+    with StrictLogging {
   private val trace = Trace[SequentialAkkaSpecWithIsolatedFixture]
 
   def testPosition: AtomicInteger = SequentialAkkaSpecWithIsolatedFixture.testPosition
@@ -27,22 +29,28 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
   type Fixture <: AkkaFixture
   type FixtureParam = Fixture
 
-
   class AkkaFixture( val config: Config, _system: ActorSystem, val slug: String )
-  extends TestKit( _system ) with ImplicitSender {
-    def before( test: OneArgTest ): Unit = { }
-    def after( test: OneArgTest ): Unit = { }
+      extends TestKit( _system )
+      with ImplicitSender {
+    def before( test: OneArgTest ): Unit = {}
+    def after( test: OneArgTest ): Unit = {}
   }
-
 
   def testSlug( test: OneArgTest ): String = {
     s"Seq-${getClass.safeSimpleName}-${SequentialAkkaSpecWithIsolatedFixture.testPosition.incrementAndGet()}"
   }
 
   def testConfiguration( test: OneArgTest, slug: String ): Config = demesne.testkit.config
-  def testSystem( test: OneArgTest, config: Config, slug: String ): ActorSystem = ActorSystem( name = slug, config )
-  def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture
 
+  def testSystem( test: OneArgTest, config: Config, slug: String ): ActorSystem =
+    ActorSystem( name = slug, config )
+
+  def createAkkaFixture(
+    test: OneArgTest,
+    config: Config,
+    system: ActorSystem,
+    slug: String
+  ): Fixture
 
   override def withFixture( test: OneArgTest ): Outcome = {
     val slug = testSlug( test )
@@ -55,20 +63,21 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
       logger.debug( ".......... before test .........." )
       f before test
       logger.debug( "++++++++++ starting test ++++++++++" )
-      ( test(f), f )
+      ( test( f ), f )
     }
 
-    val outcome = results map { case (o, f) =>
-      logger.debug( "---------- finished test ------------" )
-      f after test
-      logger.debug( ".......... after test .........." )
+    val outcome = results map {
+      case ( o, f ) =>
+        logger.debug( "---------- finished test ------------" )
+        f after test
+        logger.debug( ".......... after test .........." )
 
-      Option(f.system) foreach { s =>
-        val terminated = s.terminate()
-        Await.ready( terminated, 30.seconds )
-      }
+        Option( f.system ) foreach { s =>
+          val terminated = s.terminate()
+          Await.ready( terminated, 30.seconds )
+        }
 
-      o
+        o
     }
 
     outcome match {

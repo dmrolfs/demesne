@@ -1,6 +1,6 @@
 package demesne.index
 
-import omnibus.commons.util._
+import omnibus.core.syntax.clazz._
 
 object Directive {
 
@@ -8,14 +8,20 @@ object Directive {
     */
   case class Record[K, I, V]( key: K, identifier: I, value: V ) extends Directive {
     override def toString: String = {
-      getClass.safeSimpleName + s"(${key}:${key.getClass.safeSimpleName}, ${identifier}:${identifier.getClass.safeSimpleName}, ${value}:${value.getClass.safeSimpleName})"
+      getClass.safeSimpleName +
+      Seq( key, identifier, value )
+        .map { p =>
+          p.toString + ":" + p.getClass.safeSimpleName
+        }
+        .mkString( "(", ", ", ")" )
     }
   }
 
   object Record {
 
-    def apply[K, I]( key: K, identifier: I ): Record[K, I, I] =
+    def apply[K, I]( key: K, identifier: I ): Record[K, I, I] = {
       Record( key = key, identifier = identifier, value = identifier )
+    }
   }
 
   /** Withdraw directive tells the index to remove the identifier from the index index.

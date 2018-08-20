@@ -6,7 +6,6 @@ import scala.util.Try
 import akka.actor.{ ActorLogging, ActorPath, ActorRef, ReceiveTimeout }
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
-import com.typesafe.scalalogging.LazyLogging
 import cats.data.Kleisli
 import cats.instances.either._
 import cats.syntax.either._
@@ -14,9 +13,9 @@ import shapeless.the
 import omnibus.akka.envelope._
 import omnibus.akka.publish.EventPublisher
 import omnibus.akka.ActorStack
-import omnibus.commons.identifier.{ Identifying, TaggedID }
-import omnibus.commons.{ ErrorOr, KOp }
-import omnibus.commons.util._
+import omnibus.identifier.{ Id, Identifying }
+import omnibus.core.{ ErrorOr, KOp }
+import omnibus.core.syntax.clazz._
 import demesne.PassivationSpecification.StopAggregateRoot
 
 //////////////////////////////////////
@@ -31,29 +30,27 @@ import demesne.PassivationSpecification.StopAggregateRoot
 // support registration with "state" handler (context become state)
 //////////////////////////////////////
 
-object AggregateRoot extends LazyLogging {
+object AggregateRoot {
   trait Provider extends DomainModel.Provider with AggregateRootType.Provider
 
   type Acceptance[S] = PartialFunction[( Any, S ), S]
 
-  def aggregateIdFromPath[S, I](
-    path: ActorPath
-  )( implicit identifying: Identifying.Aux[S, I] ): TaggedID[I] = {
-    identifying.tag( identifying.idFromString( path.toStringWithoutAddress ) )
+  def aggregateIdFromPath[S: Identifying]( path: ActorPath ): Identifying[S]#TID = {
+//    identifying tidFromString java.net.URLDecoder.decode( self.path.name, "utf-8" )
+    the[Identifying[S]].fromString( path.toStringWithoutAddress )
   }
 
-  def aggregateIdFromRef[S, I](
-    aggregateRef: ActorRef
-  )( implicit identifying: Identifying.Aux[S, I] ): TaggedID[I] = {
-    aggregateIdFromPath[S, I]( aggregateRef.path )
+  def aggregateIdFromRef[S: Identifying]( aggregateRef: ActorRef ): Identifying[S]#TID = {
+    aggregateIdFromPath( aggregateRef.path )
+  }
+
+  def persistenceIdFromPath[S: Identifying]( path: ActorPath ): String = {
+    aggregateIdFromPath( path ).toString
   }
 }
 
-abstract class AggregateRoot[S, I](
-  implicit identifying: Identifying.Aux[S, I],
-  evState: ClassTag[S] //,
-//  evID: ClassTag[I0]
-) extends PersistentActor
+abstract class AggregateRoot[S: Identifying: ClassTag]
+    extends PersistentActor
     with ActorStack
     with EnvelopingActor
     with ActorLogging {
@@ -92,20 +89,22 @@ abstract class AggregateRoot[S, I](
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
-  type ID = I
-  type TID = TaggedID[ID]
-  lazy val evTID: ClassTag[TID] = classTag[TID]
+  val identifying: Identifying[S] = the[Identifying[S]]
+  type ID = identifying.ID
+  type TID = identifying.TID
+//  lazy val evTID: ClassTag[TID] = classTag[TID]
 
-  lazy val aggregateId: TID = aggregateIdFromPath()
+  def aggregateId: TID = AggregateRoot aggregateIdFromPath self.path
 
-  def aggregateIdFromPath(): TID =
-    identifying tidFromString java.net.URLDecoder.decode( self.path.name, "utf-8" )
+//  def aggregateIdFromPath(): ID = {
+//
+//  }
 
-  override lazy val persistenceId: String = persistenceIdFromPath() // self.path.toStringWithoutAddress
+  override def persistenceId: String = AggregateRoot persistenceIdFromPath self.path
 
   // assumes the identifier component of the aggregate path contains only the id and not a tagged id.
 //  val PathComponents = """^.*\/(.+)$""".r
-  def persistenceIdFromPath(): String = aggregateIdFromPath().toString
+//  def persistenceIdFromPath(): String = aggregateIdFromPath().toString
 
   def state: S
   def state_=( newState: S ): Unit
@@ -116,18 +115,18 @@ abstract class AggregateRoot[S, I](
   }
 
   override def around( r: Receive ): Receive = {
-    case m: ReceiveTimeout => {
+    case _: ReceiveTimeout => {
       log.debug(
         "[{}] id:[{}] sending aggregate stop message per receive timeout",
         self.path,
         aggregateId
       )
       context.parent ! rootType.passivation.passivationMessage(
-        PassivationSpecification.StopAggregateRoot[ID]( aggregateId )
+        PassivationSpecification.StopAggregateRoot[S]( aggregateId )
       )
     }
 
-    case StopMessageType( m ) if aggregateIdFor( m ) == Option( aggregateId.id.toString ) => {
+    case StopMessageType( m ) if aggregateIdFor( m ) == Option( aggregateId.value.toString ) => {
       log.debug(
         "[{}] id:[{}] received stop message and starting passivation and stop",
         self.path,
@@ -153,7 +152,7 @@ abstract class AggregateRoot[S, I](
   }
 
   val handleSaveSnapshot: Receive = {
-    case SaveSnapshot( evTID( tid ) ) if tid == aggregateId => {
+    case SaveSnapshot( Id( tid ) ) if tid == aggregateId => {
       log.debug( "saving snapshot for pid:[{}] aid:[{}]", persistenceId, aggregateId )
       saveSnapshot( state )
     }

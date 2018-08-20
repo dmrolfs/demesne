@@ -8,7 +8,7 @@ import akka.contrib.pattern.ReliableProxy.{ Connecting, TargetChanged }
 import akka.event.LoggingReceive
 import omnibus.akka.envelope.Envelope
 
-object IndexRelay extends com.typesafe.scalalogging.LazyLogging {
+object IndexRelay {
 
   def props( indexAggregatePath: ActorPath, extractor: KeyIdExtractor ): Props = {
     Props( new IndexRelay( indexAggregatePath, extractor ) )
@@ -23,8 +23,8 @@ class IndexRelay( indexAggregatePath: ActorPath, extractor: KeyIdExtractor )
     with ActorLogging {
 
   val fullExtractor: KeyIdExtractor = {
-    case m if extractor.isDefinedAt( m )                                => extractor( m )
-    case e @ Envelope( payload, _ ) if extractor.isDefinedAt( payload ) => extractor( payload )
+    case m if extractor.isDefinedAt( m )                            => extractor( m )
+    case Envelope( payload, _ ) if extractor.isDefinedAt( payload ) => extractor( payload )
   }
 
   //todo move into configuration retry timeout
@@ -101,7 +101,7 @@ class IndexRelay( indexAggregatePath: ActorPath, extractor: KeyIdExtractor )
 //      case _: akka.actor.FSM.Transition[_] => ()
 //      case _: akka.contrib.pattern.ReliableProxy.TargetChanged => ()
 //      case id: ActorIdentity => log.debug( "received ActorIdentity:[{}]", id )
-      case m =>
+      case _ =>
         log.warning(
           "RELAY_UNHANDLED [{}]; extractor-defined-at={}",
           message,

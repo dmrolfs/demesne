@@ -1,8 +1,9 @@
 package demesne.module.entity
 
-import demesne.{ AggregateProtocol, AggregateRootModule }
+import demesne.AggregateProtocol
+import omnibus.identifier.Identifying
 
-abstract class EntityProtocol[I] extends AggregateProtocol[I] { protocol =>
+abstract class EntityProtocol[E: Identifying] extends AggregateProtocol[E] { protocol =>
 
   case class Add( override val targetId: Add#TID, info: Option[Any] = None ) extends Command
   case class Rename( override val targetId: Rename#TID, name: String ) extends Command

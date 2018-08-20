@@ -1,16 +1,15 @@
 package demesne
 
-import omnibus.commons.identifier.TaggedID
+import omnibus.identifier.Identifying
 
 /**
   * Created by rolfsd on 6/20/16.
   */
-abstract class AggregateProtocol[I] { outer =>
-  type ID = I
-  type TID = TaggedID[ID]
+abstract class AggregateProtocol[E: Identifying] { outer =>
+  type ID = Identifying[E]#ID
 
   trait ProtocolMessage
-  trait Message extends AggregateRootModule.Message[I] with ProtocolMessage
-  trait Command extends AggregateRootModule.Command[I] with ProtocolMessage
-  trait Event extends AggregateRootModule.Event[I] with ProtocolMessage
+  trait Message extends AggregateRootModule.Message[E] with ProtocolMessage
+  trait Command extends AggregateRootModule.Command[E] with ProtocolMessage
+  trait Event extends AggregateRootModule.Event[E] with ProtocolMessage
 }

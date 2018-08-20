@@ -1,37 +1,35 @@
 package demesne
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.reflect._
-import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.event.LoggingReceive
 import akka.testkit._
 import cats.syntax.either._
 import org.scalatest.concurrent.ScalaFutures
 
 import shapeless._
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{ Config, ConfigFactory }
 import demesne.repository.CommonLocalRepository
 import org.scalatest.OptionValues
-import omnibus.akka.publish.{EventPublisher, StackableStreamPublisher}
-import omnibus.archetype.domain.model.core.{Entity, EntityIdentifying, EntityLensProvider}
+import omnibus.akka.publish.{ EventPublisher, StackableStreamPublisher }
+import omnibus.archetype.domain.model.core.{ Entity, EntityIdentifying, EntityLensProvider }
 import omnibus.akka.envelope._
 import omnibus.commons._
-import omnibus.commons.identifier.{Identifying, ShortUUID, TaggedID}
+import omnibus.commons.identifier.{ Identifying, ShortUUID, TaggedID }
 import omnibus.commons.log.Trace
-
 
 /**
   * Created by rolfsd on 6/29/16.
   */
 class AggregateRootFunctionalSpec
-extends demesne.testkit.AggregateRootSpec[AggregateRootFunctionalSpec]
-with ScalaFutures
-with OptionValues {
+    extends demesne.testkit.AggregateRootSpec[AggregateRootFunctionalSpec]
+    with ScalaFutures
+    with OptionValues {
   import AggregateRootFunctionalSpec._
 
   private val trace = Trace[AggregateRootFunctionalSpec]
-
 
   override type State = AggregateRootFunctionalSpec.State
   override type ID = AggregateRootFunctionalSpec.Foo#ID
@@ -39,26 +37,33 @@ with OptionValues {
   override type Protocol = AggregateRootFunctionalSpec.Protocol.type
   override val protocol: Protocol = AggregateRootFunctionalSpec.Protocol
 
-
-  override def testConfiguration( test: OneArgTest, slug: String ): Config = AggregateRootFunctionalSpec.config
-  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
+  override def testConfiguration( test: OneArgTest, slug: String ): Config =
+    AggregateRootFunctionalSpec.config
+  override def createAkkaFixture(
+    test: OneArgTest,
+    config: Config,
+    system: ActorSystem,
+    slug: String
+  ): Fixture = {
     new Fixture( config, system, slug )
   }
 
-  class Fixture( _config: Config, _system: ActorSystem, _slug: String ) extends AggregateFixture( _config, _system, _slug ) {
+  class Fixture( _config: Config, _system: ActorSystem, _slug: String )
+      extends AggregateFixture( _config, _system, _slug ) {
     private val trace = Trace[Fixture]
     override val module: AggregateRootModule[State, ID] = AggregateRootFunctionalSpec.FooModule
 
-    override def rootTypes: Set[AggregateRootType] = trace.block("rootTypes") { Set( AggregateRootFunctionalSpec.FooModule.rootType ) }
+    override def rootTypes: Set[AggregateRootType] = trace.block( "rootTypes" ) {
+      Set( AggregateRootFunctionalSpec.FooModule.rootType )
+    }
 
     override def nextId(): TID = State.stateIdentifying.nextTID.unsafeGet
 
     def infoFrom( ar: ActorRef )( implicit ec: ExecutionContext ): Future[Option[State]] = {
       import akka.pattern.ask
-      ( ar ? protocol.GetState(tid) ).mapTo[protocol.MyState].map{ _.state }
+      (ar ? protocol.GetState( tid )).mapTo[protocol.MyState].map { _.state }
     }
   }
-
 
   def assertStates( actual: State, expected: State ): Unit = {
     logger.debug( "asserting actual:[{}] == expected:[{}]", actual, expected )
@@ -80,67 +85,74 @@ with OptionValues {
       import f._
       import scala.concurrent.ExecutionContext.Implicits.global
 
-      val e1 = State( tid, Foo(tid, "foo", "foo", b = 17), count = 1 )
+      val e1 = State( tid, Foo( tid, "foo", "foo", b = 17 ), count = 1 )
       entityRef !+ protocol.Bar( e1.id, e1.foo.b )
       bus.expectMsgClass( classOf[protocol.Barred] )
-      whenReady( infoFrom(entityRef) ) { actual => assertStates( actual.value, e1 ) }
+      whenReady( infoFrom( entityRef ) ) { actual =>
+        assertStates( actual.value, e1 )
+      }
 
-      val e2 = State( tid, Foo(tid, "foo", "foo", b = 3.14159), count = 2 )
+      val e2 = State( tid, Foo( tid, "foo", "foo", b = 3.14159 ), count = 2 )
 
       EventFilter.debug( start = "aggregate snapshot successfully saved:", occurrences = 1 ) intercept {
         logger.debug( "+ INTERCEPT" )
         entityRef !+ FooModule.rootType.snapshot.value.saveSnapshotCommand( tid )
         entityRef !+ protocol.Bar( e2.id, e2.foo.b )
-        logger.debug( "TEST:SLEEPING...")
+        logger.debug( "TEST:SLEEPING..." )
         Thread.sleep( 3000 )
-        logger.debug( "TEST:AWAKE...")
+        logger.debug( "TEST:AWAKE..." )
         logger.debug( "- INTERCEPT" )
       }
 
-      whenReady( infoFrom(entityRef) ) { actual => assertStates( actual.value, e2 ) }
+      whenReady( infoFrom( entityRef ) ) { actual =>
+        assertStates( actual.value, e2 )
+      }
     }
 
     "recover and continue after passivation" in { f: Fixture =>
       import f._
       import scala.concurrent.ExecutionContext.Implicits.global
 
-      val p1 = State( tid, Foo(tid, "foo", "foo", b = 3.14159) )
+      val p1 = State( tid, Foo( tid, "foo", "foo", b = 3.14159 ) )
       entityRef !+ protocol.Bar( p1.id, p1.foo.b )
       bus.expectMsgClass( classOf[protocol.Barred] )
-      whenReady( infoFrom(entityRef) ) { actual => assertStates( actual.value, p1 ) }
+      whenReady( infoFrom( entityRef ) ) { actual =>
+        assertStates( actual.value, p1 )
+      }
 
       val barredType = TypeCase[protocol.Barred]
-      val p2 = FooModule.FooActor.foob.set(p1)(1.2345).copy( count = 2 )
+      val p2 = FooModule.FooActor.foob.set( p1 )( 1.2345 ).copy( count = 2 )
       entityRef !+ protocol.Bar( p2.id, p2.foo.b )
       bus.expectMsgPF( 1.second, "Post Passivation BAR" ) {
-        case barredType(protocol.Barred(pid, b)) => {
+        case barredType( protocol.Barred( pid, b ) ) => {
           pid mustBe p2.id
           b mustBe p2.foo.b
         }
       }
-      whenReady( infoFrom(entityRef) ) { _.value mustBe p2 }
+      whenReady( infoFrom( entityRef ) ) { _.value mustBe p2 }
 
-      logger.debug( "TEST:SLEEPING...")
+      logger.debug( "TEST:SLEEPING..." )
       Thread.sleep( 3000 )
-      logger.debug( "TEST:AWAKE...")
+      logger.debug( "TEST:AWAKE..." )
 
-      whenReady( infoFrom(entityRef) ) { _.value mustBe p2 }
+      whenReady( infoFrom( entityRef ) ) { _.value mustBe p2 }
 
-      val p3 = FooModule.FooActor.foob.set(p1)(12).copy( count = 3 )
+      val p3 = FooModule.FooActor.foob.set( p1 )( 12 ).copy( count = 3 )
       entityRef !+ protocol.Bar( p3.id, p3.foo.b )
       bus.expectMsgPF( 1.second.dilated, "Post Passivation BAR" ) {
-        case barredType(protocol.Barred(pid, b)) => {
+        case barredType( protocol.Barred( pid, b ) ) => {
           pid mustBe p3.id
           b mustBe p3.foo.b
         }
       }
 
-      whenReady( infoFrom(entityRef) ) { _.value mustBe p3 }
+      whenReady( infoFrom( entityRef ) ) { _.value mustBe p3 }
     }
   }
 }
 
 object AggregateRootFunctionalSpec {
+
   trait Foo extends Entity with Equals {
     override type ID = ShortUUID
 
@@ -165,16 +177,16 @@ object AggregateRootFunctionalSpec {
     override def equals( rhs: Any ): Boolean = {
       rhs match {
         case that: Foo => {
-          if ( this eq that ) true
+          if (this eq that) true
           else {
-            ( that.## == this.## ) &&
-            ( that canEqual this ) &&
-            ( this.id == that.id ) &&
-            ( this.name == that.name ) &&
-            ( this.slug == that.slug ) &&
-            ( this.f == that.f ) &&
-            ( this.b == that.b ) &&
-            ( this.z == that.z )
+            (that.## == this.##) &&
+            (that canEqual this) &&
+            (this.id == that.id) &&
+            (this.name == that.name) &&
+            (this.slug == that.slug) &&
+            (this.f == that.f) &&
+            (this.b == that.b) &&
+            (this.z == that.z)
           }
         }
 
@@ -184,6 +196,7 @@ object AggregateRootFunctionalSpec {
   }
 
   object Foo extends EntityLensProvider[Foo] {
+
     def apply(
       id: Foo#TID,
       name: String,
@@ -195,13 +208,12 @@ object AggregateRootFunctionalSpec {
       FooImpl( id, name, slug, f, b, z )
     }
 
-
     implicit val fooIdentifying = new EntityIdentifying[Foo] {
       override def nextTID: ErrorOr[TID] = tag( ShortUUID() ).asRight
       override def idFromString( idRep: String ): ShortUUID = ShortUUID fromString idRep
     }
 
-    override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo,  Foo#TID] {
+    override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo, Foo#TID] {
       override def get( f: Foo ): Foo#TID = f.id
       override def set( f: Foo )( id: Foo#TID ): Foo = {
         FooImpl( id = id, name = f.name, slug = f.slug, f = f.f, b = f.b, z = f.z )
@@ -222,10 +234,10 @@ object AggregateRootFunctionalSpec {
       }
     }
 
-
     val bLens: Lens[Foo, Double] = new Lens[Foo, Double] {
       override def get( f: Foo ): Double = f.b
-      override def set( f: Foo )( newB: Double ): Foo = Foo( id = f.id, name = f.name, slug = f.slug, f = f.f, b = newB, z = f.z )
+      override def set( f: Foo )( newB: Double ): Foo =
+        Foo( id = f.id, name = f.name, slug = f.slug, f = f.f, b = newB, z = f.z )
     }
 
     final case class FooImpl(
@@ -237,10 +249,10 @@ object AggregateRootFunctionalSpec {
       override val z: String = ""
     ) extends Foo {
       override def canEqual( that: Any ): Boolean = that.isInstanceOf[FooImpl]
-      override def toString(): String = s"""FooImpl(id=$id, name=$name, slug=$slug, f=$f, b=$b, z="$z")"""
+      override def toString(): String =
+        s"""FooImpl(id=$id, name=$name, slug=$slug, f=$f, b=$b, z="$z")"""
     }
   }
-
 
   object Protocol extends AggregateProtocol[State#ID] {
     case class LogWarning( override val targetId: LogWarning#TID, message: String ) extends Command
@@ -255,7 +267,8 @@ object AggregateRootFunctionalSpec {
   }
 
   object State {
-    implicit val stateIdentifying = new Identifying[State] with ShortUUID.ShortUuidIdentifying[State] {
+    implicit val stateIdentifying = new Identifying[State]
+    with ShortUUID.ShortUuidIdentifying[State] {
       override val idTag: Symbol = Symbol( "foo-state" )
       override def tidOf( o: State ): TID = o.id
     }
@@ -266,10 +279,10 @@ object AggregateRootFunctionalSpec {
 
     override type ID = ShortUUID
 
-    override val rootType: AggregateRootType = trace.block("rootType") {
+    override val rootType: AggregateRootType = trace.block( "rootType" ) {
       new AggregateRootType {
         override def repositoryProps( implicit model: DomainModel ): Props = {
-          CommonLocalRepository.props( model, this, FooActor.props(_, _) )
+          CommonLocalRepository.props( model, this, FooActor.props( _, _ ) )
         }
 
         override def name: String = FooModule.shardName
@@ -281,9 +294,8 @@ object AggregateRootFunctionalSpec {
       }
     }
 
-
-
     object FooActor {
+
       def props( model: DomainModel, rootType: AggregateRootType ): Props = {
         Props( new FooActor( model, rootType ) with StackableStreamPublisher )
       }
@@ -298,22 +310,39 @@ object AggregateRootFunctionalSpec {
     class FooActor(
       override val model: DomainModel,
       override val rootType: AggregateRootType
-    ) extends AggregateRoot[Option[State], ShortUUID]()( Identifying.optionIdentifying(State.stateIdentifying), classTag[Option[State]] )
-              with AggregateRoot.Provider { outer: EventPublisher =>
+    ) extends AggregateRoot[Option[State], ShortUUID]()(
+          Identifying.optionIdentifying( State.stateIdentifying ),
+          classTag[Option[State]]
+        )
+        with AggregateRoot.Provider { outer: EventPublisher =>
 
       override val acceptance: Acceptance = {
-        case (Protocol.Barred(i, b), s) if s.isDefined => {
+        case ( Protocol.Barred( i, b ), s ) if s.isDefined => {
           val oid = outer.id
-          log.debug( "TEST: oid:[{}] accepted BARRED i=[{}] b=[{}]  current-state:[{}]", oid, i, b, s )
-          val result = s map { cur => FooActor.fooAndCount.modify( cur ) { case (_, count) => (b, count + 1) } }
-          log.info( "TEST[{}]: UPDATED STATE = [{}]", result.map{_.count}, result )
+          log.debug(
+            "TEST: oid:[{}] accepted BARRED i=[{}] b=[{}]  current-state:[{}]",
+            oid,
+            i,
+            b,
+            s
+          )
+          val result = s map { cur =>
+            FooActor.fooAndCount.modify( cur ) { case ( _, count ) => ( b, count + 1 ) }
+          }
+          log.info( "TEST[{}]: UPDATED STATE = [{}]", result.map { _.count }, result )
           result
         }
 
-        case (Protocol.Barred(i, b), s) => {
+        case ( Protocol.Barred( i, b ), s ) => {
           val oid = outer.id
-          log.debug( "TEST: oid:[{}] accepted BARRED id:[{}] b=[{}]  current-state:[{}]", oid, i, b, s )
-          Option( State( id = oid, foo = Foo(oid, "foo", "foo", b = b) ) )
+          log.debug(
+            "TEST: oid:[{}] accepted BARRED id:[{}] b=[{}]  current-state:[{}]",
+            oid,
+            i,
+            b,
+            s
+          )
+          Option( State( id = oid, foo = Foo( oid, "foo", "foo", b = b ) ) )
         }
       }
 
@@ -322,14 +351,20 @@ object AggregateRootFunctionalSpec {
       override var state: Option[State] = None
 
       override def receiveCommand: Receive = LoggingReceive { around( action ) }
+
       val action: Receive = {
         case m: Protocol.LogWarning => {
-          log.warning( "TEST_LOG WARNING @ {}: {} akka-loggers:[{}]", System.currentTimeMillis(), m.message, AggregateRootFunctionalSpec.config.getStringList("akka.loggers") )
+          log.warning(
+            "TEST_LOG WARNING @ {}: {} akka-loggers:[{}]",
+            System.currentTimeMillis(),
+            m.message,
+            AggregateRootFunctionalSpec.config.getStringList( "akka.loggers" )
+          )
         }
 //        case ReceiveTimeout => log.debug( "TEST: GOT RECEIVE_TIMEOUT MESSAGE!!!" )
-        case m @ Protocol.Bar(id, b) => {
+        case m @ Protocol.Bar( id, b ) => {
           log.debug( "TEST: received [{}]", m )
-          persist( Protocol.Barred(id, b) ) { acceptAndPublish }
+          persist( Protocol.Barred( id, b ) ) { acceptAndPublish }
         }
         case m: Protocol.GetState => {
           log.debug( "TEST: received [{}]", m )
@@ -339,7 +374,6 @@ object AggregateRootFunctionalSpec {
       }
     }
   }
-
 
   val config: Config = ConfigFactory.parseString(
     """

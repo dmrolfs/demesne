@@ -3,7 +3,6 @@ package demesne.repository
 import akka.actor.{ ActorRef, Props }
 import akka.event.LoggingReceive
 import com.typesafe.config.{ Config, ConfigFactory }
-import com.typesafe.scalalogging.LazyLogging
 import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ ChildStarted, StartChild }
 import omnibus.akka.supervision.{ IsolatedDefaultSupervisor, OneForOneStrategyFactory }
 import demesne.{ AggregateRootType, DomainModel }
@@ -12,7 +11,7 @@ import demesne.repository.{ StartProtocol => SP }
 /**
   * Created by rolfsd on 8/20/16.
   */
-object RepositorySupervisor extends LazyLogging {
+object RepositorySupervisor {
 
   def props(
     model: DomainModel,
@@ -122,26 +121,22 @@ object RepositorySupervisor extends LazyLogging {
     }
 
     def withStartingRepositoryState( repositoryState: StartingRepository ): ModelStartupState = {
-      logger.debug( "BEFORE new repositoryState:[{}]", repositoryState )
-      logger.debug( "BEFORE starting:[{}]", starting.mkString( ", " ) )
+      scribe.debug( s"BEFORE new repositoryState:[${repositoryState}]" )
+      scribe.debug( s"BEFORE starting:[${starting.mkString( ", " )}]" )
       val without = starting - repositoryState
-      logger.debug( "AFTER without:[{}]", without.mkString( ", " ) )
+      scribe.debug( s"AFTER without:[${without.mkString( ", " )}]" )
       this.copy( starting = without + repositoryState )
     }
 
     def withWaiting( ref: ActorRef ): ModelStartupState = {
       if (starting.nonEmpty) {
-        logger.debug(
-          "Stashing waiting:[{}] repositories are starting:[{}]",
-          ref.path.name,
-          starting.map { _.name }.mkString( ", " )
+        scribe.debug(
+          s"Stashing waiting:[${ref.path.name}] repositories are starting:[${starting.map { _.name }.mkString( ", " )}]"
         )
         this.copy( waiting = waiting + ref )
       } else {
-        logger.debug(
-          "Reply with Started:[{}] repositories HAVE STARTED:[{}]",
-          ref.path.name,
-          started.map { _.name }.mkString( ", " )
+        scribe.debug(
+          s"Reply with Started:[${ref.path.name}] repositories HAVE STARTED:[${started.map { _.name }.mkString( ", " )}]"
         )
         ref ! SP.Started
         this
@@ -158,9 +153,8 @@ object RepositorySupervisor extends LazyLogging {
     }
 
     def drainWaiting(): ModelStartupState = {
-      logger.debug(
-        "notifying waiting:[{}] that RepositorySupervisor Started",
-        waiting.map { _.path.name }.mkString( ", " )
+      scribe.debug(
+        s"notifying waiting:[${waiting.map { _.path.name }.mkString( ", " )}] that RepositorySupervisor Started"
       )
       waiting foreach { _ ! SP.Started }
       this.copy( waiting = Set.empty[ActorRef] )
@@ -184,8 +178,7 @@ class RepositorySupervisor(
   userResources: Map[Symbol, Any],
   configuration: Config
 ) extends IsolatedDefaultSupervisor
-    with OneForOneStrategyFactory
-    with LazyLogging {
+    with OneForOneStrategyFactory {
   import RepositorySupervisor._
 
   override def childStarter(): Unit = {
@@ -204,13 +197,13 @@ class RepositorySupervisor(
       context become LoggingReceive { start( state withWaiting sender() ) }
     }
 
-    case StartChild( props, name )
+    case StartChild( _, name )
         if state.started.exists( s => s.name == name ) && context.child( name ).isDefined => {
       log.debug( "repository found: [{}]", name )
       context.child( name ) foreach { sender() ! ChildStarted( _ ) }
     }
 
-    case StartChild( props, name )
+    case StartChild( _, name )
         if state.starting.exists( s => s.state != Quiscent && s.name == name ) => {
       log.debug( "repository for [{}] is initializing", name )
       state.starting
@@ -231,7 +224,7 @@ class RepositorySupervisor(
       }
     }
 
-    case m @ SP.Loaded( rootType, resources, dependencies ) => {
+    case SP.Loaded( _, resources, dependencies ) => {
       val starting = startingStateFor( sender() )
       val waitingState = {
         state

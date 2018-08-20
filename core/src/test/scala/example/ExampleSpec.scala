@@ -7,8 +7,8 @@ import shapeless._
 
 import com.github.harveywi.builder._
 
-
 object ExampleSpec {
+
   trait Entity {
     type ID
     def id: ID
@@ -19,7 +19,6 @@ object ExampleSpec {
     def idLens: Lens[E, E#ID]
     def nameLens: Lens[E, String]
   }
-
 
   trait Foo extends Entity {
     override type ID = Long
@@ -38,8 +37,8 @@ object ExampleSpec {
     }
   }
 
-  case class FooImpl( override val id: Long, override val name: String, override val f: Int ) extends Foo
-
+  case class FooImpl( override val id: Long, override val name: String, override val f: Int )
+      extends Foo
 
   trait Module[E <: Entity] {
     def tag: Symbol
@@ -49,15 +48,16 @@ object ExampleSpec {
   }
 
   object Module {
-    def builderFor[E <: Entity : ClassTag]: BuilderFactory[E] = new BuilderFactory[E]
+    def builderFor[E <: Entity: ClassTag]: BuilderFactory[E] = new BuilderFactory[E]
 
-    class BuilderFactory[E <: Entity : ClassTag] {
+    class BuilderFactory[E <: Entity: ClassTag] {
       type CC = ModuleImpl[E]
 
-      def make[L <: HList]( implicit g: Generic.Aux[CC, L] ): ModuleBuilder[L] = new ModuleBuilder[L]
-
+      def make[L <: HList]( implicit g: Generic.Aux[CC, L] ): ModuleBuilder[L] =
+        new ModuleBuilder[L]
 
       class ModuleBuilder[L <: HList]( implicit val g: Generic.Aux[CC, L] ) extends HasBuilder[CC] {
+
         object P {
           object Tag extends OptParam[Symbol]( 'DefaultFooTAG )
           object IdLens extends Param[Lens[E, E#ID]]
@@ -65,7 +65,9 @@ object ExampleSpec {
         }
 
         override val gen = Generic[CC]
-        override val fieldsContainer = createFieldsContainer( P.Tag :: P.IdLens :: P.NameLens :: HNil )
+        override val fieldsContainer = createFieldsContainer(
+          P.Tag :: P.IdLens :: P.NameLens :: HNil
+        )
       }
     }
   }
@@ -78,7 +80,7 @@ object ExampleSpec {
     type ID[E <: Entity] = E#ID
   }
 
-  final case class ModuleImpl[E <: Entity : ClassTag](
+  final case class ModuleImpl[E <: Entity: ClassTag](
     override val tag: Symbol,
     override val idLens: Lens[E, ModuleImpl.ID[E]],
     override val nameLens: Lens[E, String]
@@ -97,16 +99,16 @@ class ExampleSpec extends FlatSpec with Matchers {
     import builder.P._
 
     val module = builder.builder
-                        .set( Tag, 'fooTAG )
-                        .set( IdLens, Foo.idLens )
-                        .set( NameLens, Foo.nameLens )
-                        .build()
+      .set( Tag, 'fooTAG )
+      .set( IdLens, Foo.idLens )
+      .set( NameLens, Foo.nameLens )
+      .build()
 
     val f = FooImpl( 314159, "foobar", 17 )
     module should equal( expected )
     module.tag should equal( expected.tag )
-    module.idLens.get(f) should equal( expected.idLens.get(f) )
-    module.nameLens.get(f) should equal( expected.nameLens.get(f) )
+    module.idLens.get( f ) should equal( expected.idLens.get( f ) )
+    module.nameLens.get( f ) should equal( expected.nameLens.get( f ) )
     module.target should equal( classOf[Foo] )
     module.target should equal( expected.target )
   }

@@ -6,13 +6,12 @@ import akka.actor._
 import akka.event.LoggingReceive
 import akka.pattern.{ ask, pipe }
 import akka.util.Timeout
-import com.typesafe.scalalogging.StrictLogging
 import demesne.{ index, AggregateRootType }
 import demesne.index.IndexSupervisor.ConstituencyProvider
 import omnibus.akka.envelope.Envelope
 import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ ChildStarted, StartChild }
 import omnibus.akka.supervision.{ IsolatedDefaultSupervisor, OneForOneStrategyFactory }
-import omnibus.commons.util._
+import omnibus.core.syntax.clazz._
 
 /**
   * Created by damonrolfs on 11/6/14.
@@ -50,7 +49,7 @@ class IndexSupervisor( bus: IndexBus )
   }
 }
 
-object IndexSupervisor extends StrictLogging {
+object IndexSupervisor {
   def props( bus: IndexBus ): Props = Props( new IndexSupervisor( bus ) with ConstituencyProvider )
 
   import scala.language.existentials
@@ -85,13 +84,13 @@ object IndexSupervisor extends StrictLogging {
       subscription.fold(
         classifier => {
           val ( ctx, clazz ) = classifier
-          logger.debug( "Relay[{}] index with Akka EventStream for class={}", constituent, clazz )
+          scribe.debug( s"Relay[${constituent}] index with Akka EventStream for class=${clazz}" )
           ctx.system.eventStream.subscribe( constituent, clazz )
           ctx.system.eventStream.subscribe( constituent, classOf[Envelope] )
         },
         classifier => {
           val ( bus, name ) = classifier
-          logger.debug( "Relay[{}] index with bus[{}] for name={}", constituent, bus, name )
+          scribe.debug( s"Relay[${constituent}] index with bus[${bus}] for name=${name}" )
           bus.subscribe( constituent, name )
         }
       )
@@ -242,7 +241,7 @@ object IndexSupervisor extends StrictLogging {
             Startup( pieces.tail )
           }
 
-          case m =>
+          case _ =>
             log.error( "failed to create index piece: [{}]", p ) //todo consider retry state via ctx.become
         } pipeTo self
       }
@@ -260,7 +259,6 @@ object IndexSupervisor extends StrictLogging {
         }
 
         log.debug( "verified constituent: {}", verified )
-        val next = toCheck - verified._1
         handleNext( toCheck - verified._1 )
       }
     }

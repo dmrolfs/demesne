@@ -10,9 +10,8 @@ import akka.pattern.ask
 import akka.util.Timeout
 import cats.syntax.either._
 import com.typesafe.config.Config
-import com.typesafe.scalalogging.LazyLogging
 import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ ChildStarted, StartChild }
-import omnibus.commons.ErrorOr
+import omnibus.core.ErrorOr
 import demesne.index._
 import demesne.index.IndexSupervisor.{ IndexRegistered, RegisterIndex }
 import DomainModel.NoSuchAggregateRootError
@@ -75,8 +74,7 @@ object DomainModel {
     specAgents: Map[IndexSpecification, IndexEnvelope] =
       Map.empty[IndexSpecification, IndexEnvelope],
     supervisors: Option[Supervisors] = None
-  ) extends DomainModel
-      with LazyLogging {
+  ) extends DomainModel {
     override def toString: String = {
       s"""DomainModelCell(name=${name}, system=${system}, root-types=[${rootTypes.mkString( ", " )}], """ +
       s"""aggregate-refs=[${aggregateRefs.mkString( ", " )}]), spec-agents=[${specAgents.mkString(
@@ -119,12 +117,10 @@ object DomainModel {
     }
 
     def start()( implicit ec: ExecutionContext, timeout: Timeout ): Future[DomainModelCell] = {
-      logger.debug(
-        "starting with supervisors:[{}] and rootTypes:[{}]",
-        supervisors.map { s =>
+      scribe.debug(
+        s"starting with supervisors:[${supervisors.map { s =>
           s"repository:[${s.repository.path.name}] index:[${s.index.path.name}]"
-        },
-        rootTypes.mkString( ", " )
+        }}] and rootTypes:[${rootTypes.mkString( ", " )}]"
       )
 
       supervisors
@@ -146,15 +142,13 @@ object DomainModel {
           }
 
           result onComplete {
-            case Success( cell ) => {
-              logger.debug(
-                "Registering root-types[{}]@[{}] Completed",
-                rootTypes.map { _.name }.mkString( ", " ),
-                name
+            case Success( _ ) => {
+              scribe.debug(
+                s"Registering root-types[${rootTypes.map { _.name }.mkString( ", " )}]@[${name}] Completed"
               )
             }
 
-            case Failure( ex ) => logger error s"failed to start domain model: ${ex}"
+            case Failure( ex ) => scribe.error( "failed to start domain model", ex )
           }
 
           result
@@ -171,7 +165,7 @@ object DomainModel {
     def shutdown: Future[Done] = {
       aggregateRefs.values foreach {
         case RootTypeRef( ref, rt ) =>
-          logger.info( "shutting down aggregate: {}", rt.name )
+          scribe.info( s"shutting down aggregate: ${rt.name}" )
           ref ! ShardRegion.GracefulShutdown
       }
 
@@ -198,16 +192,14 @@ object DomainModel {
       aggregateRefs
         .get( rootType.name )
         .map { ref =>
-          logger.debug( "aggregate ref found for root-type:[{}]", rootType.name )
+          scribe.debug( s"aggregate ref found for root-type:[${rootType.name}]" )
           Future successful (rootType.name -> ref)
         }
         .getOrElse {
           retrieveAggregate( rootType, supervisor )
             .map { ref =>
-              logger.debug(
-                "Registering root-type[{}]@[{}] - aggregate registry established ",
-                rootType.name,
-                name
+              scribe.debug(
+                s"Registering root-type[${rootType.name}]@[${name}] - aggregate registry established "
               )
               (rootType.name -> ref)
             }
@@ -242,13 +234,11 @@ object DomainModel {
       implicit ec: ExecutionContext
     ): Future[Seq[( IndexSpecification, IndexEnvelope )]] = {
       if (rootType.indexes.isEmpty) {
-        logger.debug( "no indexes for rootType:[{}]", rootType )
+        scribe.debug( s"no indexes for rootType:[${rootType}]" )
         Future successful Seq.empty[( IndexSpecification, IndexEnvelope )]
       } else {
-        logger.debug(
-          "establishing indexes for rootType:[{}] with supervisor:[{}]",
-          rootType,
-          supervisor.path.name
+        scribe.debug(
+          s"establishing indexes for rootType:[${rootType}] with supervisor:[${supervisor.path.name}]"
         )
 
         val result = rootType.indexes map { spec =>
@@ -259,11 +249,8 @@ object DomainModel {
             ref = registration.agentRef
             envelope <- ref.ask( GetIndex )( agentBudget ).mapTo[IndexEnvelope]
           } yield {
-            logger.debug(
-              "Registering root-type:[{}] name -> index:[{}] -> [{}]",
-              rootType.name,
-              spec.name,
-              envelope.payload.toString
+            scribe.debug(
+              s"Registering root-type:[${rootType.name}] name -> index:[${spec.name}] -> [${envelope.payload.toString}]"
             )
 
             (spec -> envelope)

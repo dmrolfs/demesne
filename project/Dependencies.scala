@@ -45,7 +45,7 @@ object Dependencies {
   object omnibus extends SimpleModule {
     override val groupId: String = "com.github.dmrolfs"
     override val artifactIdRoot: String = "omnibus"
-    override val version: String = "0.71"
+    override val version: String = "0.73-SNAPSHOT"
 
     def all = Seq( core, identifier, commons, akka, archetype )
 
