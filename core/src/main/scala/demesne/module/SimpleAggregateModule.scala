@@ -12,7 +12,10 @@ import demesne._
 import demesne.index.IndexSpecification
 import demesne.repository.{ AggregateRootProps, CommonClusteredRepository, CommonLocalRepository }
 
-abstract class SimpleAggregateModule[S0: Identifying: ClassTag] extends AggregateRootModule {
+abstract class SimpleAggregateModule[S0, ID](
+  implicit override val identifying: Identifying.Aux[S0, ID],
+  val evState: ClassTag[S0]
+) extends AggregateRootModule[S0, ID] {
   module =>
 
   def indexes: Seq[IndexSpecification] = Seq.empty[IndexSpecification]
@@ -31,8 +34,6 @@ abstract class SimpleAggregateModule[S0: Identifying: ClassTag] extends Aggregat
 
   def clusterRole: Option[String]
 
-  val evState: ClassTag[S0] = the[ClassTag[S0]]
-
   class SimpleAggregateRootType(
     override val name: String,
     override val indexes: Seq[IndexSpecification],
@@ -45,7 +46,6 @@ abstract class SimpleAggregateModule[S0: Identifying: ClassTag] extends Aggregat
     override def startTask: StartTask = module.startTask
 
     override type S = S0
-    override val identifying: Identifying[S] = module.identifying
 
     override def repositoryProps( implicit model: DomainModel ): Props = {
       environment( model ) match {
@@ -81,10 +81,16 @@ abstract class SimpleAggregateModule[S0: Identifying: ClassTag] extends Aggregat
 
 object SimpleAggregateModule {
 
-  def builderFor[S: Identifying: ClassTag]: BuilderFactory[S] = new BuilderFactory[S]
+  def builderFor[S, ID](
+    implicit identifying: Identifying.Aux[S, ID],
+    evState: ClassTag[S]
+  ): BuilderFactory[S, ID] = new BuilderFactory[S, ID]
 
-  class BuilderFactory[S: Identifying: ClassTag] {
-    type CC = SimpleAggregateModuleImpl[S]
+  class BuilderFactory[S, ID](
+    implicit val identifying: Identifying.Aux[S, ID],
+    evState: ClassTag[S]
+  ) {
+    type CC = SimpleAggregateModuleImpl
 
     def make: ModuleBuilder = new ModuleBuilder
 
@@ -122,38 +128,38 @@ object SimpleAggregateModule {
         HNil
       )
     }
-  }
 
-  final case class SimpleAggregateModuleImpl[S: Identifying: ClassTag](
-    override val aggregateRootPropsOp: AggregateRootProps,
-    override val passivateTimeout: Duration,
-    override val snapshotPeriod: Option[FiniteDuration],
-    override val startTask: demesne.StartTask,
-    override val environment: AggregateEnvironment.Resolver,
-    override val clusterRole: Option[String],
-    override val indexes: Seq[IndexSpecification]
-  ) extends SimpleAggregateModule[S]
-      with Equals { module =>
+    final case class SimpleAggregateModuleImpl(
+      override val aggregateRootPropsOp: AggregateRootProps,
+      override val passivateTimeout: Duration,
+      override val snapshotPeriod: Option[FiniteDuration],
+      override val startTask: demesne.StartTask,
+      override val environment: AggregateEnvironment.Resolver,
+      override val clusterRole: Option[String],
+      override val indexes: Seq[IndexSpecification]
+    ) extends SimpleAggregateModule[S, ID]
+        with Equals {
 
-    override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl[S]]
+      override def canEqual( rhs: Any ): Boolean = rhs.isInstanceOf[SimpleAggregateModuleImpl]
 
-    override def equals( rhs: Any ): Boolean = rhs match {
-      case that: SimpleAggregateModuleImpl[S] => {
-        if (this eq that) true
-        else {
-          (that.## == this.##) &&
-          (that canEqual this) &&
-          (this.indexes == that.indexes)
+      override def equals( rhs: Any ): Boolean = rhs match {
+        case that: SimpleAggregateModuleImpl => {
+          if (this eq that) true
+          else {
+            (that.## == this.##) &&
+            (that canEqual this) &&
+            (this.indexes == that.indexes)
+          }
         }
+
+        case _ => false
       }
 
-      case _ => false
-    }
-
-    override def hashCode: Int = {
-      41 * (
-        41 + indexes.##
-      )
+      override def hashCode: Int = {
+        41 * (
+          41 + indexes.##
+        )
+      }
     }
   }
 }

@@ -1,7 +1,6 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
-import scala.util.Try
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -9,11 +8,9 @@ import akka.actor.ActorSystem
 import akka.testkit.{ ImplicitSender, TestKit }
 import cats.syntax.either._
 import com.typesafe.config.Config
-import com.typesafe.scalalogging.StrictLogging
 import org.scalatest.{ fixture, MustMatchers, Outcome, ParallelTestExecution }
-import omnibus.commons.log.Trace
-import omnibus.commons.util._
-import demesne.{ AggregateRootType, BoundedContext, DomainModel, StartTask }
+import omnibus.core.syntax.clazz._
+import demesne.{ AggregateRootType, BoundedContext, DomainModel }
 
 object ParallelAkkaSpec {
   val testPosition: AtomicInteger = new AtomicInteger()
@@ -23,9 +20,7 @@ object ParallelAkkaSpec {
 abstract class ParallelAkkaSpec
     extends fixture.WordSpec
     with MustMatchers
-    with ParallelTestExecution
-    with StrictLogging {
-  private val trace = Trace[ParallelAkkaSpec]
+    with ParallelTestExecution {
 
   def testPosition: AtomicInteger = ParallelAkkaSpec.testPosition
 
@@ -36,13 +31,13 @@ abstract class ParallelAkkaSpec
       extends TestKit( _system )
       with ImplicitSender {
 
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
+    def before( test: OneArgTest ): Unit = {
       import scala.concurrent.ExecutionContext.global
       val timeout = akka.util.Timeout( 5.seconds )
       Await.ready( boundedContext.start()( global, timeout ), timeout.duration )
     }
 
-    def after( test: OneArgTest ): Unit = trace.block( "after" ) {}
+    def after( test: OneArgTest ): Unit = {}
 
     def rootTypes: Set[AggregateRootType]
     lazy val boundedContext: BoundedContext = {
@@ -74,31 +69,31 @@ abstract class ParallelAkkaSpec
     val fixture = Either catchNonFatal { createAkkaFixture( test, config, system, slug ) }
 
     val results = fixture map { f =>
-      logger.debug( ".......... before test .........." )
+      scribe.debug( s".......... before test [${test.name}] .........." )
       f before test
-      logger.debug( "++++++++++ starting test ++++++++++" )
+      scribe.debug( s"++++++++++ starting test [${test.name}] ++++++++++" )
       ( test( f ), f )
     }
 
     val outcome = results map {
       case ( o, f ) =>
-        logger.debug( "---------- finished test ------------" )
+        scribe.debug( s"---------- finished test [${test.name}] ------------" )
         f after test
-        logger.debug( ".......... after test .........." )
+        scribe.debug( s".......... after test [${test.name}] .........." )
 
         o
     }
 
-    outcome match {
-      case Right( o ) => {
+    outcome.fold(
+      ex => {
         Await.ready( system.terminate(), 5.seconds )
-        o
-      }
-      case Left( ex ) => {
-        Await.ready( system.terminate(), 5.seconds )
-        logger.error( s"test[${test.name}] failed", ex )
+        scribe.error( s"test[${test.name}] failed", ex )
         throw ex
+      },
+      o => {
+        Await.ready( system.terminate(), 5.seconds )
+        o
       }
-    }
+    )
   }
 }

@@ -22,7 +22,6 @@ abstract class EnvelopingAggregateRootRepository(
 
   override def repository: Receive = {
     case message => {
-//      val originalSender = sender()
       val aggregate = aggregateFor( message )
       log.debug(
         "enveloping-repository:[{}] forwarding to aggregate:[{}] command:[{}]",

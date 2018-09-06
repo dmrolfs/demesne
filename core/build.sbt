@@ -8,6 +8,7 @@ scalacOptions := BuildSettings.scalacOptions
 
 libraryDependencies ++=
   commonDependencies ++
+  commonTestDependencies ++
   Seq(
     akka.contrib,
     inflector

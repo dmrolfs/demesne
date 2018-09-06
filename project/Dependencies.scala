@@ -67,7 +67,9 @@ object Dependencies {
       clusterSharding,
       persistence,
       agent,
-      slf4j
+      slf4j,
+      kyro,
+      kryoSerializers
     )
 
     val actor = module( "actor" )
@@ -80,9 +82,12 @@ object Dependencies {
     val slf4j = module( "slf4j" )
     val testkit = module( "testkit" )
 
-    val kyro = "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2"
     val leveldb = "org.iq80.leveldb" % "leveldb" % "0.10"
     val leveldbNative = "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8"
+
+    val kyro = "com.github.romix.akka" %% "akka-kryo-serialization" % "0.5.2"
+    val kryoSerializers = "de.javakaffee" % "kryo-serializers" % "0.41"
+
   }
 
   object cats extends SimpleModule {
@@ -153,16 +158,6 @@ object Dependencies {
   val shapeless = "com.chuusai" %% "shapeless" % "2.3.3"
   val inflector = "org.atteo" % "evo-inflector" % "1.2.2"
 
-  val commonTestDependencies = Scope.test(
-    akka.remote,
-    akka.kyro,
-    akka.testkit,
-    akka.leveldb,
-    quality.scalatest,
-    quality.persistence.inMemory,
-    quality.mockito.core
-  )
-
   val commonDependencies =
     akka.all ++
     omnibus.all ++
@@ -175,6 +170,16 @@ object Dependencies {
       ficus,
       shapeless
     )
+
+  val commonTestDependencies = Scope.test(
+    akka.remote,
+    akka.testkit,
+    akka.leveldb,
+    quality.scalatest,
+    quality.persistence.inMemory,
+    quality.mockito.core
+  )
+
 
   val defaultDependencyOverrides: Seq[sbt.ModuleID] = Seq.empty[sbt.ModuleID]
 }

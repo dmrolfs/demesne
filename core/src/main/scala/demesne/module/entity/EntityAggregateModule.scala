@@ -2,15 +2,13 @@ package demesne.module.entity
 
 import scala.reflect._
 import scala.concurrent.duration.{ Duration, FiniteDuration }
-import scala.util.Try
 import akka.event.LoggingReceive
 import cats.syntax.either._
 import shapeless.{ Id => _, _ }
 import omnibus.archetype.domain.model.core.Entity
 import omnibus.akka.publish.EventPublisher
 import omnibus.commons.builder.HasBuilder
-import omnibus.core.ErrorOr
-import omnibus.identifier.{ Id, Identifying }
+import omnibus.identifier.Identifying
 import omnibus.core.syntax.clazz._
 import demesne.{ AggregateRoot, AggregateRootType }
 import demesne.index.{ Directive, IndexSpecification }
@@ -22,17 +20,17 @@ object EntityAggregateModule {
   type MakeIndexSpec = Function0[Seq[IndexSpecification]]
   val makeEmptyIndexSpec: MakeIndexSpec = () => Seq.empty[IndexSpecification]
 
-  def makeSlugSpec[E <: Entity: Identifying: ClassTag, ID](
+  //  def makeSlugSpec[E <: Entity: Identifying: ClassTag, ID](
+  //    idLens: Lens[E, E#TID],
+  //    slugLens: Option[Lens[E, String]] = None,
+  //    infoToEntity: PartialFunction[Any, Option[E]]
+  //  )
+
+  def makeSlugSpec[E <: Entity[E, ID]: Identifying: ClassTag, ID](
     idLens: Lens[E, E#TID],
     slugLens: Option[Lens[E, String]] = None,
     infoToEntity: PartialFunction[Any, Option[E]]
-  )
-//  (
-//    implicit identifying: Identifying.Aux[E, ID],
-//    evE: ClassTag[E],
-//    evID: ClassTag[ID]
-//  )
-  : IndexSpecification = {
+  ): IndexSpecification = {
     def label( entity: E ): String = slugLens map { _.get( entity ) } getOrElse {
       idLens.get( entity ).value.toString
     }
@@ -51,12 +49,12 @@ object EntityAggregateModule {
           .fold[Directive] {
             Directive.Ignore
           } { i =>
-            triedToEntity( i )( infoToEntity )
+            triedToEntity[E, ID]( i )( infoToEntity )
               .fold {
                 Directive.Record( sid.toString, sid )
               } { e =>
-                val value: E#TID = idLens.get( e )
-                Directive.Record( label( e ), value.asInstanceOf[Id[E]] )
+                val value = idLens.get( e )
+                Directive.Record( label( e ), value /*.asInstanceOf[Id[E]]*/ )
               }
           }
       }
@@ -81,7 +79,7 @@ object EntityAggregateModule {
 //    )
   }
 
-  def triedToEntity[E <: Entity: ClassTag](
+  def triedToEntity[E <: Entity[E, ID]: ClassTag, ID](
     from: Any
   )(
     toEntity: PartialFunction[Any, Option[E]]
@@ -109,14 +107,17 @@ object EntityAggregateModule {
     }
   }
 
-  def builderFor[
-    E <: Entity: Identifying: ClassTag,
-    EP <: EntityProtocol[E]
-  ]: BuilderFactory[E, EP] = {
-    new BuilderFactory[E, EP]
+  def builderFor[E <: Entity[E, ID], ID, EP <: EntityProtocol[E]](
+    implicit identifying: Identifying.Aux[E, ID],
+    evState: ClassTag[E]
+  ): BuilderFactory[E, ID, EP] = {
+    new BuilderFactory[E, ID, EP]
   }
 
-  class BuilderFactory[E <: Entity: Identifying: ClassTag, EP <: EntityProtocol[E]] {
+  class BuilderFactory[E <: Entity[E, ID], ID, EP <: EntityProtocol[E]](
+    implicit val identifying: Identifying.Aux[E, ID],
+    evState: ClassTag[E]
+  ) {
     type CC = EntityAggregateModuleImpl
 
     def make: ModuleBuilder = new ModuleBuilder
@@ -135,7 +136,7 @@ object EntityAggregateModule {
 
         object StartTask
             extends OptParam[demesne.StartTask](
-              demesne.StartTask.empty( s"start ${the[ClassTag[E]].runtimeClass.safeSimpleName}" )
+              demesne.StartTask.empty( s"start ${evState.runtimeClass.safeSimpleName}" )
             )
 
         object Environment
@@ -184,7 +185,7 @@ object EntityAggregateModule {
       override val nameLens: Lens[E, String],
       override val slugLens: Option[Lens[E, String]],
       override val isActiveLens: Option[Lens[E, Boolean]]
-    ) extends EntityAggregateModule[E]
+    ) extends EntityAggregateModule[E, ID]
         with Equals {
 //      override val evState: ClassTag[E] = the[ClassTag[E]]
 
@@ -211,8 +212,10 @@ object EntityAggregateModule {
   }
 }
 
-abstract class EntityAggregateModule[E <: Entity: Identifying: ClassTag]
-    extends SimpleAggregateModule[E] { module =>
+abstract class EntityAggregateModule[E <: Entity[E, ID], ID](
+  implicit override val identifying: Identifying.Aux[E, ID],
+  override val evState: ClassTag[E]
+) extends SimpleAggregateModule[E, ID] { module =>
 
   type Protocol <: EntityProtocol[E]
   val protocol: Protocol

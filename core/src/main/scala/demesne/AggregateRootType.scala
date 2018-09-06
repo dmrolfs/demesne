@@ -28,7 +28,7 @@ abstract class AggregateRootType extends Equals {
   def repositoryProps( implicit model: DomainModel ): Props
 
   type S
-  val identifying: Identifying[S]
+//  val identifying: Identifying[S]
 
   //todo: separate envelope & reliable like Relay's fillExtractor
   def aggregateIdFor: ShardRegion.ExtractEntityId = {

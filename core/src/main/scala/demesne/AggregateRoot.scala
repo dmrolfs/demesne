@@ -35,25 +35,40 @@ object AggregateRoot {
 
   type Acceptance[S] = PartialFunction[( Any, S ), S]
 
-  def aggregateIdFromPath[S: Identifying]( path: ActorPath ): Identifying[S]#TID = {
+  def aggregateIdFromPath[S, ID](
+    path: ActorPath
+  )(
+    implicit identifying: Identifying.Aux[S, ID]
+  ): identifying.TID = {
 //    identifying tidFromString java.net.URLDecoder.decode( self.path.name, "utf-8" )
-    the[Identifying[S]].fromString( path.toStringWithoutAddress )
+    identifying fromString path.name
   }
 
-  def aggregateIdFromRef[S: Identifying]( aggregateRef: ActorRef ): Identifying[S]#TID = {
+  def aggregateIdFromRef[S, ID](
+    aggregateRef: ActorRef
+  )(
+    implicit identifying: Identifying.Aux[S, ID]
+  ): identifying.TID = {
     aggregateIdFromPath( aggregateRef.path )
   }
 
-  def persistenceIdFromPath[S: Identifying]( path: ActorPath ): String = {
+  def persistenceIdFromPath[S, ID](
+    path: ActorPath
+  )(
+    implicit identifying: Identifying.Aux[S, ID]
+  ): String = {
     aggregateIdFromPath( path ).toString
   }
 }
 
-abstract class AggregateRoot[S: Identifying: ClassTag]
-    extends PersistentActor
+abstract class AggregateRoot[S](
+  implicit val identifying: Identifying[S],
+  stateType: ClassTag[S]
+) extends PersistentActor
     with ActorStack
     with EnvelopingActor
     with ActorLogging {
+
   outer: AggregateRoot.Provider with EventPublisher =>
 
   val StopMessageType: ClassTag[_] = classTag[PassivationSpecification.StopAggregateRoot[ID]]
@@ -89,7 +104,7 @@ abstract class AggregateRoot[S: Identifying: ClassTag]
   type Acceptance = AggregateRoot.Acceptance[S]
   def acceptance: Acceptance
 
-  val identifying: Identifying[S] = the[Identifying[S]]
+//  val identifying: Identifying[S] = the[Identifying[S]]
   type ID = identifying.ID
   type TID = identifying.TID
 //  lazy val evTID: ClassTag[TID] = classTag[TID]

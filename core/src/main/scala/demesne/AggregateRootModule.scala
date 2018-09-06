@@ -1,13 +1,12 @@
 package demesne
 
 import akka.actor.ActorRef
-import shapeless.the
 import omnibus.identifier.Identifying
 import omnibus.core.syntax.clazz._
 
-abstract class AggregateRootModule[S: Identifying] extends AggregateRootType.Provider { module =>
+abstract class AggregateRootModule[S, ID]( implicit val identifying: Identifying.Aux[S, ID] )
+    extends AggregateRootType.Provider { module =>
 
-  val identifying: Identifying[S] = the[Identifying[S]]
   type ID = identifying.ID
   type TID = identifying.TID
 

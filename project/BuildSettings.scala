@@ -9,7 +9,7 @@ object BuildSettings {
       "-target:jvm-1.8",
     "-language:experimental.macros",
     "-unchecked",                         // Enable additional warnings where generated code depends on assumptions.
-    "-Xcheckinit",                        // Wrap field accessors to throw an exception on uninitialized access.
+//    "-Xcheckinit",                        // Wrap field accessors to throw an exception on uninitialized access.
     //    "-Xfatal-warnings",                  // Fail the compilation if there are any warnings.
     "-deprecation",                       // Emit warning and location for usages of deprecated APIs.
     "-encoding",

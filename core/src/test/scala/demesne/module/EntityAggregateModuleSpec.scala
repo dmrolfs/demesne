@@ -1,36 +1,28 @@
 package demesne.module
 
 import scala.concurrent.duration._
-import scala.reflect._
 import akka.actor.{ ActorSystem, Props }
 import akka.testkit._
-import com.typesafe.config.Config
-import com.typesafe.scalalogging.LazyLogging
-import cats.syntax.either._
+//import com.typesafe.config.Config
+//import cats.syntax.either._
 import shapeless._
 import org.scalatest.Tag
-import omnibus.archetype.domain.model.core.{ Entity, EntityIdentifying, EntityLensProvider }
+import omnibus.archetype.domain.model.core.{ Entity, EntityLensProvider }
 import omnibus.akka.envelope._
 import omnibus.akka.publish.{ EventPublisher, StackableStreamPublisher }
-import omnibus.commons.log.Trace
-import omnibus.commons.identifier._
-import omnibus.commons.ErrorOr
 import org.scalatest.concurrent.ScalaFutures
 import demesne._
 import demesne.index.{ IndexSpecification, StackableIndexBusPublisher }
+import demesne.module.EntityAggregateModuleSpec.Foo
 import demesne.testkit.AggregateRootSpec
 import demesne.testkit.concurrent.CountDownFunction
 import demesne.module.entity.{ EntityAggregateModule, EntityProtocol }
+import omnibus.identifier.{ Identifying, ShortUUID }
 
-object EntityAggregateModuleSpec extends LazyLogging {
+object EntityAggregateModuleSpec {
 
-  object Protocol extends EntityProtocol[Foo#ID] {
-    case class Bar( targetId: Bar#TID, b: Int ) extends Command
-    case class Barred( sourceId: Barred#TID, b: Int ) extends Event
-  }
-
-  trait Foo extends Entity {
-    override type ID = ShortUUID
+  trait Foo extends Entity[Foo, ShortUUID] {
+//    override type ID = ShortUUID
 
     def isActive: Boolean
     def f: Int
@@ -38,11 +30,9 @@ object EntityAggregateModuleSpec extends LazyLogging {
     def z: String
   }
 
-  object Foo extends EntityLensProvider[Foo] {
-    implicit val identifying: EntityIdentifying[Foo] = new EntityIdentifying[Foo] {
-      override def nextTID: ErrorOr[TID] = tag( ShortUUID() ).asRight
-      override def idFromString( idRep: String ): ID = ShortUUID fromString idRep
-    }
+  object Foo extends EntityLensProvider[Foo, ShortUUID] {
+
+    override implicit val identifying: Identifying.Aux[Foo, ShortUUID] = Identifying.byShortUuid
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo, Foo#TID] {
       override def get( f: Foo ): Foo#TID = f.id
@@ -107,44 +97,47 @@ object EntityAggregateModuleSpec extends LazyLogging {
     override val z: String = ""
   ) extends Foo
 
+  object Protocol extends EntityProtocol[Foo] {
+    case class Bar( targetId: Bar#TID, b: Int ) extends Command
+    case class Barred( sourceId: Barred#TID, b: Int ) extends Event
+  }
+
   object FooAggregateRoot {
     import demesne.index.{ Directive => D }
 //    implicit val fi: Identifying.Aux[Foo, Foo#ID] = Foo.identifying
 //    implicit val evID: ClassTag[Foo#ID] = classTag[ShortUUID]
 
-    val myIndexes: () => Seq[IndexSpecification] = () =>
-      trace.briefBlock( "myIndexes" ) {
-        Seq(
-          EntityAggregateModule.makeSlugSpec[Foo](
-            idLens = Foo.idLens,
-            slugLens = Some( Foo.slugLens ),
-            infoToEntity = { case f: Foo => Some( f ) }
-          ),
-          demesne.index.local.IndexLocalAgent.spec[String, Foo#TID, Foo#TID]( 'name ) {
-            case Protocol.Added( tid, info ) => {
-              module
-                .triedToEntity( info )
-                .map { e =>
-                  D.Record( module.entityLabel( e ), module.idLens.get( e ) )
-                }
-                .getOrElse { D.Record( tid, tid ) }
-            }
-
-            case Protocol.Disabled( tid, _ ) => {
-              logger.debug( "#TEST #SLUG: from Disabled Withdrawing: [{}]", tid )
-              D.Withdraw( tid )
-            }
-            case Protocol.Enabled( tid, slug ) => D.Record( slug, tid )
+    val myIndexes: () => Seq[IndexSpecification] = () => {
+      val myIdLens: Lens[Foo, Foo#TID] = Foo.idLens
+      Seq(
+        EntityAggregateModule.makeSlugSpec[Foo, ShortUUID](
+          idLens = myIdLens,
+          slugLens = Some( Foo.slugLens ),
+          infoToEntity = { case f: Foo => Some( f ) }
+        ),
+        demesne.index.local.IndexLocalAgent.spec[String, Foo#TID, Foo#TID]( 'name ) {
+          case Protocol.Added( tid, info ) => {
+            module
+              .triedToEntity( info )
+              .map { e =>
+                D.Record( module.entityLabel( e ), module.idLens.get( e ) )
+              }
+              .getOrElse { D.Record( tid, tid ) }
           }
-        )
+
+          case Protocol.Disabled( tid, _ ) => {
+            scribe.debug( s"#TEST #SLUG: from Disabled Withdrawing: [${tid}]" )
+            D.Withdraw( tid )
+          }
+          case Protocol.Enabled( tid, slug ) => D.Record( slug, tid )
+        }
+      )
     }
 
-    val trace = Trace[FooAggregateRoot.type]
+    val builderFactory: EntityAggregateModule.BuilderFactory[Foo, ShortUUID, Protocol.type] =
+      EntityAggregateModule.builderFor[Foo, ShortUUID, Protocol.type]
 
-    val builderFactory: EntityAggregateModule.BuilderFactory[Foo, Protocol.type] =
-      EntityAggregateModule.builderFor[Foo, Protocol.type]
-
-    val module: EntityAggregateModule[Foo] = trace.block( "foo-module" ) {
+    val module: EntityAggregateModule[Foo, ShortUUID] = {
       val b = builderFactory.make
       import b.P.{ Props => BProps, Protocol => BProtocol, _ }
 
@@ -185,36 +178,30 @@ object EntityAggregateModuleSpec extends LazyLogging {
   }
 }
 
-class EntityAggregateModuleSpec
-    extends AggregateRootSpec[EntityAggregateModuleSpec]
-    with ScalaFutures {
+class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with ScalaFutures {
   import EntityAggregateModuleSpec._
 
-  private val trace = Trace[EntityAggregateModuleSpec]
-
-  override type State = Foo
-  override type ID = ShortUUID
+//  override type State = Foo
+//  override type ID = ShortUUID
 
   override type Protocol = EntityAggregateModuleSpec.Protocol.type
   override val protocol: Protocol = EntityAggregateModuleSpec.Protocol
 
   override def createAkkaFixture(
     test: OneArgTest,
-    config: Config,
     system: ActorSystem,
     slug: String
   ): Fixture = {
-    new TestFixture( config, system, slug )
+    new TestFixture( slug, system )
   }
 
   override type Fixture = TestFixture
 
-  class TestFixture( _config: Config, _system: ActorSystem, _slug: String )
-      extends AggregateFixture( _config, _system, _slug ) {
-    private val trace = Trace[TestFixture]
-    override def nextId(): TID = Foo.identifying.nextTID.unsafeGet
+  class TestFixture( _slug: String, _system: ActorSystem )
+      extends AggregateFixture( _slug, _system ) {
+    override def nextId(): TID = Foo.identifying.next
 
-    override val module: AggregateRootModule[Foo, Foo#ID] = FooAggregateRoot.module
+    override val module: AggregateRootModule[Foo, ShortUUID] = FooAggregateRoot.module
 
     val rootType: AggregateRootType = module.rootType
 
@@ -259,8 +246,8 @@ class EntityAggregateModuleSpec
         isActiveLens = Some( Foo.isActiveLens )
       )
 
-      logger.info( "ACTUAL = {}", FooAggregateRoot.module )
-      logger.info( "EXPECTED = {}", expected )
+      scribe.info( s"ACTUAL = ${FooAggregateRoot.module}" )
+      scribe.info( s"EXPECTED = ${expected}" )
 
       expected.canEqual( FooAggregateRoot.module ) must equal( true )
       expected.## must equal( FooAggregateRoot.module.## )
@@ -274,7 +261,7 @@ class EntityAggregateModuleSpec
 
       system.eventStream.subscribe( bus.ref, classOf[Envelope] )
 
-      val id = Module.nextId.toOption.get
+      val id = Module.nextId
       val t = Module aggregateOf id
       t !+ Protocol.Rename( id, "foobar" )
       bus.expectNoMsg( 5.seconds.dilated )
@@ -285,7 +272,8 @@ class EntityAggregateModuleSpec
 
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
-      val id = Module.nextId.toOption.get
+      val id = Module.nextId
+//      val id = Foo.nextId
       val foo = Option( FooImpl( id, "foo1", "f1", true, 17, 3.14159, "zedster" ) )
       val f = Module aggregateOf id
       f !+ Protocol.Add( id, foo )
@@ -298,7 +286,7 @@ class EntityAggregateModuleSpec
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
-      val id = Module.nextId.toOption.get
+      val id = Module.nextId
       val f = Module aggregateOf id
       f !+ Protocol.Add( id, Option( FooImpl( id, "foo1", "f1", true, 17, 3.14159, "zedster" ) ) )
       bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) {
@@ -319,7 +307,7 @@ class EntityAggregateModuleSpec
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
-      val id = Module.nextId.toOption.get
+      val id = Module.nextId
       val f = Module aggregateOf id
       f !+ Protocol.Add( id, Option( FooImpl( id, "foo1", "f1", true, 17, 3.14159, "zedster" ) ) )
       bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) {
@@ -341,7 +329,7 @@ class EntityAggregateModuleSpec
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
-      val id = Module.nextId.toOption.get
+      val id = Module.nextId
       val f = Module aggregateOf id
       f !+ Protocol.Add( id, Option( FooImpl( id, "foo1", "f1", true, 17, 3.14159, "zedster" ) ) )
       bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) {
@@ -361,7 +349,7 @@ class EntityAggregateModuleSpec
       import fixture._
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
 
-      val id = Module.nextId.toOption.get
+      val id = Module.nextId
       val f = Module aggregateOf id
       f !+ Protocol.Add( id, Option( FooImpl( id, "foo1", "f1", true, 17, 3.14159, "zedster" ) ) )
       bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo added" ) {
@@ -388,8 +376,8 @@ class EntityAggregateModuleSpec
     "recorded in slug index" in { fixture: Fixture =>
       import fixture._
 
-      val tid = Module.nextId.toOption.get
-      val id = tid.id
+      val tid = Module.nextId
+      val id = tid.value
       val f1 = Option( FooImpl( tid, "foo1", "f1", true, 17, 3.14159, "zedster" ) )
 
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
@@ -406,15 +394,15 @@ class EntityAggregateModuleSpec
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
         result mustBe Some( id )
       }
-      trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
+      scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
       slugIndex.get( "f1" ) mustBe Some( id )
     }
 
     "bar command to force concrete protocol implementation" in { fixture: Fixture =>
       import fixture._
 
-      val tid = Module.nextId.toOption.get
-      val id = tid.id
+      val tid = Module.nextId
+      val id = tid.value
       val f1 = Option( FooImpl( tid, "foo1", "f1", true, 17, 3.14159, "zedster" ) )
 
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
@@ -429,7 +417,7 @@ class EntityAggregateModuleSpec
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
         result mustBe Some( id )
       }
-      trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
+      scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
       slugIndex.get( "f1" ) mustBe Some( id )
 
       import akka.pattern.ask
@@ -443,8 +431,8 @@ class EntityAggregateModuleSpec
     "enablement actions translate in slug index" in { fixture: Fixture =>
       import fixture._
 
-      val tid = Module.nextId.toOption.get
-      val id = tid.id
+      val tid = Module.nextId
+      val id = tid.value
       val f1 = Option( FooImpl( tid, "foo1", "f1", true, 17, 3.14159, "zedster" ) )
 
       system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
@@ -459,7 +447,7 @@ class EntityAggregateModuleSpec
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
         result mustBe Some( id )
       }
-      trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
+      scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
       slugIndex.get( "f1" ) mustBe Some( id )
 
       f !+ Protocol.Disable( tid )
@@ -467,7 +455,7 @@ class EntityAggregateModuleSpec
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
         result mustBe None
       }
-      trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
+      scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
       slugIndex.get( "f1" ) mustBe None
 
       f !+ Protocol.Enable( tid )
@@ -475,7 +463,7 @@ class EntityAggregateModuleSpec
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
         result mustBe Some( id )
       }
-      trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
+      scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
       slugIndex.get( "f1" ) mustBe Some( id )
 
       f !+ Protocol.Enable( tid )
@@ -483,7 +471,7 @@ class EntityAggregateModuleSpec
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
         result mustBe Some( id )
       }
-      trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
+      scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
       slugIndex.get( "f1" ) mustBe Some( id )
     }
   }

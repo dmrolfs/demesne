@@ -6,45 +6,43 @@ import scala.concurrent.duration._
 import akka.actor._
 import akka.event.LoggingReceive
 import akka.testkit._
-import com.typesafe.config.Config
-import cats.syntax.either._
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.Tag
-import omnibus.commons.ErrorOr
-import omnibus.commons.identifier.{ Identifying, ShortUUID }
-import omnibus.commons.log.Trace
+import omnibus.identifier.Identifying
 import demesne._
 import demesne.index.IndexSupervisor._
 import demesne.index.local.IndexLocalAgent
 import demesne.repository.CommonLocalRepository
 import demesne.testkit.ParallelAkkaSpec
+import omnibus.archetype.domain.model.core.Identifiable
 
 object IndexSupervisorSpec {
   val sysId = new AtomicInteger()
+
+  case class Foo( id: Foo#TID ) extends Identifiable[Foo, Long]
+
+  object Foo {
+    implicit val identifying: Identifying.Aux[Foo, Long] = Identifying.byLong[Foo]
+  }
 }
 
 /**
   * Created by damonrolfs on 9/18/14.
   */
 class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
-
-  private val trace = Trace[IndexSupervisorSpec]
+  import IndexSupervisorSpec.Foo
 
   case class FooAdded( value: String )
 
   override def createAkkaFixture(
     test: OneArgTest,
-    config: Config,
     system: ActorSystem,
     slug: String
   ): Fixture = {
-    new Fixture( config, system, slug )
+    new Fixture( slug, system )
   }
 
-  class Fixture( _config: Config, _system: ActorSystem, _slug: String )
-      extends AkkaFixture( _config, _system, _slug ) {
-    private val trace = Trace[Fixture]
-
+  class Fixture( _slug: String, _system: ActorSystem ) extends AkkaFixture( _slug, _system ) {
     override def rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
 
     def rootType( specs: IndexSpecification* ): AggregateRootType = {
@@ -52,14 +50,8 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
         override def name: String = "foo"
         override def indexes: Seq[IndexSpecification] = specs
 
-        override type S = ShortUUID
-        override val identifying: Identifying[ShortUUID] = new Identifying[ShortUUID] {
-          override type ID = ShortUUID
-          override val idTag: Symbol = 'foo
-          override def tidOf( o: ShortUUID ): TID = tag( o )
-          override def idFromString( idRep: String ): ShortUUID = ShortUUID.fromString( idRep )
-          override def nextTID: ErrorOr[TID] = tag( ShortUUID() ).asRight
-        }
+        override type S = Foo
+//        override val identifying: Identifying[S] = Foo.identifying
 
         override def repositoryProps( implicit model: DomainModel ): Props = {
           CommonLocalRepository.props( model, this, noAggregateProps )
@@ -204,7 +196,7 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       val expected = f.constituents.map { nameFor( _, f.busRoot, f.busSpec ) }.toSet
       val actual: Set[String] = real.children.map( _.path.name ).toSet
 
-      actual must be( expected )
+      actual shouldBe expected
     }
 
     "index index for spec with context subscription" in { implicit f: Fixture =>
@@ -225,7 +217,7 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       val expected = f.constituents.map { nameFor( _, f.contextRoot, f.contextSpec ) }.toSet
       val actual: Set[String] = real.children.map( _.path.name ).toSet
 
-      actual must be( expected )
+      actual should be( expected )
     }
 
     "supervisor restarts index constituent upon failure" in { implicit f: Fixture =>
@@ -249,8 +241,10 @@ class IndexSupervisorSpec extends ParallelAkkaSpec with MockitoSugar {
       relayProbe expectMsg index.WaitingForStart
       relayProbe reply index.Started
 
-      trace( s"###### LOOKING FOR = IndexRegistered( _, $restartRoot, $restartSpec )  ######" )
-      f.registrant.expectMsgPF() { case IndexRegistered( _, restartRoot, restartSpec ) => true }
+      scribe.trace(
+        s"###### LOOKING FOR = IndexRegistered( _, $restartRoot, $restartSpec )  ######"
+      )
+      f.registrant.expectMsgPF() { case _: IndexRegistered => true }
       val agent = real.getSingleChild( nameFor( Agent, restartRoot, restartSpec ) )
       val monitor = TestProbe()
       monitor watch agent

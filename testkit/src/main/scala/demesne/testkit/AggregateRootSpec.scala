@@ -12,8 +12,7 @@ import akka.testkit._
 import com.typesafe.config.Config
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar
-import omnibus.commons.identifier.{ Identifying, TaggedID }
-import omnibus.commons.log.Trace
+import omnibus.identifier.Identifying
 import demesne._
 import demesne.repository.StartProtocol
 
@@ -28,11 +27,10 @@ abstract class AggregateRootSpec[A: ClassTag]
     extends SequentialAkkaSpecWithIsolatedFixture
     with MockitoSugar
     with BeforeAndAfterAll {
-  private val trace = Trace[AggregateRootSpec[A]]
 
   type State
   type ID
-  type TID = TaggedID[ID]
+  type TID
 
   import scala.language.higherKinds
   type Protocol <: AggregateProtocol[ID]
@@ -40,24 +38,22 @@ abstract class AggregateRootSpec[A: ClassTag]
 
   abstract class AggregateFixture( _config: Config, _system: ActorSystem, _slug: String )
       extends AkkaFixture( _config, _system, _slug ) { fixture =>
-    private val trace = Trace[AggregateFixture]
 
     val module: AggregateRootModule[State, ID]
 
     import akka.util.Timeout
     implicit val actorTimeout = Timeout( 5.seconds )
 
-    override def before( test: OneArgTest ): Unit = trace.block( "before" ) {
+    override def before( test: OneArgTest ): Unit = {
       import akka.pattern.AskableActorSelection
       val supervisorSel = new AskableActorSelection(
         system actorSelection s"/user/${boundedContext.name}-repositories"
       )
 
       Await.ready( (supervisorSel ? StartProtocol.WaitForStart), 5.seconds )
-      logger.debug(
-        "model from started BoundedContext = [{}] with root-types=[{}]",
-        boundedContext.unsafeModel,
-        boundedContext.unsafeModel.rootTypes.mkString( ", " )
+      scribe.debug(
+        s"model from started BoundedContext = [${boundedContext.unsafeModel}] " +
+        s"with root-types=[${boundedContext.unsafeModel.rootTypes.mkString( ", " )}]"
       )
     }
 
@@ -70,11 +66,11 @@ abstract class AggregateRootSpec[A: ClassTag]
     def startTasks( system: ActorSystem ): Set[StartTask] = {
       Set(
         StartTask.withFunction( "start-task-1" ) { bc =>
-          logger.info( "test-start-task1: bounded context:[{}]", bc.name )
+          scribe.info( s"test-start-task1: bounded context:[${bc.name}]" )
           Map( Symbol( "from-start-task-1" ) -> "resource sourced from start task 1" )
         },
         StartTask.withFunction( "start-task-2" ) { bc =>
-          logger.info( "test-start-task2: bounded context:[{}]", bc.name )
+          scribe.info( s"test-start-task2: bounded context:[${bc.name}]" )
           Map( Symbol( "from-start-task-2" ) -> "resource sourced from start task 2" )
         },
         StartTask.withFunction( "unit-start-task-3" ) { bc =>
@@ -88,7 +84,7 @@ abstract class AggregateRootSpec[A: ClassTag]
 
     lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
 
-    lazy val boundedContext: BoundedContext = trace.block( s"FIXTURE: boundedContext($slug)" ) {
+    lazy val boundedContext: BoundedContext = {
       val key = Symbol( s"BoundedContext-${slug}" )
 
       val bc = for {
@@ -100,22 +96,20 @@ abstract class AggregateRootSpec[A: ClassTag]
         )
         filled <- made addAggregateTypes rootTypes
         _ <- filled.futureModel map { m =>
-          logger.debug( "TEST: future model new rootTypes:[{}]", m.rootTypes.mkString( ", " ) ); m
+          scribe.debug( s"TEST: future model new rootTypes:[${m.rootTypes.mkString( ", " )}]" )
+          m
         }
         started <- filled.start()
       } yield started
 
       val result = Await.result( bc, 5.seconds )
-      logger.debug(
-        "Bounded Context root-type:[{}]",
-        result.unsafeModel.rootTypes.mkString( ", " )
+      scribe.debug(
+        s"Bounded Context root-type:[${result.unsafeModel.rootTypes.mkString( ", " )}]"
       )
       result
     }
 
-    implicit lazy val model: DomainModel = trace.block( "model" ) {
-      Await.result( boundedContext.futureModel, 6.seconds )
-    }
+    implicit lazy val model: DomainModel = Await.result( boundedContext.futureModel, 6.seconds )
   }
 
   override type Fixture <: AggregateFixture

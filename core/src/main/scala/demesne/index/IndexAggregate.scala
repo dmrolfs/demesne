@@ -89,12 +89,14 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
   import akka.cluster.pubsub.DistributedPubSubMediator.Publish
   import demesne.index.{ IndexAggregateProtocol => P, Directive => D }
 
-  implicit val identifying = new Identifying[State] {
-    private val id = IndexIdentifier.make[K, I, V]( topic )
-    override type ID = IndexIdentifier
-    override val zeroValue: ID = id
-    override val nextValue: ID = id
-    override def valueFromRep( rep: String ): ID = id
+  implicit val identifying = {
+    val id = IndexIdentifier.make[K, I, V]( topic )
+
+    Identifying.pure[State, IndexIdentifier](
+      zeroValueFn = id,
+      nextValueFn = () => id,
+      valueFromRepFn = _ => id
+    )
   }
 
   val tid: Id[State] = identifying.next

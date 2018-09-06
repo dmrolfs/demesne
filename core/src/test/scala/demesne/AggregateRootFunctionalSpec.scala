@@ -2,73 +2,66 @@ package demesne
 
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
-import scala.reflect._
 import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.event.LoggingReceive
+import akka.serialization.SerializationExtension
 import akka.testkit._
-import cats.syntax.either._
+import com.romix.akka.serialization.kryo.KryoSerializer
 import org.scalatest.concurrent.ScalaFutures
-
 import shapeless._
 import com.typesafe.config.{ Config, ConfigFactory }
 import demesne.repository.CommonLocalRepository
-import org.scalatest.OptionValues
+import org.scalatest.{ OptionValues, TryValues }
 import omnibus.akka.publish.{ EventPublisher, StackableStreamPublisher }
-import omnibus.archetype.domain.model.core.{ Entity, EntityIdentifying, EntityLensProvider }
+import omnibus.archetype.domain.model.core.{ Entity, EntityLensProvider }
 import omnibus.akka.envelope._
-import omnibus.commons._
-import omnibus.commons.identifier.{ Identifying, ShortUUID, TaggedID }
-import omnibus.commons.log.Trace
+import omnibus.identifier.{ Id, Identifying, ShortUUID }
 
 /**
   * Created by rolfsd on 6/29/16.
   */
 class AggregateRootFunctionalSpec
-    extends demesne.testkit.AggregateRootSpec[AggregateRootFunctionalSpec]
+    extends demesne.testkit.AggregateRootSpec[AggregateRootFunctionalSpec.AggregateState, Long]
     with ScalaFutures
-    with OptionValues {
+    with OptionValues
+    with TryValues {
   import AggregateRootFunctionalSpec._
 
-  private val trace = Trace[AggregateRootFunctionalSpec]
+  override def configurationForTest( test: OneArgTest, slug: String ): Option[Config] = {
+    Option( AggregateRootFunctionalSpec.config )
+  }
 
-  override type State = AggregateRootFunctionalSpec.State
-  override type ID = AggregateRootFunctionalSpec.Foo#ID
+  override def createAkkaFixture( test: OneArgTest, system: ActorSystem, slug: String ): Fixture = {
+    new Fixture( slug, system )
+  }
 
+//  implicit val id2: Identifying[State] = State.identifying
   override type Protocol = AggregateRootFunctionalSpec.Protocol.type
   override val protocol: Protocol = AggregateRootFunctionalSpec.Protocol
 
-  override def testConfiguration( test: OneArgTest, slug: String ): Config =
-    AggregateRootFunctionalSpec.config
-  override def createAkkaFixture(
-    test: OneArgTest,
-    config: Config,
-    system: ActorSystem,
-    slug: String
-  ): Fixture = {
-    new Fixture( config, system, slug )
-  }
+  class Fixture( _slug: String, _system: ActorSystem ) extends AggregateFixture( _slug, _system ) {
 
-  class Fixture( _config: Config, _system: ActorSystem, _slug: String )
-      extends AggregateFixture( _config, _system, _slug ) {
-    private val trace = Trace[Fixture]
-    override val module: AggregateRootModule[State, ID] = AggregateRootFunctionalSpec.FooModule
+    override val module: AggregateRootModule[State, Long] = AggregateRootFunctionalSpec.FooModule
 
-    override def rootTypes: Set[AggregateRootType] = trace.block( "rootTypes" ) {
+    val fooTid: Foo#TID = AggregateRootFunctionalSpec.Foo.identifying.next
+
+//    override type State = AggregateRootFunctionalSpec.State
+//    override type ID = AggregateRootFunctionalSpec.Foo#ID
+
+    override def rootTypes: Set[AggregateRootType] = {
       Set( AggregateRootFunctionalSpec.FooModule.rootType )
     }
 
-    override def nextId(): TID = State.stateIdentifying.nextTID.unsafeGet
-
-    def infoFrom( ar: ActorRef )( implicit ec: ExecutionContext ): Future[Option[State]] = {
+    def infoFrom( ar: ActorRef )( implicit ec: ExecutionContext ): Future[AggregateState] = {
       import akka.pattern.ask
       (ar ? protocol.GetState( tid )).mapTo[protocol.MyState].map { _.state }
     }
   }
 
-  def assertStates( actual: State, expected: State ): Unit = {
-    logger.debug( "asserting actual:[{}] == expected:[{}]", actual, expected )
-    actual.id.tag.name mustBe expected.id.tag.name
-    actual.id.id mustBe expected.id.id
+  def assertStates( actual: FooState, expected: FooState ): Unit = {
+    scribe.debug( s"asserting actual:[${actual}] == expected:[${expected}]" )
+//    actual.id.tag.name mustBe expected.id.tag.name
+    actual.id.value mustBe expected.id.value
     actual.id mustBe expected.id
     actual.foo.name mustBe expected.foo.name
     actual.foo.slug mustBe expected.foo.slug
@@ -81,27 +74,140 @@ class AggregateRootFunctionalSpec
   }
 
   "AggregateRoot" should {
+    "kryo config is included" in { f: Fixture =>
+      import f._
+      import net.ceedubs.ficus.Ficus._
+      system.settings.config.as[String]( "akka.actor.kryo.type" ) mustBe "graph"
+
+      scribe.error( s"FooState FQCN = ${classOf[FooState].getName}" )
+      scribe.error( s"Id[Option[FooState]] FQCN = ${classOf[Id[Option[FooState]]].getName}" )
+      scribe.error( s"Id[FooState] FQCN = ${classOf[Id[FooState]].getName}" )
+      classOf[Id[Option[FooState]]].getName mustBe "omnibus.identifier.Id"
+    }
+
+    "should get right serializers" in { f: Fixture =>
+      import f._
+      val serialization = SerializationExtension( system )
+      val state = FooState( tid, Foo( fooTid, "foo", "bar", b = 19 ), count = 1 )
+
+      val ofsId = Id.of[Option[FooState], Long]( 17L )
+      val fsId = Id.of[FooState, Long]( 13L )
+      serialization.findSerializerFor( state ).getClass mustBe classOf[KryoSerializer]
+      serialization.findSerializerFor( ofsId ).getClass mustBe classOf[KryoSerializer]
+      serialization.findSerializerFor( fsId ).getClass mustBe classOf[KryoSerializer]
+    }
+
+    "id should be serializable" in { f: Fixture =>
+      import f._
+      val serialization = SerializationExtension( system )
+      val ofsId = Id.of[Option[FooState], Long]( 23L )
+      val fsId = Id.of[FooState, Long]( 29L )
+
+      val ofsSerialized = serialization serialize ofsId
+      ofsSerialized must be a 'success
+
+      val fsSerialized = serialization serialize fsId
+      fsSerialized must be a 'success
+
+      val ofsDeserialized = serialization.deserialize(
+        ofsSerialized.get,
+        classOf[Id[Option[FooState]]]
+      )
+      ofsDeserialized must be a 'success
+      ofsDeserialized.success.value mustBe ofsId
+
+      val fsDeserialized = serialization.deserialize(
+        fsSerialized.get,
+        classOf[Id[FooState]]
+      )
+      fsDeserialized must be a 'success
+      fsDeserialized.success.value mustBe fsId
+
+//      val fsaux: Id.Aux[FooState, Long] = fsDeserialized.success.value
+//      fsaux mustBe fsId
+    }
+
+    "tid in proper form" in { f: Fixture =>
+      import f._
+      scribe.info(
+        s"DMR **** TID=[${tid.toString}] and fooTid=[${fooTid.toString}]"
+      )
+//      scribe.info(
+//        s"DMR **** stateType=[${stateType.toString}]"
+//      )
+
+      "val id: Id.Aux[Option[FooState], Long] = tid" must compile
+
+      scribe.error( s"tid = $tid; value = ${tid.value}" )
+      tid.getClass.getName mustBe "omnibus.identifier.Id$Simple"
+      tid.toString() mustBe s"FooStateId(${tid.value})"
+    }
+
+    "state is serializable" in { f: Fixture =>
+      import f._
+      val state = FooState( tid, Foo( fooTid, "foo", "bar", b = 19 ), count = 1 )
+      val serialization = SerializationExtension( system )
+      serialization.findSerializerFor( state ).getClass mustBe classOf[KryoSerializer]
+      val serialized = serialization serialize state
+      serialized must be a 'success
+      val hydrated = serialization.deserialize( serialized.success.value, classOf[FooState] )
+      hydrated must be a 'success
+      hydrated.success.value mustBe state
+      hydrated.success.value.id mustBe tid
+      hydrated.success.value.foo.id mustBe fooTid
+    }
+
+    "optional state is serializable" in { f: Fixture =>
+      import f._
+      scribe.info(
+        s"DMR **** TID=[${tid.toString}] and fooTid=[${fooTid.toString}]"
+      )
+      val state = Option( FooState( tid, Foo( fooTid, "foo", "bar", b = 19 ), count = 1 ) )
+      scribe.info(
+        s"DMR **** STATE's tid=[${state.get.id.toString}] and fooTid=[${state.get.foo.id.toString}]"
+      )
+      val serialization = SerializationExtension( system )
+      serialization.findSerializerFor( state ).getClass mustBe classOf[KryoSerializer]
+      val serialized = serialization serialize state
+      serialized must be a 'success
+      val hydrated = serialization.deserialize(
+        serialized.success.value,
+        classOf[Option[FooState]]
+      )
+      scribe.info(
+        s"DMR **** HYDRATED's tid=[${hydrated.success.value.value.id.toString}] and fooTid=[${hydrated.success.value.value.foo.id.toString}]"
+      )
+      hydrated must be a 'success
+      hydrated.success.value mustBe state
+      hydrated.success.value.value.id mustBe tid
+      val hfsid: FooState#TID = hydrated.success.value.value.id
+      hfsid.toString() mustBe s"FooStateId(${tid.value})"
+      val hfid: Foo#TID = hydrated.success.value.value.foo.id
+      hfid.toString() mustBe s"FooId(${fooTid.value})"
+      hfid mustBe fooTid
+    }
+
     "save and reload a snapshot" taggedAs WIP in { f: Fixture =>
       import f._
       import scala.concurrent.ExecutionContext.Implicits.global
 
-      val e1 = State( tid, Foo( tid, "foo", "foo", b = 17 ), count = 1 )
+      val e1 = FooState( tid, Foo( fooTid, "foo", "foo", b = 17 ), count = 1 )
       entityRef !+ protocol.Bar( e1.id, e1.foo.b )
       bus.expectMsgClass( classOf[protocol.Barred] )
       whenReady( infoFrom( entityRef ) ) { actual =>
         assertStates( actual.value, e1 )
       }
 
-      val e2 = State( tid, Foo( tid, "foo", "foo", b = 3.14159 ), count = 2 )
+      val e2 = FooState( tid, Foo( fooTid, "foo", "foo", b = 3.14159 ), count = 2 )
 
       EventFilter.debug( start = "aggregate snapshot successfully saved:", occurrences = 1 ) intercept {
-        logger.debug( "+ INTERCEPT" )
+        scribe.debug( "+ INTERCEPT" )
         entityRef !+ FooModule.rootType.snapshot.value.saveSnapshotCommand( tid )
         entityRef !+ protocol.Bar( e2.id, e2.foo.b )
-        logger.debug( "TEST:SLEEPING..." )
+        scribe.debug( "TEST:SLEEPING..." )
         Thread.sleep( 3000 )
-        logger.debug( "TEST:AWAKE..." )
-        logger.debug( "- INTERCEPT" )
+        scribe.debug( "TEST:AWAKE..." )
+        scribe.debug( "- INTERCEPT" )
       }
 
       whenReady( infoFrom( entityRef ) ) { actual =>
@@ -113,34 +219,35 @@ class AggregateRootFunctionalSpec
       import f._
       import scala.concurrent.ExecutionContext.Implicits.global
 
-      val p1 = State( tid, Foo( tid, "foo", "foo", b = 3.14159 ) )
+      val p1 = FooState( tid, Foo( fooTid, "foo", "foo", b = 3.14159 ) )
       entityRef !+ protocol.Bar( p1.id, p1.foo.b )
       bus.expectMsgClass( classOf[protocol.Barred] )
       whenReady( infoFrom( entityRef ) ) { actual =>
         assertStates( actual.value, p1 )
       }
 
-      val barredType = TypeCase[protocol.Barred]
+      import scala.reflect.classTag
+      val BarredType = classTag[protocol.Barred]
       val p2 = FooModule.FooActor.foob.set( p1 )( 1.2345 ).copy( count = 2 )
       entityRef !+ protocol.Bar( p2.id, p2.foo.b )
       bus.expectMsgPF( 1.second, "Post Passivation BAR" ) {
-        case barredType( protocol.Barred( pid, b ) ) => {
+        case BarredType( protocol.Barred( pid, b ) ) => {
           pid mustBe p2.id
           b mustBe p2.foo.b
         }
       }
       whenReady( infoFrom( entityRef ) ) { _.value mustBe p2 }
 
-      logger.debug( "TEST:SLEEPING..." )
+      scribe.debug( "TEST:SLEEPING..." )
       Thread.sleep( 3000 )
-      logger.debug( "TEST:AWAKE..." )
+      scribe.debug( "TEST:AWAKE..." )
 
       whenReady( infoFrom( entityRef ) ) { _.value mustBe p2 }
 
       val p3 = FooModule.FooActor.foob.set( p1 )( 12 ).copy( count = 3 )
       entityRef !+ protocol.Bar( p3.id, p3.foo.b )
       bus.expectMsgPF( 1.second.dilated, "Post Passivation BAR" ) {
-        case barredType( protocol.Barred( pid, b ) ) => {
+        case BarredType( protocol.Barred( pid, b ) ) => {
           pid mustBe p3.id
           b mustBe p3.foo.b
         }
@@ -152,9 +259,25 @@ class AggregateRootFunctionalSpec
 }
 
 object AggregateRootFunctionalSpec {
+  type AggregateState = Option[FooState]
 
-  trait Foo extends Entity with Equals {
-    override type ID = ShortUUID
+//  object AggregateState {
+//    implicit val optionalIdentifying: Identifying.Aux[Option[FooState], Long] =
+//      Identifying.toComposite[Option, FooState, Long]( FooState.identifying )
+//  implicit val optionalIdentifying = Identifying.optionalIdentifying
+//  }
+
+  case class FooState( id: FooState#TID, foo: Foo, count: Int = 1 ) {
+    type TID = FooState.identifying.TID
+  }
+
+  object FooState {
+    implicit val identifying: Identifying.Aux[FooState, Long] = Identifying.byLong
+
+  }
+
+  trait Foo extends Entity[Foo, ShortUUID] with Equals {
+//    override type E = Foo
 
     def f: Int
     def b: Double
@@ -195,7 +318,7 @@ object AggregateRootFunctionalSpec {
     }
   }
 
-  object Foo extends EntityLensProvider[Foo] {
+  object Foo extends EntityLensProvider[Foo, ShortUUID] {
 
     def apply(
       id: Foo#TID,
@@ -208,10 +331,7 @@ object AggregateRootFunctionalSpec {
       FooImpl( id, name, slug, f, b, z )
     }
 
-    implicit val fooIdentifying = new EntityIdentifying[Foo] {
-      override def nextTID: ErrorOr[TID] = tag( ShortUUID() ).asRight
-      override def idFromString( idRep: String ): ShortUUID = ShortUUID fromString idRep
-    }
+    override implicit val identifying: Identifying.Aux[Foo, ShortUUID] = Identifying.byShortUuid
 
     override val idLens: Lens[Foo, Foo#TID] = new Lens[Foo, Foo#TID] {
       override def get( f: Foo ): Foo#TID = f.id
@@ -254,40 +374,24 @@ object AggregateRootFunctionalSpec {
     }
   }
 
-  object Protocol extends AggregateProtocol[State#ID] {
+  object Protocol extends AggregateProtocol[AggregateState] {
     case class LogWarning( override val targetId: LogWarning#TID, message: String ) extends Command
     case class Bar( override val targetId: Bar#TID, b: Double ) extends Command
     case class Barred( override val sourceId: Barred#TID, b: Double ) extends Event
     case class GetState( override val targetId: GetState#TID ) extends Command
-    case class MyState( override val sourceId: MyState#TID, state: Option[State] ) extends Event
+    case class MyState( override val sourceId: MyState#TID, state: AggregateState ) extends Event
   }
 
-  case class State( id: TaggedID[ShortUUID], foo: Foo, count: Int = 1 ) {
-    type ID = State.stateIdentifying.ID
-  }
-
-  object State {
-    implicit val stateIdentifying = new Identifying[State]
-    with ShortUUID.ShortUuidIdentifying[State] {
-      override val idTag: Symbol = Symbol( "foo-state" )
-      override def tidOf( o: State ): TID = o.id
-    }
-  }
-
-  object FooModule extends AggregateRootModule[State, ShortUUID] { module =>
-    private def trace: Trace[_] = Trace[FooModule.type]
-
-    override type ID = ShortUUID
-
-    override val rootType: AggregateRootType = trace.block( "rootType" ) {
+  object FooModule extends AggregateRootModule[AggregateState, Long] { module =>
+    override val rootType: AggregateRootType = {
       new AggregateRootType {
         override def repositoryProps( implicit model: DomainModel ): Props = {
           CommonLocalRepository.props( model, this, FooActor.props( _, _ ) )
         }
 
         override def name: String = FooModule.shardName
-        override type S = State
-        override val identifying: Identifying[State] = State.stateIdentifying
+        override type S = AggregateState
+//        override val identifying: Identifying[S] = Identifying[S]
         //      override def aggregateRootProps( implicit model: DomainModel ): Props = FooModule.FooActor.props( model, this )
         override val toString: String = "FooAggregateRootType"
         override def passivateTimeout: Duration = 1.seconds
@@ -300,9 +404,9 @@ object AggregateRootFunctionalSpec {
         Props( new FooActor( model, rootType ) with StackableStreamPublisher )
       }
 
-      val fooLens: Lens[State, Foo] = lens[State] >> 'foo
-      val countLens: Lens[State, Int] = lens[State] >> 'count
-      val foob: Lens[State, Double] = Foo.bLens compose fooLens
+      val fooLens: Lens[FooState, Foo] = lens[FooState] >> 'foo
+      val countLens: Lens[FooState, Int] = lens[FooState] >> 'count
+      val foob: Lens[FooState, Double] = Foo.bLens compose fooLens
       val fooAndCount = foob ~ countLens
 
     }
@@ -310,10 +414,7 @@ object AggregateRootFunctionalSpec {
     class FooActor(
       override val model: DomainModel,
       override val rootType: AggregateRootType
-    ) extends AggregateRoot[Option[State], ShortUUID]()(
-          Identifying.optionIdentifying( State.stateIdentifying ),
-          classTag[Option[State]]
-        )
+    ) extends AggregateRoot[AggregateState]
         with AggregateRoot.Provider { outer: EventPublisher =>
 
       override val acceptance: Acceptance = {
@@ -342,13 +443,16 @@ object AggregateRootFunctionalSpec {
             b,
             s
           )
-          Option( State( id = oid, foo = Foo( oid, "foo", "foo", b = b ) ) )
+          s map { s1 =>
+            s1.copy( foo = Foo.bLens.set( s1.foo )( b ) )
+          }
+//          Option( State( id = oid, foo = Foo( oid, "foo", "foo", b = b ) ) )
         }
       }
 
       val id: TID = aggregateId
 
-      override var state: Option[State] = None
+      override var state: AggregateState = None
 
       override def receiveCommand: Receive = LoggingReceive { around( action ) }
 
@@ -376,7 +480,13 @@ object AggregateRootFunctionalSpec {
   }
 
   val config: Config = ConfigFactory.parseString(
-    """
+    s"""
+      |include "kryo"
+      |akka.actor.serialization-bindings {
+      |  "${classOf[FooState].getName}" = kryo
+      |  "scala.Option" = kryo
+      |}
+      |
       |akka.persistence {
       |  journal {
       |#    plugin = "akka.persistence.journal.leveldb-shared"
@@ -426,48 +536,6 @@ object AggregateRootFunctionalSpec {
       |    ]
       |
       |    auto-down-unreachable-after = 10s
-      |  }
-      |}
-      |
-      |akka {
-      |  extensions = ["com.romix.akka.serialization.kryo.KryoSerializationExtension$"]
-      |  actor {
-      |    kryo  {
-      |      type = "graph"
-      |      idstrategy = "incremental"
-      |      buffer-size = 4096
-      |      max-buffer-size = -1
-      |      use-manifests = false
-      |      use-unsafe = false
-      |      post-serialization-transformations = "lz4,aes"
-      |      encryption {
-      |        aes {
-      |          mode = "AES/CBC/PKCS5Padding"
-      |          key = "5ZQq!7FbW&SNqepm"
-      |          IV-length = 16
-      |        }
-      |      }
-      |      implicit-registration-logging = true
-      |      kryo-trace = false
-      |      resolve-subclasses = false
-      |      //      mappings {
-      |      //        "package1.name1.className1" = 20,
-      |      //        "package2.name2.className2" = 21
-      |      //      }
-      |      classes = [
-      |        "demesne.EventLike"
-      |      ]
-      |    }
-      |
-      |    serializers {
-      |      java = "akka.serialization.JavaSerializer"
-      |      kyro = "com.romix.akka.serialization.kryo.KryoSerializer"
-      |    }
-      |
-      |    serialization-bindings {
-      |      "demesne.EventLike" = kyro
-      |      "scala.Option" = kyro
-      |    }
       |  }
       |}
       |

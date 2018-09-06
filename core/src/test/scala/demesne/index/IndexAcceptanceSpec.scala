@@ -3,44 +3,40 @@ package demesne.index
 import scala.concurrent.duration._
 import akka.testkit._
 import akka.actor.ActorSystem
-import com.typesafe.config.Config
-
 import org.scalatest.concurrent.ScalaFutures
 import omnibus.akka.envelope._
-import omnibus.commons.identifier._
-import omnibus.commons.log.Trace
+import omnibus.identifier.{ Id, Identifying, ShortUUID }
 import omnibus.archetype.domain.model.core.Entity
 import demesne._
+import demesne.index.IndexAcceptanceSpec.Foo
 import demesne.index.local.IndexLocalAgent
 import demesne.testkit.{ AggregateRootSpec, SimpleTestModule }
 import demesne.testkit.concurrent.CountDownFunction
 
 object IndexAcceptanceSpec {
-  case class Foo(
-    override val id: TaggedID[ShortUUID],
-    override val name: String,
-    foo: String,
-    bar: Int
-  ) extends Entity {
-    override type ID = ShortUUID
-    def toSummary: Foo.Summary = Foo.Summary( this.id, Foo.Summary.foobar( this.foo, this.bar ) )
-  }
 
   object Foo {
     def summarize( foo: Foo ): Summary = Summary( foo.id, Summary.foobar( foo.foo, foo.bar ) )
-    case class Summary( id: Foo#TID, foobar: String )
+    case class Summary( id: Id[Foo], foobar: String )
 
     object Summary {
       def foobar( foo: String, bar: Int ): String = foo + "-" + bar
     }
 
-    implicit val fooIdentifying = new Identifying[Foo] with ShortUUID.ShortUuidIdentifying[Foo] {
-      override val idTag: Symbol = 'foo
-      override def tidOf( f: Foo ): TID = f.id
-    }
+    implicit val identifying: Identifying.Aux[Foo, ShortUUID] = Identifying.byShortUuid
   }
 
-  object Protocol extends AggregateProtocol[Foo#ID] {
+  case class Foo(
+    override val id: Foo#TID,
+    override val name: String,
+    foo: String,
+    bar: Int
+  ) extends Entity[Foo, ShortUUID] {
+//    override type E = Foo
+    def toSummary: Foo.Summary = Foo.Summary( this.id, Foo.Summary.foobar( this.foo, this.bar ) )
+  }
+
+  object Protocol extends AggregateProtocol[Foo] {
     case class Add( override val targetId: Add#TID, name: String, foo: String, bar: Int )
         extends Command
     case class ChangeBar( override val targetId: ChangeBar#TID, bar: Int ) extends Command
@@ -57,7 +53,7 @@ object IndexAcceptanceSpec {
     case class Deleted( override val sourceId: Deleted#TID, name: String ) extends Event
   }
 
-  object TestModule extends SimpleTestModule[Foo, Foo#ID]()( Foo.fooIdentifying ) { module =>
+  object TestModule extends SimpleTestModule[Foo, ShortUUID] { module =>
 
 //    override type ID = Foo#ID
 //    override val evID: ClassTag[ID] = classTag[Foo#ID]
@@ -85,7 +81,7 @@ object IndexAcceptanceSpec {
     override def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any] = {
       case Protocol.Add( id, name, foo, bar ) => Protocol.Added( id, name, foo, bar )
       case Protocol.ChangeBar( id, newBar ) => {
-        logger info s"state = $state"
+        scribe info s"state = $state"
         Protocol.BarChanged(
           id,
           state( 'name ).asInstanceOf[String],
@@ -109,7 +105,7 @@ object IndexAcceptanceSpec {
           ContextChannelSubscription( classOf[Protocol.Event] )
         ) {
           case Protocol.Added( sid, _, _, bar ) => Directive.Record( bar, sid, sid )
-          case Protocol.BarChanged( sid, name, oldBar, newBar ) =>
+          case Protocol.BarChanged( _, _, oldBar, newBar ) =>
             Directive.ReviseKey( oldBar, newBar )
           case Protocol.Deleted( sid, _ ) => Directive.Withdraw( sid )
         },
@@ -118,12 +114,11 @@ object IndexAcceptanceSpec {
             case Protocol.Added( sid, name, foo, bar ) =>
               Directive.Record( name, sid, Foo.Summary( sid, Foo.Summary.foobar( foo, bar ) ) )
             case Protocol.BarChanged( sid, name, oldBar, newBar ) => {
-              logger.info(
-                "IndexLocalAgentSpec-summary: ALTERING sid:[{}] name:[{}] oldBar:[{}] newBar:[{}]",
-                sid,
-                name,
-                oldBar.toString,
-                newBar.toString
+              scribe.info(
+                s"IndexLocalAgentSpec-summary: ALTERING sid:[${sid}] " +
+                s"name:[${name}] " +
+                s"oldBar:[${oldBar.toString}] " +
+                s"newBar:[${newBar.toString}]"
               )
 
               Directive.AlterValue[String, Foo.Summary]( name ) { oldSummary =>
@@ -145,36 +140,33 @@ object IndexAcceptanceSpec {
       case ( Protocol.Added( id, name, foo, bar ), state ) => {
         state + ('id -> id) + ('name -> name) + ('foo -> foo) + ('bar -> bar)
       }
-      case ( Protocol.BarChanged( id, _, _, newBar ), state ) => state + ('bar -> newBar)
-      case ( _: Protocol.Deleted, _ )                         => Map.empty[Symbol, Any]
+      case ( Protocol.BarChanged( _, _, _, newBar ), state ) => state + ('bar -> newBar)
+      case ( _: Protocol.Deleted, _ )                        => Map.empty[Symbol, Any]
     }
   }
 }
 
-class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with ScalaFutures {
+class IndexAcceptanceSpec extends AggregateRootSpec[Foo, ShortUUID] with ScalaFutures {
   import IndexAcceptanceSpec._
 
-  private val trace = Trace[IndexAcceptanceSpec]
-
-  override type State = Foo
-  override type ID = Foo#ID
+//  override type State = Foo
+//  override type ID = Foo#ID
   override type Protocol = IndexAcceptanceSpec.Protocol.type
   override val protocol: Protocol = IndexAcceptanceSpec.Protocol
 
   override def createAkkaFixture(
     test: OneArgTest,
-    config: Config,
     system: ActorSystem,
     slug: String
   ): Fixture = {
-    new TestFixture( config, system, slug )
+    new TestFixture( slug, system )
   }
 
   override type Fixture = TestFixture
 
-  class TestFixture( _config: Config, _system: ActorSystem, _slug: String )
-      extends AggregateFixture( _config, _system, _slug ) {
-    override def nextId(): TID = Foo.fooIdentifying.nextTID.unsafeGet
+  class TestFixture( _slug: String, _system: ActorSystem )
+      extends AggregateFixture( _slug, _system ) {
+    override def nextId(): TID = Foo.identifying.next
 //    {
 //      Foo.fooIdentifying.nextIdAs[TID] match {
 //        case \/-( r ) => r
@@ -185,7 +177,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
 //      }
 //    }
 
-    override val module: AggregateRootModule[Foo, Foo#ID] = TestModule
+    override val module: AggregateRootModule[Foo, ShortUUID] = TestModule
 
     override def rootTypes: Set[AggregateRootType] = Set( module.rootType )
   }
@@ -206,9 +198,9 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
         streamRegister  <- sr
         summaryRegister <- sumReg
       } {
-        val tid = TestModule.nextId.toOption.get
-        val id = tid.id
-        logger.info( "DMR: test tid =[{}]", tid )
+        val tid = TestModule.nextId
+//        val id = tid.value
+        scribe.debug( s"DMR: test tid =[${tid}]" )
         val name = "tfoo"
         val foo = "Test Foo"
         val bar = 17
@@ -228,11 +220,11 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
         countDown await 200.millis.dilated
 
         whenReady( busRegister.futureGet( "Test Foo" ) ) { _ mustBe Some( tid ) }
-        trace( s"""bus-index:Test Foo = ${busRegister.get( "Test Foo" )}""" )
+        scribe trace (s"""bus-index:Test Foo = ${busRegister.get( "Test Foo" )}""")
         busRegister.get( "Test Foo" ) mustBe Some( tid )
 
         whenReady( streamRegister.futureGet( 17 ) ) { _ mustBe Some( tid ) }
-        trace( s"stream-index:17 = ${streamRegister.get( 17 )}" )
+        scribe.trace( s"stream-index:17 = ${streamRegister.get( 17 )}" )
         streamRegister.get( 17 ) mustBe Some( tid )
 
         whenReady( summaryRegister futureGet "tfoo" ) {
@@ -258,7 +250,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
       } {
         val p = TestProbe()
 
-        val id = TestModule.nextId.toOption.get
+        val id = TestModule.nextId
         val name = "tfoo"
         val foo = "Test Foo"
         val bar = 13
@@ -266,7 +258,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
         system.eventStream.subscribe( p.ref, classOf[Protocol.Event] )
 
         val aggregate = TestModule aggregateOf id
-        logger.info( "----------  ADDIND ----------" )
+        scribe.trace( "----------  ADDING ----------" )
         aggregate !+ Protocol.Add( id, name, foo, bar )
 
         bus.expectMsgPF( hint = "bus-added" ) {
@@ -287,7 +279,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
 
         val countDownAdd = new CountDownFunction[String]
         countDownAdd await 200.millis.dilated
-        logger.info( "----------  DELETING ----------" )
+        scribe.trace( "----------  DELETING ----------" )
 
         whenReady( busRegister.futureGet( "Test Foo" ) ) { _ mustBe Some( id ) }
         busRegister.get( "Test Foo" ) mustBe Some( id )
@@ -304,20 +296,20 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
 
         val countDownChange = new CountDownFunction[String]
         countDownChange await 500.millis.dilated
-        logger.info( "----------  CHECKING ----------" )
+        scribe.trace( "----------  CHECKING ----------" )
 
         whenReady( busRegister futureGet "Test Foo" ) { actual =>
-          logger info s"HERE ****: result(Test Foo) = $actual"
+          scribe debug s"HERE ****: result(Test Foo) = $actual"
           actual mustBe None
         }
 
         whenReady( streamRegister futureGet 13 ) { actual =>
-          logger info s"HERE ****: result(Damon) = $actual"
+          scribe debug s"HERE ****: result(Damon) = $actual"
           actual mustBe None
         }
 
         whenReady( summaryRegister futureGet "tfoo" ) { actual =>
-          logger info s"HERE ****: result(Damon) = $actual"
+          scribe debug s"HERE ****: result(Damon) = $actual"
           actual mustBe None
         }
       }
@@ -340,14 +332,14 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
       } {
         val p = TestProbe()
 
-        val id = TestModule.nextId.toOption.get
+        val id = TestModule.nextId
         val name = "tfoo"
         val foo = "Test Foo"
         val bar = 7
         system.eventStream.subscribe( bus.ref, classOf[Protocol.Event] )
         system.eventStream.subscribe( p.ref, classOf[Protocol.Event] )
 
-        logger.info( "----------  ADDING ----------" )
+        scribe.debug( "----------  ADDING ----------" )
         val aggregate = TestModule aggregateOf id
         aggregate !+ Protocol.Add( id, name, foo, bar )
 
@@ -379,7 +371,7 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
         busRegister.get( "Test Foo" ) mustBe Some( id )
         streamRegister.get( 7 ) mustBe Some( id )
 
-        logger.info( "----------  CHANGING ----------" )
+        scribe.debug( "----------  CHANGING ----------" )
         aggregate !+ Protocol.ChangeBar( id, 13 )
 
         bus.expectMsgPF( hint = "bar-change" ) {
@@ -398,20 +390,20 @@ class IndexAcceptanceSpec extends AggregateRootSpec[IndexAcceptanceSpec] with Sc
 
         val countDownChange = new CountDownFunction[String]
         countDownChange await 200.millis.dilated
-        logger.info( "----------  CHECKING ----------" )
+        scribe.debug( "----------  CHECKING ----------" )
 
         whenReady( busRegister.futureGet( "Test Foo" ) ) { result =>
-          logger info s"HERE ****: result(Test Foo) = $result"
+          scribe debug s"HERE ****: result(Test Foo) = $result"
           result mustBe Some( id )
         }
 
         whenReady( streamRegister.futureGet( 7 ) ) { result =>
-          logger info s"HERE ****: result(7) = $result"
+          scribe debug s"HERE ****: result(7) = $result"
           result mustBe None
         }
 
         whenReady( summaryRegister.futureGet( "tfoo" ) ) { result =>
-          logger info s"HERE ****: result(13) = $result"
+          scribe debug s"HERE ****: result(13) = $result"
           result mustBe Some( Foo.Summary( id, Foo.Summary.foobar( foo, 13 ) ) )
         }
       }
