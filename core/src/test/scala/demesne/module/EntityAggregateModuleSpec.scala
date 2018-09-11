@@ -3,6 +3,7 @@ package demesne.module
 import scala.concurrent.duration._
 import akka.actor.{ ActorSystem, Props }
 import akka.testkit._
+import org.scalatest.OptionValues
 //import com.typesafe.config.Config
 //import cats.syntax.either._
 import shapeless._
@@ -178,7 +179,10 @@ object EntityAggregateModuleSpec {
   }
 }
 
-class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with ScalaFutures {
+class EntityAggregateModuleSpec
+    extends AggregateRootSpec[Foo, ShortUUID]
+    with OptionValues
+    with ScalaFutures {
   import EntityAggregateModuleSpec._
 
 //  override type State = Foo
@@ -206,11 +210,11 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with S
     val rootType: AggregateRootType = module.rootType
 
     type SlugIndex =
-      DomainModel.AggregateIndex[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID]
+      DomainModel.AggregateIndex[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.ID]
 
     def slugIndex: SlugIndex = {
       model
-        .aggregateIndexFor[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.TID](
+        .aggregateIndexFor[String, FooAggregateRoot.module.TID, FooAggregateRoot.module.ID](
           rootType,
           'slug
         )
@@ -228,7 +232,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with S
   "Module should" should {
     import FooAggregateRoot.{ module => Module }
 
-    "build module" taggedAs WIP in { fixture: Fixture =>
+    "build module" in { fixture: Fixture =>
       import fixture._
 
       val expected = FooAggregateRoot.builderFactory.EntityAggregateModuleImpl(
@@ -391,10 +395,10 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with S
       countDown await 250.millis.dilated
 
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
-        result mustBe Some( id )
+        result.value mustBe tid
       }
       scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
-      slugIndex.get( "f1" ) mustBe Some( id )
+      slugIndex.get( "f1" ).value mustBe tid
     }
 
     "bar command to force concrete protocol implementation" in { fixture: Fixture =>
@@ -414,10 +418,10 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with S
 
       new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
-        result mustBe Some( id )
+        result.value mustBe tid
       }
       scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
-      slugIndex.get( "f1" ) mustBe Some( id )
+      slugIndex.get( "f1" ).value mustBe tid
 
       import akka.pattern.ask
 //      implicit val timeout = akka.util.Timeout( 1.second )
@@ -427,7 +431,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with S
       }
     }
 
-    "enablement actions translate in slug index" in { fixture: Fixture =>
+    "enablement actions translate in slug index" taggedAs WIP in { fixture: Fixture =>
       import fixture._
 
       val tid = Module.nextId
@@ -444,10 +448,10 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with S
 
       new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
-        result mustBe Some( id )
+        result.value mustBe tid
       }
       scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
-      slugIndex.get( "f1" ) mustBe Some( id )
+      slugIndex.get( "f1" ).value mustBe tid
 
       f !+ Protocol.Disable( tid )
       new CountDownFunction[String] await 250.millis.dilated
@@ -460,18 +464,18 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with S
       f !+ Protocol.Enable( tid )
       new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
-        result mustBe Some( id )
+        result.value mustBe tid
       }
       scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
-      slugIndex.get( "f1" ) mustBe Some( id )
+      slugIndex.get( "f1" ).value mustBe tid
 
       f !+ Protocol.Enable( tid )
       new CountDownFunction[String] await 250.millis.dilated
       whenReady( slugIndex.futureGet( "f1" ) ) { result =>
-        result mustBe Some( id )
+        result.value mustBe tid
       }
       scribe.trace( s"""index:f1 = ${slugIndex.get( "f1" )}""" )
-      slugIndex.get( "f1" ) mustBe Some( id )
+      slugIndex.get( "f1" ).value mustBe tid
     }
   }
 }

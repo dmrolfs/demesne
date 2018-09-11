@@ -1,12 +1,12 @@
 package demesne
 
+import scala.util.Try
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.event.LoggingReceive
 import akka.serialization.SerializationExtension
 import akka.testkit._
-import com.romix.akka.serialization.kryo.KryoSerializer
 import org.scalatest.concurrent.ScalaFutures
 import shapeless._
 import com.typesafe.config.{ Config, ConfigFactory }
@@ -18,9 +18,6 @@ import omnibus.akka.envelope._
 import omnibus.identifier.{ Id, Identifying, Labeling, ShortUUID }
 import AggregateRootFunctionalSpec.{ AggregateState, FooState }
 import com.twitter.chill.akka.AkkaSerializer
-
-import scala.reflect.ClassTag
-import scala.util.Try
 
 /**
   * Created by rolfsd on 6/29/16.

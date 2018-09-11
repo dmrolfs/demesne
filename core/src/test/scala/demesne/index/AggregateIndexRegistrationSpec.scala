@@ -149,7 +149,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
 
   "IndexRegistration should" should {
 
-    "survey upon first create" in { implicit f: Fixture =>
+    "survey upon first create" taggedAs WIP in { implicit f: Fixture =>
       implicit val system = f.system
       val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ) {
         case FooAdded( name ) => Directive.Record( name, name.hashCode, name.hashCode )
@@ -193,7 +193,7 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
       expectStartWorkflow( rt, spec, probes, Set() )
     }
 
-    "relay startup after initial create in node" taggedAs (WIP) in { implicit f: Fixture =>
+    "relay startup after initial create in node" in { implicit f: Fixture =>
       implicit val system = f.system
       val spec = IndexLocalAgent.spec[String, Int, Int]( 'foo ) {
         case FooAdded( name ) => Directive.Record( name, name.hashCode, name.hashCode )

@@ -308,13 +308,10 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
 
       case D.Withdraw( id, k ) => {
         log.warning(
-          s"IndexAggregate[{}] UNHANDLED: [{}] id:[${id}] type:[{}] " +
+          s"IndexAggregate[${self.path}] UNHANDLED: [${message}] " +
+          s"id:[${id}] type:[${IdType.runtimeClass.safeSimpleName}] " +
           s"key:[${k.toString}] key-class:[${k.getClass.safeSimpleName}] " +
-          "state:[{}]",
-          self.path,
-          message,
-          ValueType.runtimeClass.safeSimpleName,
-          state
+          s"state:[${state}]"
         )
       }
 

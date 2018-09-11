@@ -65,11 +65,11 @@ object EntityAggregateModule {
       }
       case DisabledType( event ) => {
         scribe.debug( s"#TEST #SLUG: Index handling Disabled event: [${event}]" )
-        Directive.Withdraw( event.sourceId.value )
+        Directive.Withdraw( event.sourceId )
       }
       case EnabledType( event ) => {
         scribe.debug( s"#TEST #SLUG: Index handling Enabled event: [${event}]" )
-        Directive.Record( event.slug, event.sourceId.value, event.sourceId.value )
+        Directive.Record( event.slug, event.sourceId, event.sourceId )
       }
     }
 //    (
