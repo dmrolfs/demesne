@@ -1,45 +1,39 @@
 package demesne.testkit
 
-import java.util.concurrent.atomic.AtomicInteger
-
 import scala.concurrent.duration._
-import scala.reflect.ClassTag
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.testkit._
-
-import com.typesafe.config.Config
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar
-import omnibus.identifier.Identifying
+import omnibus.identifier.{ Id, Identifying }
 import demesne._
 import demesne.repository.StartProtocol
-
-object AggregateRootSpec {
-  val sysId = new AtomicInteger()
-}
 
 /**
   * Created by damonrolfs on 9/17/14.
   */
-abstract class AggregateRootSpec[A: ClassTag]
-    extends SequentialAkkaSpecWithIsolatedFixture
+abstract class AggregateRootSpec[S, ID0](
+  implicit val identifying: Identifying.Aux[S, ID0]
+) extends SequentialAkkaSpecWithIsolatedFixture
     with MockitoSugar
     with BeforeAndAfterAll {
 
-  type State
-  type ID
-  type TID
+  type State = S
+  type ID = ID0
+  type TID = Id.Aux[S, ID0]
 
   import scala.language.higherKinds
-  type Protocol <: AggregateProtocol[ID]
+  type Protocol <: AggregateProtocol[S, ID0]
   val protocol: Protocol
 
-  abstract class AggregateFixture( _config: Config, _system: ActorSystem, _slug: String )
-      extends AkkaFixture( _config, _system, _slug ) { fixture =>
+  abstract class AggregateFixture(
+    _slug: String,
+    _system: ActorSystem
+  ) extends AkkaFixture( _slug, _system ) { fixture =>
 
-    val module: AggregateRootModule[State, ID]
+    val module: AggregateRootModule[S, ID0]
 
     import akka.util.Timeout
     implicit val actorTimeout = Timeout( 5.seconds )
@@ -57,7 +51,7 @@ abstract class AggregateRootSpec[A: ClassTag]
       )
     }
 
-    val bus = TestProbe()
+    val bus = TestProbe( "bus" )
     system.eventStream.subscribe( bus.ref, classOf[protocol.Event] )
 
     def rootTypes: Set[AggregateRootType]
@@ -79,21 +73,22 @@ abstract class AggregateRootSpec[A: ClassTag]
       )
     }
 
-    def nextId(): TID
+    def nextId(): TID = identifying.next
     lazy val tid: TID = nextId()
 
-    lazy val entityRef: ActorRef = module aggregateOf tid.asInstanceOf[module.TID]
+    lazy val entityRef: ActorRef = module aggregateOf tid //.asInstanceOf[module.TID]
 
     lazy val boundedContext: BoundedContext = {
       val key = Symbol( s"BoundedContext-${slug}" )
 
       val bc = for {
         made <- BoundedContext.make(
-          key,
-          config,
+          key = key,
+          configuration = config,
           userResources = resources,
           startTasks = startTasks( system )
         )
+
         filled <- made addAggregateTypes rootTypes
         _ <- filled.futureModel map { m =>
           scribe.debug( s"TEST: future model new rootTypes:[${m.rootTypes.mkString( ", " )}]" )
@@ -109,10 +104,10 @@ abstract class AggregateRootSpec[A: ClassTag]
       result
     }
 
-    implicit lazy val model: DomainModel = Await.result( boundedContext.futureModel, 6.seconds )
+    implicit lazy val model: DomainModel = {
+      Await.result( boundedContext.futureModel, 6.seconds )
+    }
   }
-
-  override type Fixture <: AggregateFixture
 
   object WIP extends Tag( "wip" )
 }

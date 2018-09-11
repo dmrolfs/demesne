@@ -214,14 +214,14 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
   override def receiveCommand: Receive = LoggingReceive {
     // Record commands are processed asynchronously to update the index with a new logical key to identifier mapping.
     case D.Record( KeyType( k ), IdType( i ), ValueType( v ) ) => {
-      persistAsync( P.Recorded( sourceId = tid, key = k, id = i, value = v ) ) { e =>
+      persist( P.Recorded( sourceId = tid, key = k, id = i, value = v ) ) { e =>
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }
     }
 
     case D.Withdraw( IdType( i ), Some( KeyType( k ) ) ) if state contains k => {
-      persistAsync( P.Withdrawn( sourceId = tid, key = Option( k ), id = i ) ) { e =>
+      persist( P.Withdrawn( sourceId = tid, key = Option( k ), id = i ) ) { e =>
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }
@@ -230,14 +230,14 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
     case D.Withdraw( IdType( evtId ), None ) if state.exists {
           case ( _, IndexedValue( id, _ ) ) => id == evtId
         } => {
-      persistAsync( P.Withdrawn( sourceId = tid, key = None, id = evtId ) ) { e =>
+      persist( P.Withdrawn( sourceId = tid, key = None, id = evtId ) ) { e =>
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }
     }
 
     case D.ReviseKey( KeyType( oldKey ), KeyType( newKey ) ) if state contains oldKey => {
-      persistAsync( P.KeyRevised( sourceId = tid, oldKey = oldKey, newKey = newKey ) ) { e =>
+      persist( P.KeyRevised( sourceId = tid, oldKey = oldKey, newKey = newKey ) ) { e =>
         updateState( e )
         mediator ! Publish( topic = topic, msg = e )
       }
@@ -245,7 +245,7 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
 
     case D.ReviseValue( KeyType( key ), ValueType( oldValue ), ValueType( newValue ) )
         if state contains key => {
-      persistAsync(
+      persist(
         P.ValueRevised( sourceId = tid, key = key, oldValue = oldValue, newValue = newValue )
       ) { e =>
         updateState( e )
@@ -282,7 +282,7 @@ class IndexAggregate[K: ClassTag, I: ClassTag, V: ClassTag]( topic: String )
 
       event match {
         case Right( evt ) => {
-          persistAsync( evt ) { e =>
+          persist( evt ) { e =>
             updateState( e )
             mediator ! Publish( topic = topic, msg = e )
           }

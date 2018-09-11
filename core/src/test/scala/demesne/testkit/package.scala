@@ -11,6 +11,7 @@ package object testkit {
   val config: Config = ConfigFactory.parseString(
     """
       |include "kryo"
+      |#akka.actor.kryo.idstrategy = automatic
       |
       |#akka.loggers = ["akka.testkit.TestEventListener"]
       |
@@ -58,9 +59,7 @@ package object testkit {
       |  log-dead-letters = on
       |  log-dead-letters-during-shutdown = on
       |
-      |  actor {
-      |    provider = "akka.cluster.ClusterActorRefProvider"
-      |  }
+      |  actor.provider = "cluster"
       |
       |  remote {
       |    log-remote-lifecycle-events = off

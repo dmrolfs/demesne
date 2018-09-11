@@ -2,29 +2,27 @@ package demesne.testkit
 
 import akka.actor.Props
 import omnibus.akka.publish.{ EventPublisher, StackableStreamPublisher }
-import omnibus.core.ErrorOr
 import omnibus.identifier.Identifying
 import demesne._
 import demesne.index.{ IndexSpecification, StackableIndexBusPublisher }
 import demesne.repository.CommonLocalRepository
 
-abstract class SimpleTestModule[S0, I0](
-  implicit override val identifying: Identifying.Aux[S0, I0]
-) extends AggregateRootModule[S0, I0] { module =>
-
+abstract class SimpleTestModule[S0, ID](
+  implicit override val identifying: Identifying.Aux[S0, ID]
+) extends AggregateRootModule[S0, ID] { module =>
   def name: String
   def indexes: Seq[IndexSpecification]
   def acceptance: AggregateRoot.Acceptance[SimpleTestActor.State]
   def eventFor( state: SimpleTestActor.State ): PartialFunction[Any, Any]
 
-  def parseId( idstr: String ): TID = identifying fromString idstr
+  def parseId( idrep: String ): TID = identifying fromString idrep
 
   override def rootType: AggregateRootType = {
     new AggregateRootType {
       override val name: String = module.name
 
       override type S = S0
-//      override val identifying: Identifying[T] = module.identifying
+//      override val identifying: Identifying[S] = module.identifying
 
       override def repositoryProps( implicit model: DomainModel ): Props = {
         CommonLocalRepository.props( model, this, SimpleTestActor.props( _, _ ) )
@@ -45,8 +43,8 @@ abstract class SimpleTestModule[S0, I0](
     }
   }
 
-  implicit val stateIdentifying: Identifying.Aux[SimpleTestActor.State, module.identifying.ID] = {
-    Identifying.pure(
+  implicit val stateIdentifying = {
+    Identifying.pure[SimpleTestActor.State, module.identifying.ID](
       zeroValueFn = module.identifying.zeroValue,
       nextValueFn = () => module.identifying.nextValue,
       valueFromRepFn = module.identifying.valueFromRep( _: String )
@@ -56,7 +54,7 @@ abstract class SimpleTestModule[S0, I0](
   class SimpleTestActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SimpleTestActor.State]
+  ) extends AggregateRoot[SimpleTestActor.State, module.identifying.ID]
       with AggregateRoot.Provider { outer: EventPublisher =>
     import SimpleTestActor._
 

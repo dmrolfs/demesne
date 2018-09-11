@@ -159,16 +159,16 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
         TestProbe()
       } ): _* )
 
-//      val constituency = constituencyFor(
-//        probes map { kp =>
-//          (kp._1 -> kp._2.ref)
-//        },
-//        rt,
-//        spec
-//      )
+      val constituency = constituencyFor(
+        probes map { kp =>
+          (kp._1 -> kp._2.ref)
+        },
+        rt,
+        spec
+      )
       probes.values foreach { _.ref ! PoisonPill }
 
-//      val real = indexRegistrationFor( rt, spec, constituency )
+      val real = indexRegistrationFor( rt, spec, constituency )
       expectStartWorkflow( rt, spec, probes, probes.keySet )
     }
 
@@ -181,15 +181,15 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
       val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ) {
         TestProbe()
       } ): _* )
-//      val constituency = constituencyFor(
-//        probes map { kp =>
-//          (kp._1 -> kp._2.ref)
-//        },
-//        rt,
-//        spec
-//      )
+      val constituency = constituencyFor(
+        probes map { kp =>
+          (kp._1 -> kp._2.ref)
+        },
+        rt,
+        spec
+      )
 
-//      val real = indexRegistrationFor( rt, spec, constituency )
+      val real = indexRegistrationFor( rt, spec, constituency )
       expectStartWorkflow( rt, spec, probes, Set() )
     }
 
@@ -202,17 +202,17 @@ class AggregateIndexRegistrationSpec extends ParallelAkkaSpec with MockitoSugar 
       val probes: ConstituentProbes = Map( Seq( Relay, Aggregate, Agent ).zip( Seq.fill( 3 ) {
         TestProbe()
       } ): _* )
-//      val constituency = constituencyFor(
-//        probes map { kp =>
-//          (kp._1 -> kp._2.ref)
-//        },
-//        rt,
-//        spec
-//      )
+      val constituency = constituencyFor(
+        probes map { kp =>
+          (kp._1 -> kp._2.ref)
+        },
+        rt,
+        spec
+      )
 
       probes.values.head.ref ! PoisonPill
 
-//      val real = indexRegistrationFor( rt, spec, constituency )
+      val real = indexRegistrationFor( rt, spec, constituency )
       expectStartWorkflow( rt, spec, probes, Set( Relay ) )
     }
   }
