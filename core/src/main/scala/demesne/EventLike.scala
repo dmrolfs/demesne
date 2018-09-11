@@ -4,7 +4,8 @@ import omnibus.identifier.Id
 
 trait EventLike extends Serializable {
   type A
-  type TID = Id[A]
+  type ID
+  type TID = Id.Aux[A, ID]
   def sourceId: TID
   def tags: Set[String] = Set.empty[String]
 }

@@ -61,8 +61,8 @@ object AggregateRoot {
   }
 }
 
-abstract class AggregateRoot[S](
-  implicit val identifying: Identifying[S],
+abstract class AggregateRoot[S, ID0](
+  implicit val identifying: Identifying.Aux[S, ID0],
   stateType: ClassTag[S]
 ) extends PersistentActor
     with ActorStack
@@ -71,7 +71,7 @@ abstract class AggregateRoot[S](
 
   outer: AggregateRoot.Provider with EventPublisher =>
 
-  val StopMessageType: ClassTag[_] = classTag[PassivationSpecification.StopAggregateRoot[ID]]
+  val StopMessageType: ClassTag[_] = classTag[PassivationSpecification.StopAggregateRoot[S, ID]]
 
   context.setReceiveTimeout( outer.rootType.passivation.inactivityTimeout )
 
@@ -105,7 +105,7 @@ abstract class AggregateRoot[S](
   def acceptance: Acceptance
 
 //  val identifying: Identifying[S] = the[Identifying[S]]
-  type ID = identifying.ID
+  type ID = ID0
   type TID = identifying.TID
 //  lazy val evTID: ClassTag[TID] = classTag[TID]
 
@@ -137,7 +137,7 @@ abstract class AggregateRoot[S](
         aggregateId
       )
       context.parent ! rootType.passivation.passivationMessage(
-        PassivationSpecification.StopAggregateRoot[S]( aggregateId )
+        PassivationSpecification.StopAggregateRoot[S, ID]( aggregateId )( identifying )
       )
     }
 
@@ -167,9 +167,13 @@ abstract class AggregateRoot[S](
   }
 
   val handleSaveSnapshot: Receive = {
-    case SaveSnapshot( Id( tid ) ) if tid == aggregateId => {
+    case SaveSnapshot( tid ) if tid == aggregateId => {
       log.debug( "saving snapshot for pid:[{}] aid:[{}]", persistenceId, aggregateId )
       saveSnapshot( state )
+    }
+
+    case SaveSnapshot( tid ) => {
+      log.error( s"MISSED!!! SaveSnaphot(${tid}) failed to match!!! aggregateId=${aggregateId}" )
     }
 
     case success: SaveSnapshotSuccess => onSuccessfulSnapshot( success.metadata )

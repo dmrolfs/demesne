@@ -13,11 +13,13 @@ object SnapshotSpecification {
 }
 
 abstract class SnapshotSpecification { outer =>
-  def saveSnapshotCommand[S]( tid: Id[S] ): Any = SaveSnapshot[S]( targetId = tid )
+  type TID[S, ID] = Id.Aux[S, ID]
+
+  def saveSnapshotCommand[S, ID]( targetId: TID[S, ID] ): Any = SaveSnapshot[S, ID]( targetId )
   def snapshotInitialDelay: FiniteDuration
   def snapshotInterval: FiniteDuration
 
-  def schedule[S]( system: ActorSystem, target: ActorRef, tid: Id[S] )(
+  def schedule[S, ID]( system: ActorSystem, target: ActorRef, tid: TID[S, ID] )(
     implicit ec: ExecutionContext
   ): Cancellable = {
     system.scheduler.schedule(
@@ -29,9 +31,10 @@ abstract class SnapshotSpecification { outer =>
   }
 }
 
-case class SaveSnapshot[S]( override val targetId: Id[S] )
+case class SaveSnapshot[S, ID0]( override val targetId: SaveSnapshot[S, ID0]#TID )
     extends CommandLike
     with NotInfluenceReceiveTimeout {
 
+  override type ID = ID0
   override type A = S
 }

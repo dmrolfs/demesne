@@ -4,10 +4,10 @@ import akka.actor.ActorRef
 import omnibus.identifier.Identifying
 import omnibus.core.syntax.clazz._
 
-abstract class AggregateRootModule[S, ID]( implicit val identifying: Identifying.Aux[S, ID] )
+abstract class AggregateRootModule[S, ID0]( implicit val identifying: Identifying.Aux[S, ID0] )
     extends AggregateRootType.Provider { module =>
 
-  type ID = identifying.ID
+  type ID = ID0
   type TID = identifying.TID
 
   def nextId: TID = identifying.next
@@ -27,13 +27,21 @@ abstract class AggregateRootModule[S, ID]( implicit val identifying: Identifying
 
 object AggregateRootModule {
 
-  trait Message[A0] extends MessageLike {
+  abstract class Message[A0, ID0](
+    implicit val identifying: Identifying.Aux[A0, ID0]
+  ) extends MessageLike {
     override type A = A0
+    override type ID = ID0
   }
 
-  trait Command[A] extends Message[A] with CommandLike
+  abstract class Command[A, ID0]( implicit override val identifying: Identifying.Aux[A, ID0] )
+      extends Message[A, ID0]
+      with CommandLike
 
-  trait Event[A0] extends EventLike {
+  abstract class Event[A0, ID0](
+    implicit val identifying: Identifying.Aux[A0, ID0]
+  ) extends EventLike {
     override type A = A0
+    override type ID = ID0
   }
 }

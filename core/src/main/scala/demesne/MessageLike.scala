@@ -4,7 +4,8 @@ import omnibus.identifier.Id
 
 trait MessageLike {
   type A // AggregateRoot entity
-  type TID = Id[A]
+  type ID
+  type TID = Id.Aux[A, ID]
   def targetId: TID
 }
 

@@ -68,8 +68,8 @@ object Dependencies {
       persistence,
       agent,
       slf4j,
-      kyro,
-      kryoSerializers
+      kyro //,
+//      kryoSerializers
     )
 
     val actor = module( "actor" )
@@ -90,9 +90,25 @@ object Dependencies {
 
   }
 
+  object chill extends SimpleModule {
+    override val groupId: String = "com.twitter"
+    override def artifactIdRoot: String = "chill"
+    override def version: String = "0.9.3"
+
+    def all = Seq(
+      core,
+      akka,
+      bijection
+    )
+
+    val core  = module( "" )
+    val akka = module( "akka" )
+    val bijection = module( "bijection" )
+  }
+
   object cats extends SimpleModule {
     override val groupId: String = "org.typelevel"
-    override val  artifactIdRoot: String = "cats"
+    override val artifactIdRoot: String = "cats"
     override val version: String = "1.2.0"
 
     def all = Seq( core, kernel, macros )
@@ -160,6 +176,7 @@ object Dependencies {
 
   val commonDependencies =
     akka.all ++
+    chill.all ++
     omnibus.all ++
     cats.all ++
     monix.all ++

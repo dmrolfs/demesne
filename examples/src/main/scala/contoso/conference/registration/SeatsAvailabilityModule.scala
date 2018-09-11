@@ -8,13 +8,13 @@ import contoso.conference.{ ConferenceModule, SeatType }
 import contoso.registration.SeatQuantity
 import demesne._
 import demesne.repository._
-import omnibus.commons.ErrorOr
-import omnibus.commons.identifier._
+import omnibus.core.ErrorOr
+import omnibus.identifier._
 import omnibus.akka.publish.EventPublisher
 import omnibus.commons.log.Trace
 import squants.{ Dimensionless, Each }
 
-object SeatsAvailabilityProtocol extends AggregateProtocol[ShortUUID] {
+object SeatsAvailabilityProtocol extends AggregateProtocol[SeatsAvailabilityState] {
   // targetId is conference ID
 
   // Conference/Registration/Commands/MakeSeatReservation.cs
@@ -84,8 +84,8 @@ case class SeatsAvailabilityState(
   remainingSeats: SeatsAvailabilityState.SeatTypesRemaining = Map(),
   pendingReservations: SeatsAvailabilityState.PendingReservations = Map()
 ) {
-  type ID = ConferenceModule.ID
-  type TID = TaggedID[ID]
+  type ID = SeatsAvailabilityState.identifying.ID
+  type TID = SeatsAvailabilityState.identifying.TID
 }
 
 object SeatsAvailabilityState {
@@ -106,18 +106,8 @@ object SeatsAvailabilityState {
     original ++ newRemainingSeats
   }
 
-  implicit val identifying = new Identifying[SeatsAvailabilityState]
-  with ShortUUID.ShortUuidIdentifying[SeatsAvailabilityState] {
-    override val idTag: Symbol = 'seatsAvailability
-
-    override def nextTID: ErrorOr[TID] = {
-      new IllegalStateException(
-        "SeatsAvailability supports corresponding Conference so does not have independent ID"
-      ).asLeft
-    }
-
-    override def tidOf( o: SeatsAvailabilityState ): TID = o.id
-  }
+  implicit val labeling = Labeling.custom[SeatsAvailabilityState]( "SeatsAvailability" )
+  implicit val identifying = Identifying.byShortUuid[SeatsAvailabilityState]
 }
 
 /**
@@ -128,7 +118,6 @@ object SeatsAvailabilityState {
   */
 object SeatsAvailabilityModule
     extends AggregateRootModule[SeatsAvailabilityState, SeatsAvailabilityState#ID] { module =>
-  val trace = Trace[SeatsAvailabilityModule.type]
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -143,8 +132,6 @@ object SeatsAvailabilityModule
   object SeatsAvailabilityType extends AggregateRootType {
     override def name: String = module.shardName
     override type S = SeatsAvailabilityState
-    override val identifying: Identifying[S] = SeatsAvailabilityState.identifying
-
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -160,11 +147,9 @@ object SeatsAvailabilityModule
   class SeatsAvailability(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SeatsAvailabilityState, ShortUUID]
+  ) extends AggregateRoot[SeatsAvailabilityState]
       with AggregateRoot.Provider { outer: EventPublisher =>
     import SeatsAvailabilityProtocol._
-
-    private val trace = Trace( "SeatsAvailability", log )
 
     // override val indexBus: IndexBus = model.indexBus
 
@@ -172,38 +157,38 @@ object SeatsAvailabilityModule
 
     override def acceptance: Acceptance = {
       // Conference/Registration/SeatsAvailability.cs[185-198]
-      case ( AvailableSeatsChanged( _, seats ), state ) => {
-        val updated = SeatsAvailabilityState.addToRemainingSeats( state.remainingSeats, seats )
-        state.copy( remainingSeats = updated )
+      case ( AvailableSeatsChanged( _, seats ), s ) => {
+        val updated = SeatsAvailabilityState.addToRemainingSeats( s.remainingSeats, seats )
+        s.copy( remainingSeats = updated )
       }
 
       // Conference/Registration/SeatsAvailability.cs[223-231]
-      case ( SeatsReservationCancelled( _, reservationId, availableSeatsChanged ), state ) => {
-        val updatedPending = state.pendingReservations - reservationId
+      case ( SeatsReservationCancelled( _, reservationId, availableSeatsChanged ), s ) => {
+        val updatedPending = s.pendingReservations - reservationId
         val updatedRemaining =
-          SeatsAvailabilityState.addToRemainingSeats( state.remainingSeats, availableSeatsChanged )
-        state.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
+          SeatsAvailabilityState.addToRemainingSeats( s.remainingSeats, availableSeatsChanged )
+        s.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
       }
 
       // Conference/Registration/SeatsAvailability.cs[218 - 221]
-      case ( SeatsReservationCommitted( _, reservationId ), state ) => {
-        state.copy( pendingReservations = (state.pendingReservations - reservationId) )
+      case ( SeatsReservationCommitted( _, reservationId ), s ) => {
+        s.copy( pendingReservations = (state.pendingReservations - reservationId) )
       }
 
       // Conference/Registration/SeatsAvailability.cs[200-216]
       case (
           SeatsReserved( _, reservationId, reservationDetails, availableSeatsChanged ),
-          state
+          s
           ) => {
         val updatedPending =
           (
             if (reservationDetails.size > 0)
-              state.pendingReservations + (reservationId -> reservationDetails.toSeq)
-            else state.pendingReservations - reservationId
+              s.pendingReservations + (reservationId -> reservationDetails.toSeq)
+            else s.pendingReservations - reservationId
           )
         val updatedRemaining =
-          SeatsAvailabilityState.addToRemainingSeats( state.remainingSeats, availableSeatsChanged )
-        state.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
+          SeatsAvailabilityState.addToRemainingSeats( s.remainingSeats, availableSeatsChanged )
+        s.copy( pendingReservations = updatedPending, remainingSeats = updatedRemaining )
       }
     }
 
@@ -217,7 +202,7 @@ object SeatsAvailabilityModule
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [70-78]
         // Conference/Registration/SeatsAvailability.cs [90-93]
-        case RemoveSeats( conferenceId, seatTypeId, quantity ) => {
+        case RemoveSeats( _, seatTypeId, quantity ) => {
           persist( makeAvailableSeatsChangedEvent( seatTypeId, -1 * quantity ) ) {
             acceptAndPublish
           }
@@ -225,7 +210,7 @@ object SeatsAvailabilityModule
 
         // Conference/Registration/Handlers/SeatsAvailabilityHandler.cs [37-42]
         // Conference/Registration/SeatsAvailability.cs [95-135]
-        case c @ MakeSeatReservation( conferenceId, reservationId, seats ) if seats forall { s =>
+        case MakeSeatReservation( _, reservationId, seats ) if seats forall { s =>
               state.remainingSeats.contains( s.seatTypeId )
             } => {
           persist(

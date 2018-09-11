@@ -2,7 +2,7 @@ package sample.blog.post
 
 import demesne.AggregateProtocol
 
-object PostPrototol extends AggregateProtocol[PostModule.ID] {
+object PostPrototol extends AggregateProtocol[Post] {
   case class AddPost( override val targetId: AddPost#TID, content: PostContent ) extends Command
   case class GetContent( override val targetId: GetContent#TID ) extends Command
   case class ChangeBody( override val targetId: ChangeBody#TID, body: String ) extends Command

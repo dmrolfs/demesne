@@ -35,15 +35,15 @@ object EntityAggregateModule {
       idLens.get( entity ).value.toString
     }
 
-    val AddedType = classTag[EntityProtocol[E]#Added]
-    val ResluggedType = classTag[EntityProtocol[E]#Reslugged]
-    val DisabledType = classTag[EntityProtocol[E]#Disabled]
-    val EnabledType = classTag[EntityProtocol[E]#Enabled]
+    val AddedType = classTag[EntityProtocol[E, ID]#Added]
+    val ResluggedType = classTag[EntityProtocol[E, ID]#Reslugged]
+    val DisabledType = classTag[EntityProtocol[E, ID]#Disabled]
+    val EnabledType = classTag[EntityProtocol[E, ID]#Enabled]
 
     IndexLocalAgent.spec[String, E#TID, E#TID]( 'slug ) { // or 'activeSlug
       case AddedType( event ) => {
         scribe.debug( s"#TEST #SLUG: Index handling Added event: [${event}]" )
-        val sid = event.sourceId //.value
+        val sid: E#TID = event.sourceId //.value
 
         event.info
           .fold[Directive] {
@@ -51,10 +51,10 @@ object EntityAggregateModule {
           } { i =>
             triedToEntity[E, ID]( i )( infoToEntity )
               .fold {
-                Directive.Record( sid.toString, sid )
+                Directive.Record[String, E#TID]( sid.toString, sid )
               } { e =>
                 val value = idLens.get( e )
-                Directive.Record( label( e ), value /*.asInstanceOf[Id[E]]*/ )
+                Directive.Record[String, E#TID]( label( e ), value /*.asInstanceOf[Id[E]]*/ )
               }
           }
       }
@@ -107,14 +107,14 @@ object EntityAggregateModule {
     }
   }
 
-  def builderFor[E <: Entity[E, ID], ID, EP <: EntityProtocol[E]](
+  def builderFor[E <: Entity[E, ID], ID, EP <: EntityProtocol[E, ID]](
     implicit identifying: Identifying.Aux[E, ID],
     evState: ClassTag[E]
   ): BuilderFactory[E, ID, EP] = {
     new BuilderFactory[E, ID, EP]
   }
 
-  class BuilderFactory[E <: Entity[E, ID], ID, EP <: EntityProtocol[E]](
+  class BuilderFactory[E <: Entity[E, ID], ID, EP <: EntityProtocol[E, ID]](
     implicit val identifying: Identifying.Aux[E, ID],
     evState: ClassTag[E]
   ) {
@@ -212,12 +212,12 @@ object EntityAggregateModule {
   }
 }
 
-abstract class EntityAggregateModule[E <: Entity[E, ID], ID](
-  implicit override val identifying: Identifying.Aux[E, ID],
+abstract class EntityAggregateModule[E <: Entity[E, ID0], ID0](
+  implicit override val identifying: Identifying.Aux[E, ID0],
   override val evState: ClassTag[E]
-) extends SimpleAggregateModule[E, ID] { module =>
+) extends SimpleAggregateModule[E, ID0] { module =>
 
-  type Protocol <: EntityProtocol[E]
+  type Protocol <: EntityProtocol[E, ID0]
   val protocol: Protocol
 
   def idLens: Lens[E, E#TID]
@@ -255,7 +255,7 @@ abstract class EntityAggregateModule[E <: Entity[E, ID], ID](
     )
   }
 
-  abstract class EntityAggregateActor extends AggregateRoot[E] {
+  abstract class EntityAggregateActor extends AggregateRoot[E, ID0] {
     publisher: AggregateRoot.Provider with EventPublisher =>
     override def acceptance: Acceptance = entityAcceptance
 

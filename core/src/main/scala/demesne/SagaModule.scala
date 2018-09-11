@@ -8,6 +8,9 @@ abstract class SagaModule[S, ID](
   implicit override val identifying: Identifying.Aux[S, ID]
 ) extends AggregateRootModule[S, ID]
 
-abstract class Saga[S: Identifying: ClassTag] extends AggregateRoot[S] {
+abstract class Saga[S, ID](
+  implicit override val identifying: Identifying.Aux[S, ID],
+  stateType: ClassTag[S]
+) extends AggregateRoot[S, ID] {
   outer: AggregateRoot.Provider with EventPublisher =>
 }

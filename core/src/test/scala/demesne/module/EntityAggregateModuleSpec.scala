@@ -97,7 +97,7 @@ object EntityAggregateModuleSpec {
     override val z: String = ""
   ) extends Foo
 
-  object Protocol extends EntityProtocol[Foo] {
+  object Protocol extends EntityProtocol[Foo, Foo.identifying.ID] {
     case class Bar( targetId: Bar#TID, b: Int ) extends Command
     case class Barred( sourceId: Barred#TID, b: Int ) extends Event
   }
@@ -314,8 +314,7 @@ class EntityAggregateModuleSpec extends AggregateRootSpec[Foo, ShortUUID] with S
         case payload: Protocol.Added => Module.toEntity( payload.info ).get.name mustBe "foo1"
       }
 
-      val newSlug = "gt"
-      f !+ Protocol.Reslug( id, newSlug )
+      f !+ Protocol.Reslug( id, "gt" )
       bus.expectMsgPF( max = 5.seconds.dilated, hint = "foo slug changed" ) {
         case payload: Protocol.Reslugged => {
           payload.sourceId mustBe id

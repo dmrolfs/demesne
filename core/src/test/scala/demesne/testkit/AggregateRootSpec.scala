@@ -7,7 +7,7 @@ import akka.actor.{ ActorRef, ActorSystem }
 import akka.testkit._
 import org.scalatest._
 import org.scalatest.mockito.MockitoSugar
-import omnibus.identifier.Identifying
+import omnibus.identifier.{ Id, Identifying }
 import demesne._
 import demesne.repository.StartProtocol
 
@@ -21,11 +21,11 @@ abstract class AggregateRootSpec[S, ID0](
     with BeforeAndAfterAll {
 
   type State = S
-  type ID = identifying.ID
-  type TID = identifying.TID
+  type ID = ID0
+  type TID = Id.Aux[S, ID0]
 
   import scala.language.higherKinds
-  type Protocol <: AggregateProtocol[S]
+  type Protocol <: AggregateProtocol[S, ID0]
   val protocol: Protocol
 
   abstract class AggregateFixture(

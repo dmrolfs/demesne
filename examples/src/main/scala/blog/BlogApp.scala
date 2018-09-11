@@ -1,5 +1,7 @@
 package sample.blog
 
+import java.nio.file.Paths
+
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success }
@@ -8,14 +10,24 @@ import akka.pattern.ask
 import akka.persistence.journal.leveldb.{ SharedLeveldbJournal, SharedLeveldbStore }
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
-import com.typesafe.scalalogging.StrictLogging
 import demesne._
 import sample.blog.author.AuthorListingModule
 import sample.blog.post.PostModule
+import scribe.writer.{ FileWriter, FlatPathBuilder }
+import scribe.{ Level, ScribeMacros }
 
-object BlogApp extends StrictLogging {
+object BlogApp {
 
   def main( args: Array[String] ): Unit = {
+    scribe.Logger.root
+    //      .clearHandlers()
+    //      .clearModifiers()
+      .withHandler(
+        writer = FileWriter( new FlatPathBuilder( Paths.get( "logs" ).resolve( "app.log" ) ) )
+      )
+      .withMinimumLevel( Level.Trace )
+      .replace()
+
     import ExecutionContext.Implicits.global
     implicit val timeout = Timeout( 5.seconds )
     if (args.isEmpty) startup( Seq( 2551, 2552, 0 ) )
@@ -46,7 +58,7 @@ object BlogApp extends StrictLogging {
         started <- built.start()
         model   <- started.futureModel
       } {
-        logger.info( s"bounded context [{}] started: [{}]", started.name, started )
+        scribe.info( s"bounded context [${started.name}] started: [${started}]" )
         if (port != 2551 && port != 2552) clusterSystem.actorOf( Bot.props( model ), "bot" )
       }
     }

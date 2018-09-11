@@ -54,7 +54,7 @@ abstract class SimpleTestModule[S0, ID](
   class SimpleTestActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SimpleTestActor.State]
+  ) extends AggregateRoot[SimpleTestActor.State, module.identifying.ID]
       with AggregateRoot.Provider { outer: EventPublisher =>
     import SimpleTestActor._
 

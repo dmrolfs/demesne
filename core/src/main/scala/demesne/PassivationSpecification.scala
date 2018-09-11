@@ -1,19 +1,28 @@
 package demesne
 
 import scala.concurrent.duration.Duration
+import scala.language.existentials
 import akka.actor.NotInfluenceReceiveTimeout
 import akka.cluster.sharding.ShardRegion.Passivate
+import omnibus.identifier.Id.Aux
+import omnibus.identifier.{ Id, Identifying }
 
 object PassivationSpecification {
   case object DoNotPassivate extends PassivationSpecification {
     override def inactivityTimeout: Duration = Duration.Undefined
   }
 
-  case class StopAggregateRoot[S](
-    targetId: StopAggregateRoot[S]#TID
+  case class StopAggregateRoot[A0, ID](
+    fooId: StopAggregateRoot[A0, ID]#TID
+  )(
+    implicit val identifying: Identifying.Aux[A0, ID]
   ) extends MessageLike
       with NotInfluenceReceiveTimeout {
-    override type A = S
+
+    override def targetId: TID = fooId
+    override type A = A0
+    override type ID = identifying.ID
+    override type TID = identifying.TID
   }
 }
 

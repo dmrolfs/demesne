@@ -8,9 +8,8 @@ import cats.syntax.validated._
 import shapeless._
 import omnibus.akka.envelope.Envelope
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.AllIssuesOr
-import omnibus.commons.identifier._
-import omnibus.commons.log.Trace
+import omnibus.core.AllIssuesOr
+import omnibus.identifier._
 import demesne._
 import demesne.index.local.IndexLocalAgent
 import demesne.index._
@@ -18,38 +17,33 @@ import demesne.repository._
 import sample.blog.post.{ PostPrototol => P }
 
 case class Post(
-  id: TaggedID[ShortUUID],
+  id: Post#TID,
   content: PostContent = PostContent.empty,
   published: Boolean = false,
   isActive: Boolean = true
 ) {
-  type ID = ShortUUID
-  type TID = TaggedID[ID]
+  type ID = Post.identifying.ID
+  type TID = Post.identifying.TID
 }
 
 object Post {
   val bodyLens = lens[Post] >> 'content >> 'body
   val titleLens = lens[Post] >> 'content >> 'title
 
-  implicit val identifying = new Identifying[Post] with ShortUUID.ShortUuidIdentifying[Post] {
-    override val idTag: Symbol = 'post
-    override def tidOf( p: Post ): TID = p.id
-  }
+  implicit val identifying = Identifying.byShortUuid[Post]
 }
 
 object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
-  private val trace = Trace[PostModule.type]
-
   override val rootType: AggregateRootType = new PostType
 
   class PostType extends AggregateRootType {
     override val name: String = module.shardName
 
     override type S = Post
-    override val identifying: Identifying[Post] = Post.identifying
 
-    override def repositoryProps( implicit model: DomainModel ): Props =
+    override def repositoryProps( implicit model: DomainModel ): Props = {
       Repository.clusteredProps( model )
+    }
 
     override def indexes: Seq[IndexSpecification] = {
       Seq(
@@ -93,19 +87,19 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
     var makeAuthorListing: () => ActorRef = _
 
     override def doLoad(): SP.Loaded = {
-      logger.info( "loading" )
+      log.info( "loading" )
       SP.Loaded( rootType, dependencies = Set( AuthorListingModule.ResourceKey ) )
     }
 
     override def doInitialize( resources: Map[Symbol, Any] ): AllIssuesOr[Done] = {
       checkAuthorListing( resources ) map { al =>
-        logger.info( "initializing makeAuthorListing:[{}]", al )
+        log.info( "initializing makeAuthorListing:[{}]", al )
         makeAuthorListing = al
         Done
       }
     }
 
-    override def aggregateProps: Props = trace.block( "aggregateProps" ) {
+    override def aggregateProps: Props = {
       log.debug(
         "PostModule: making PostActor Props with model:[{}] rootType:[{}] makeAuthorListing:[{}]",
         model,
@@ -115,22 +109,21 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
       PostActor.props( model, rootType, makeAuthorListing )
     }
 
-    private def checkAuthorListing( resources: Map[Symbol, Any] ): AllIssuesOr[() => ActorRef] =
-      trace.block( "checkAuthListing()" ) {
-        log.debug(
-          "resources[{}] = [{}]",
-          AuthorListingModule.ResourceKey,
-          resources get AuthorListingModule.ResourceKey
-        )
-        val result = for {
-          alValue <- resources get AuthorListingModule.ResourceKey
-          al      <- Option( alValue )
-          r       <- scala.util.Try[() => ActorRef] { al.asInstanceOf[() => ActorRef] }.toOption
-        } yield r.validNel
+    private def checkAuthorListing( resources: Map[Symbol, Any] ): AllIssuesOr[() => ActorRef] = {
+      log.debug(
+        "resources[{}] = [{}]",
+        AuthorListingModule.ResourceKey,
+        resources get AuthorListingModule.ResourceKey
+      )
+      val result = for {
+        alValue <- resources get AuthorListingModule.ResourceKey
+        al      <- Option( alValue )
+        r       <- scala.util.Try[() => ActorRef] { al.asInstanceOf[() => ActorRef] }.toOption
+      } yield r.validNel
 
-        log.debug( "[{}] resource result = [{}]", AuthorListingModule.ResourceKey, result )
-        result getOrElse UnspecifiedMakeAuthorListError( AuthorListingModule.ResourceKey ).invalidNel
-      }
+      log.debug( "[{}] resource result = [{}]", AuthorListingModule.ResourceKey, result )
+      result getOrElse UnspecifiedMakeAuthorListError( AuthorListingModule.ResourceKey ).invalidNel
+    }
   }
 
   object PostActor {
@@ -139,7 +132,7 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
       model: DomainModel,
       rt: AggregateRootType,
       makeAuthorListing: () => ActorRef
-    ): Props = trace.block( s"props(_,${rt}, $makeAuthorListing)" ) {
+    ): Props = {
       import omnibus.akka.publish._
 
       Props(
@@ -151,18 +144,24 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
 
           import omnibus.commons.util.Chain._
 
-          override def publish: Publisher = trace.block( "publish" ) {
+          override def publish: Publisher = {
             super.publish +> filter +> reliablePublisher( authorListing.path )
           }
 
           val filter: Publisher = {
-            case e @ Envelope( _: P.PostPublished, _ ) =>
-              logger.info( "PASSED TO RELIABLE_PUBLISH:[{}]", e ); Left( e )
-            case e: P.PostPublished =>
-              logger.info( "PASSED TO RELIABLE_PUBLISH:[{}]", e ); Left( e )
-            case x => logger.info( "blocked from reliable_publish:[{}]", x.toString ); Right( () )
-          }
+            case e @ Envelope( _: P.PostPublished, _ ) => {
+              log.info( "PASSED TO RELIABLE_PUBLISH:[{}]", e ); Left( e )
+            }
 
+            case e: P.PostPublished => {
+              log.info( "PASSED TO RELIABLE_PUBLISH:[{}]", e ); Left( e )
+            }
+
+            case x => {
+              log.info( "blocked from reliable_publish:[{}]", x.toString )
+              Right( () )
+            }
+          }
         }
       )
     }
@@ -171,10 +170,8 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
   class PostActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[Post, Post#ID]
+  ) extends AggregateRoot[Post]
       with AggregateRoot.Provider { outer: EventPublisher =>
-    private val trace = Trace( "Post", log )
-
     override var state: Post = _
 
     override val acceptance: Acceptance = {
@@ -190,22 +187,20 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
     import omnibus.akka.envelope._
 
     val quiescent: Receive = {
-      case P.GetContent( _ ) =>
+      case P.GetContent( _ ) => {
         sender() !+ Option( state ).map { _.content }.getOrElse { PostContent.empty }
-      case P.AddPost( id, content ) if !content.isIncomplete =>
-        trace.block( s"quiescent(AddPost(${id}, ${content}))" ) {
-          persist( P.PostAdded( id, content ) ) { event =>
-            trace.block( s"persist(${event})" ) {
-              trace( s"before accept state = ${state}" )
-              accept( event )
-              trace( s"after accept state = ${state}" )
-              log info s"New post saved: ${state.content.title}"
-              trace.block( s"publish($event)" ) { publish( event ) }
-            }
+      }
 
-            context become LoggingReceive { around( created ) }
-          }
+      case P.AddPost( id, content ) if !content.isIncomplete => {
+        persist( P.PostAdded( id, content ) ) { event =>
+          log.debug( s"before accept state = ${state}" )
+          accept( event )
+          log.debug( s"after accept state = ${state}" )
+          log.info( s"New post saved: ${state.content.title}" )
+          publish( event )
+          context become LoggingReceive { around( created ) }
         }
+      }
     }
 
     val created: Receive = {
@@ -214,7 +209,7 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
       case P.ChangeBody( id, body ) =>
         persist( P.BodyChanged( id, body ) ) { event =>
           accept( event )
-          log info s"Post changed: ${state.content.title}"
+          log.info( s"Post changed: ${state.content.title}" )
           publish( event )
         }
 

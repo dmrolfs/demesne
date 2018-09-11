@@ -56,11 +56,11 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
     Option( demesne.testkit.config )
   }
 
-  def contextForTest( test: OneArgTest ): ( String, Option[Config], ActorSystem ) = {
+  def contextForTest( test: OneArgTest ): ( String, ActorSystem ) = {
     val slug = slugForTest( test )
     val config = configurationForTest( test, slug )
     val system = systemForTest( test, slug, config )
-    ( slug, config, system )
+    ( slug, system )
   }
 
   type Fixture <: AkkaFixture
@@ -98,23 +98,21 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
   }
 
   override protected def withFixture( test: OneArgTest ): Outcome = {
-    val slug = slugForTest( test )
-    val config = configurationForTest( test, slug )
-    val system = systemForTest( test, slug, config )
+    val ( slug, system ) = contextForTest( test )
 
     Either
       .catchNonFatal { createAkkaFixture( test, system, slug ) }
       .map { f =>
-        scribe.debug( ".......... before test .........." )
+        scribe.debug( s".......... before test [${test.name}] .........." )
         f before test
-        scribe.debug( "++++++++++ starting test ++++++++++" )
+        scribe.debug( s"++++++++++ starting test [${test.name}] ++++++++++" )
         ( test( f ), f )
       }
       .map {
         case ( outcome, f ) =>
-          scribe.debug( "---------- finished test ------------" )
+          scribe.debug( s"---------- finished test [${test.name}] ------------" )
           f after test
-          scribe.debug( ".......... after test .........." )
+          scribe.debug( s".......... after test [${test.name}] .........." )
 
           Option( f.system ) foreach { s ⇒
             scribe.debug( s"terminating actor-system:${s.name}..." )

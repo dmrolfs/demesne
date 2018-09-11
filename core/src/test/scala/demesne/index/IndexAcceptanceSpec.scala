@@ -36,7 +36,7 @@ object IndexAcceptanceSpec {
     def toSummary: Foo.Summary = Foo.Summary( this.id, Foo.Summary.foobar( this.foo, this.bar ) )
   }
 
-  object Protocol extends AggregateProtocol[Foo] {
+  object Protocol extends AggregateProtocol[Foo, ShortUUID] {
     case class Add( override val targetId: Add#TID, name: String, foo: String, bar: Int )
         extends Command
     case class ChangeBar( override val targetId: ChangeBar#TID, bar: Int ) extends Command
