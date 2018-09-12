@@ -10,15 +10,14 @@ import akka.event.LoggingReceive
 import cats.syntax.validated._
 import shapeless._
 import com.github.nscala_time.time.{ Imports => joda }
-import omnibus.commons.AllIssuesOr
+import omnibus.core.AllIssuesOr
 import omnibus.akka.AskRetry._
 import omnibus.akka.publish._
-import omnibus.commons.identifier._
-import omnibus.commons.log.Trace
+import omnibus.identifier._
 import demesne._
 import demesne.repository._
 
-object ConferenceProtocol extends AggregateProtocol[ShortUUID] {
+object ConferenceProtocol extends AggregateProtocol[ConferenceState, ConferenceState#ID] {
   sealed trait ConferenceMessage
   sealed trait ConferenceCommand extends Command with ConferenceMessage
   sealed trait ConferenceEvent extends Event with ConferenceMessage
@@ -92,8 +91,8 @@ case class ConferenceState(
   isPublished: Boolean = false,
   twitterSearch: Option[String] = None
 ) {
-  type ID = ShortUUID
-  type TID = TaggedID[ID]
+  type ID = ConferenceState.identifying.ID
+  type TID = ConferenceState.identifying.TID
 }
 
 object ConferenceState {
@@ -117,15 +116,10 @@ object ConferenceState {
 
   val seatsLens = lens[ConferenceState] >> 'seats
 
-  implicit val identifying = new Identifying[ConferenceState]
-  with ShortUUID.ShortUuidIdentifying[ConferenceState] {
-    override val idTag: Symbol = 'conference
-    override def tidOf( s: ConferenceState ): TID = s.id
-  }
+  implicit val identifying = Identifying.byShortUuid[ConferenceState]
 }
 
 object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceState#ID] { module =>
-  val trace = Trace[ConferenceModule.type]
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -140,13 +134,13 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
     override def aggregateProps: Props = Conference.props( model, rootType, conferenceContext )
 
     override def doLoad(): SP.Loaded = {
-      logger.info( "loading" )
+      scribe.info( "loading" )
       SP.Loaded( rootType, dependencies = Set( ConferenceContext.ResourceKey ) )
     }
 
     override def doInitialize( resources: Map[Symbol, Any] ): AllIssuesOr[Done] = {
       checkConferenceContext( resources ) map { confCtx =>
-        logger.info( "initializing conference context:[{}]", confCtx.path.name )
+        scribe.info( s"initializing conference context:[${confCtx.path.name}]" )
         conferenceContext = confCtx
         Done
       }
@@ -165,7 +159,6 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
   object ConferenceType extends AggregateRootType {
     override val name: String = module.shardName
     override type S = ConferenceState
-    override val identifying: Identifying[S] = ConferenceState.identifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -189,8 +182,6 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
       with AggregateRoot.Provider { outer: EventPublisher =>
     import ConferenceProtocol._
     import contoso.conference.ConferenceModule.Conference._
-
-    private val trace = Trace( "Conference", log )
 
     override var state: ConferenceState = _
 
@@ -235,7 +226,7 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
           .mapTo[CCP.SlugStatus]
 
         askForSlugStatus onComplete {
-          case Success( status ) =>
+          case Success( _ ) =>
             persist( ConferenceCreated( id, conference ) ) { event =>
               acceptAndPublish( event )
               context.become( around( draft ) )
@@ -269,7 +260,7 @@ object ConferenceModule extends AggregateRootModule[ConferenceState, ConferenceS
         }
     }
 
-    def common: Receive = omnibus.commons.util.emptyBehavior[Any, Unit]
+    def common: Receive = omnibus.core.emptyBehavior[Any, Unit]
   }
 
   final case class UnspecifiedConferenceContextError private[conference] ( expectedKey: Symbol )

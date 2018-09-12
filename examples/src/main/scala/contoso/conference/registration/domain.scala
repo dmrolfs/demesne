@@ -1,10 +1,7 @@
 package contoso.registration
 
 import squants._
-import squants.DimensionlessConversions._
-import com.wix.accord._
 import com.wix.accord.dsl._
-import omnibus.commons.identifier._
 import contoso.conference._
 
 //Registration.Contracts/PersonalInfo.cs

@@ -16,7 +16,7 @@ object PricingRetriever {
 
   sealed trait PricingMessage
 
-  case class CalculateTotal( conferenceId: ConferenceModule.ID, seatItems: Seq[SeatQuantity] )
+  case class CalculateTotal( conferenceId: ConferenceModule.TID, seatItems: Seq[SeatQuantity] )
       extends PricingMessage
 
   // Conference.Registration/OrderTotal.cs

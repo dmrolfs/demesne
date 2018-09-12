@@ -1,8 +1,9 @@
 package sample.blog.post
 
 import demesne.AggregateProtocol
+import omnibus.identifier.ShortUUID
 
-object PostPrototol extends AggregateProtocol[Post] {
+object PostPrototol extends AggregateProtocol[Post, Post#ID] {
   case class AddPost( override val targetId: AddPost#TID, content: PostContent ) extends Command
   case class GetContent( override val targetId: GetContent#TID ) extends Command
   case class ChangeBody( override val targetId: ChangeBody#TID, body: String ) extends Command

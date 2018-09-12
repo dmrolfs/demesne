@@ -4,17 +4,17 @@ import scala.reflect._
 import akka.actor.Props
 import akka.event.LoggingReceive
 import cats.syntax.either._
-import contoso.conference.{ ConferenceModule, SeatType }
+import contoso.conference.{ ConferenceModule, ConferenceState, SeatType }
 import contoso.registration.SeatQuantity
 import demesne._
 import demesne.repository._
 import omnibus.core.ErrorOr
 import omnibus.identifier._
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.log.Trace
 import squants.{ Dimensionless, Each }
 
-object SeatsAvailabilityProtocol extends AggregateProtocol[SeatsAvailabilityState] {
+object SeatsAvailabilityProtocol
+    extends AggregateProtocol[SeatsAvailabilityState, SeatsAvailabilityState#ID] {
   // targetId is conference ID
 
   // Conference/Registration/Commands/MakeSeatReservation.cs
@@ -147,7 +147,7 @@ object SeatsAvailabilityModule
   class SeatsAvailability(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SeatsAvailabilityState]
+  ) extends AggregateRoot[SeatsAvailabilityState, SeatsAvailabilityState#ID]
       with AggregateRoot.Provider { outer: EventPublisher =>
     import SeatsAvailabilityProtocol._
 

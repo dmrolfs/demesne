@@ -116,24 +116,23 @@ class ConferenceContext extends Actor with ActorLogging {
 
   //DMR: With refactor to external service consider using CircuitBreaker
   def addSlug( slug: String, conferenceId: ConferenceModule.TID ): Future[CCP.SlugStatus] = {
-    for {
-      status: Option[CCP.SlugReserved] <- findSlug( slug )
-    } yield {
-      status.fold[CCP.SlugStatus] {
-        slugCache += (slug -> conferenceId)
-        //todo: update bloom filter: filter add slug
-        CCP.SlugReserved( slug, conferenceId )
-      } {
-        _.toNotAvailable
+    findSlug( slug )
+      .map { slugStatus =>
+        slugStatus.fold[CCP.SlugStatus] {
+          slugCache += (slug -> conferenceId)
+          //todo: update bloom filter: filter add slug
+          CCP.SlugReserved( slug, conferenceId )
+        } {
+          _.toNotAvailable
+        }
       }
-    }
   }
 
   //DMR: With refactor to external service consider using CircuitBreaker
   //DMR: and use separate execetioncontext:
   //DMR: implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(new ForkJoinPool())
-  def findSlug( slug: String ): Future[Option[CCP.SlugReserved]] = Future successful {
-    slugCache get slug map { CCP.SlugReserved( slug, _ ) }
+  def findSlug( slug: String ): Future[Option[CCP.SlugReserved]] = {
+    Future successful { slugCache.get( slug ) map { CCP.SlugReserved( slug, _ ) } }
   }
 
   // def sendResponseAndShutdown( response: Future[Any] ): Unit = {

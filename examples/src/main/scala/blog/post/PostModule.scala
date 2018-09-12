@@ -51,19 +51,20 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
           'author,
           IndexBusSubscription /* not reqd - default */
         ) {
-          case P.PostAdded( sourceId, PostContent( author, _, _ ) ) =>
+          case P.PostAdded( sourceId, PostContent( author, _, _ ) ) => {
             Directive.Record( author, sourceId, sourceId )
+          }
           case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
         },
         IndexLocalAgent.spec[String, PostModule.TID, PostModule.TID](
           'title,
           ContextChannelSubscription( classOf[P.Event] )
         ) {
-          case P.PostAdded( sourceId, PostContent( _, title, _ ) ) =>
+          case P.PostAdded( sourceId, PostContent( _, title, _ ) ) => {
             Directive.Record( title, sourceId, sourceId )
-          case P.TitleChanged( sourceId, oldTitle, newTitle ) =>
-            Directive.ReviseKey( oldTitle, newTitle )
-          case P.Deleted( sourceId ) => Directive.Withdraw( sourceId )
+          }
+          case P.TitleChanged( _, oldTitle, newTitle ) => Directive.ReviseKey( oldTitle, newTitle )
+          case P.Deleted( sourceId )                   => Directive.Withdraw( sourceId )
         }
       )
     }
@@ -71,11 +72,13 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
 
   object Repository {
 
-    def localProps( model: DomainModel ): Props =
+    def localProps( model: DomainModel ): Props = {
       Props( new Repository( model ) with LocalAggregateContext )
+    }
 
-    def clusteredProps( model: DomainModel ): Props =
+    def clusteredProps( model: DomainModel ): Props = {
       Props( new Repository( model ) with ClusteredAggregateContext )
+    }
   }
 
   abstract class Repository( model: DomainModel )
@@ -170,7 +173,7 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
   class PostActor(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[Post]
+  ) extends AggregateRoot[Post, Post#ID]
       with AggregateRoot.Provider { outer: EventPublisher =>
     override var state: Post = _
 
@@ -187,7 +190,7 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
     import omnibus.akka.envelope._
 
     val quiescent: Receive = {
-      case P.GetContent( _ ) => {
+      case _: P.GetContent => {
         sender() !+ Option( state ).map { _.content }.getOrElse { PostContent.empty }
       }
 
@@ -204,7 +207,7 @@ object PostModule extends AggregateRootModule[Post, Post#ID] { module =>
     }
 
     val created: Receive = {
-      case P.GetContent( id ) => sender() !+ state.content
+      case _: P.GetContent => sender() !+ state.content
 
       case P.ChangeBody( id, body ) =>
         persist( P.BodyChanged( id, body ) ) { event =>

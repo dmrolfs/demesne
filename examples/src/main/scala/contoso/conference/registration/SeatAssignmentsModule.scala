@@ -11,7 +11,8 @@ import demesne.repository._
 import omnibus.akka.publish.EventPublisher
 import omnibus.identifier._
 
-object SeatAssignmentsProtocol extends AggregateProtocol[SeatAssignmentsState] {
+object SeatAssignmentsProtocol extends AggregateProtocol[SeatAssignmentsState, ShortUUID] {
+
   case class SeatAssignmentRef( id: SeatAssignmentsModule.TID, position: Int )
   case class SeatAssignment(
     seatTypeId: SeatType.TID,
@@ -139,21 +140,14 @@ object SeatAssignmentsModule
   class SeatAssignments(
     override val model: DomainModel,
     override val rootType: AggregateRootType
-  ) extends AggregateRoot[SeatAssignmentsState]
+  ) extends AggregateRoot[SeatAssignmentsState, SeatAssignmentsState#ID]
       with AggregateRoot.Provider { outer: EventPublisher =>
-    import SeatsAvailabilityProtocol._
 
     override var state: SeatAssignmentsState = _
 
-    case class SeatAssignmentsCreated(
-      override val sourceId: SeatAssignmentsCreated#TID,
-      orderId: OrderModule.TID,
-      seats: Seq[SeatAssignment]
-    ) extends Event
-
     override def acceptance: Acceptance = {
       case ( SeatAssignmentsCreated( id, orderId, seats ), _ ) => {
-        SeatAssignmentsState( id, orderId, seats )
+        SeatAssignmentsState( id.as[SeatAssignmentsState], orderId, seats )
       }
 
       case ( SeatAssigned( id, position, seatTypeId, attendee ), s ) => {

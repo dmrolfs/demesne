@@ -14,10 +14,10 @@ import contoso.registration.{ OrderLine, SeatQuantity }
 import demesne._
 import demesne.repository._
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.identifier._
+import omnibus.identifier._
 import squants._
 
-object OrderProtocol extends AggregateProtocol[ShortUUID] {
+object OrderProtocol extends AggregateProtocol[OrderState, OrderState#ID] {
   import com.wix.accord.dsl._
 
   // Conference/Registration/Commands/RegsiterToConference.cs
@@ -129,6 +129,7 @@ object OrderProtocol extends AggregateProtocol[ShortUUID] {
   case class OrderPaymentConfirmed( override val sourceId: OrderPaymentConfirmed#TID ) extends Event
 
   object OrderPaymentConfirmed {
+    import scala.language.implicitConversions
     implicit def migrate( e: OrderPaymentConfirmed ): OrderConfirmed = OrderConfirmed( e.sourceId )
   }
 }
@@ -140,8 +141,8 @@ case class OrderState(
   seats: Seq[SeatQuantity] = Seq(),
   confirmed: Boolean = false
 ) {
-  type ID = ShortUUID
-  type TID = TaggedID[ID]
+  type ID = OrderState.identifying.ID
+  type TID = OrderState.identifying.TID
 
   def isCompletedBy( reserved: Seq[SeatQuantity] ): Boolean = {
     seats exists { s =>
@@ -155,11 +156,7 @@ case class OrderState(
 }
 
 object OrderState {
-  implicit val identifying = new Identifying[OrderState]
-  with ShortUUID.ShortUuidIdentifying[OrderState] {
-    override val idTag: Symbol = 'order
-    override def tidOf( s: OrderState ): TID = s.id
-  }
+  implicit val identifying = Identifying.byShortUuid[OrderState]
 }
 
 object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =>
@@ -176,8 +173,6 @@ object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =
   val reservationAutoExpiration: joda.Period = joda.Period.millis(
     config.getDuration( "reservation-auto-expiration", TU.MILLISECONDS ).toInt
   )
-
-  private val trace = Trace[OrderModule.type]
 
   object Repository {
     def props( model: DomainModel ): Props = Props( new Repository( model ) )
@@ -197,7 +192,6 @@ object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =
   object OrderType extends AggregateRootType {
     override val name: String = module.shardName
     override type S = OrderState
-    override val identifying: Identifying[S] = OrderState.identifying
     override def repositoryProps( implicit model: DomainModel ): Props = Repository.props( model )
   }
 
@@ -217,8 +211,6 @@ object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =
   ) extends AggregateRoot[OrderState, ShortUUID]
       with AggregateRoot.Provider { outer: EventPublisher =>
     import OrderProtocol._
-
-    private val trace = Trace( "Order", log )
 
     override var state: OrderState = _
 
@@ -325,7 +317,7 @@ object OrderModule extends AggregateRootModule[OrderState, ShortUUID] { module =
 
     def common: Receive = LoggingReceive {
       // Conference/Registration/Order.cs[88 - 102]
-      case c @ PricingRetriever.OrderTotal( lines: Seq[OrderLine], total: Money ) => {
+      case PricingRetriever.OrderTotal( lines: Seq[OrderLine], total: Money ) => {
         val totalCalculated = OrderTotalsCalculated(
           sourceId = state.id,
           total = total,
