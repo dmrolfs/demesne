@@ -1,15 +1,18 @@
 package demesne
 
 import akka.actor.ActorSystem
-import com.typesafe.config.{Config, ConfigFactory}
-
+import com.typesafe.config.{ Config, ConfigFactory }
 
 /**
- * Created by damonrolfs on 9/18/14.
- */
+  * Created by damonrolfs on 9/18/14.
+  */
 package object testkit {
+
   val config: Config = ConfigFactory.parseString(
     """
+      |include "kryo"
+      |#akka.actor.kryo.idstrategy = automatic
+      |
       |#akka.loggers = ["akka.testkit.TestEventListener"]
       |
       |#akka.persistence.journal.plugin = "in-memory-journal"
@@ -31,16 +34,32 @@ package object testkit {
       |}
       |
       |akka {
+      |
+      |#  loggers = ["akka.event.slf4j.Slf4jLogger"]
+      |#  logging-filter = "akka.event.slf4j.Slf4jLoggingFilter"
+      |
+      |#  log-config-on-start = off
+      |#  log-dead-letters-during-shutdown = off
+      |  # Options: off, error, warning, info, debug
+      |  loglevel = debug
+      |  stdout-loglevel = debug
+      |
+      |  actor.debug {
+      |    #    receive = off
+      |    #    lifecycle = off
+      |    #    autoreceive = off
+      |    unhandled = on
+      |    router-misconfiguration = on
+      |  }
+      |
+      |
       |  loggers = ["akka.testkit.TestEventListener"]  # "akka.event.slf4j.Slf4jLogger",
       |  logging-filter = "akka.event.DefaultLoggingFilter"
-      |  loglevel = DEBUG
-      |  stdout-loglevel = DEBUG
+      |
       |  log-dead-letters = on
       |  log-dead-letters-during-shutdown = on
       |
-      |  actor {
-      |    provider = "akka.cluster.ClusterActorRefProvider"
-      |  }
+      |  actor.provider = "cluster"
       |
       |  remote {
       |    log-remote-lifecycle-events = off

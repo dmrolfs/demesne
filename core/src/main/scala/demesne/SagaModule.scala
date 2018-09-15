@@ -2,16 +2,15 @@ package demesne
 
 import scala.reflect.ClassTag
 import omnibus.akka.publish.EventPublisher
-import omnibus.commons.identifier.Identifying
+import omnibus.identifier.Identifying
 
+abstract class SagaModule[S, ID](
+  implicit override val identifying: Identifying.Aux[S, ID]
+) extends AggregateRootModule[S, ID]
 
-abstract class SagaModule[S, I]( implicit identifying: Identifying.Aux[S, I] ) extends AggregateRootModule[S, I]()( identifying )
-
-
-abstract class Saga[S, I](
-  implicit identifying: Identifying.Aux[S, I],
-  evState: ClassTag[S] //,
-//  evID: ClassTag[I0]
-) extends AggregateRoot[S, I]()( identifying, evState /*, evID*/ ) {
+abstract class Saga[S, ID](
+  implicit override val identifying: Identifying.Aux[S, ID],
+  stateType: ClassTag[S]
+) extends AggregateRoot[S, ID] {
   outer: AggregateRoot.Provider with EventPublisher =>
 }

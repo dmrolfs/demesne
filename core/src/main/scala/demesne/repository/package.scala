@@ -2,7 +2,6 @@ package demesne
 
 import akka.actor.Props
 
-
 /**
   * Created by rolfsd on 8/31/16.
   */

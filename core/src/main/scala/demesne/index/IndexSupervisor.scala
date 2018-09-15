@@ -4,35 +4,35 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import akka.actor._
 import akka.event.LoggingReceive
-import akka.pattern.{ask, pipe}
+import akka.pattern.{ ask, pipe }
 import akka.util.Timeout
-import com.typesafe.scalalogging.StrictLogging
-import demesne.{index, AggregateRootType}
+import demesne.{ index, AggregateRootType }
 import demesne.index.IndexSupervisor.ConstituencyProvider
 import omnibus.akka.envelope.Envelope
-import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ChildStarted, StartChild}
-import omnibus.akka.supervision.{IsolatedDefaultSupervisor, OneForOneStrategyFactory}
-import omnibus.commons.util._
-
+import omnibus.akka.supervision.IsolatedLifeCycleSupervisor.{ ChildStarted, StartChild }
+import omnibus.akka.supervision.{ IsolatedDefaultSupervisor, OneForOneStrategyFactory }
+import omnibus.core.syntax.clazz._
 
 /**
- * Created by damonrolfs on 11/6/14.
- */
+  * Created by damonrolfs on 11/6/14.
+  */
 class IndexSupervisor( bus: IndexBus )
-  extends IsolatedDefaultSupervisor with OneForOneStrategyFactory with ActorLogging {
+    extends IsolatedDefaultSupervisor
+    with OneForOneStrategyFactory
+    with ActorLogging {
   outer: ConstituencyProvider =>
 
   import demesne.index.IndexSupervisor._
 
-  override def childStarter(): Unit = { }
+  override def childStarter(): Unit = {}
 
   override def receive: Receive = super.receive orElse register
 
   val register: Receive = LoggingReceive {
     case RegisterIndex( rootType, spec ) => {
       val subscription: SubscriptionClassifier = spec.relaySubscription match {
-        case ContextChannelSubscription( channel ) => Left( (context, channel) )
-        case IndexBusSubscription => Right( (bus, spec.relayClassifier( rootType ) ) )
+        case ContextChannelSubscription( channel ) => Left( ( context, channel ) )
+        case IndexBusSubscription                  => Right( ( bus, spec.relayClassifier( rootType ) ) )
       }
 
       context.actorOf(
@@ -49,19 +49,21 @@ class IndexSupervisor( bus: IndexBus )
   }
 }
 
-object IndexSupervisor extends StrictLogging {
+object IndexSupervisor {
   def props( bus: IndexBus ): Props = Props( new IndexSupervisor( bus ) with ConstituencyProvider )
 
   import scala.language.existentials
   sealed trait Message
   case class RegisterIndex( rootType: AggregateRootType, spec: IndexSpecification ) extends Message
-  case class IndexRegistered( agentRef: ActorRef, rootType: AggregateRootType, spec: IndexSpecification ) extends Message
+  case class IndexRegistered(
+    agentRef: ActorRef,
+    rootType: AggregateRootType,
+    spec: IndexSpecification
+  ) extends Message
 
-
-  type ContextClassifier = (ActorContext, Class[_])
-  type BusClassifier = (IndexBus, String)
+  type ContextClassifier = ( ActorContext, Class[_] )
+  type BusClassifier = ( IndexBus, String )
   type SubscriptionClassifier = Either[ContextClassifier, BusClassifier]
-
 
   sealed trait IndexConstituent {
     def category: Symbol
@@ -75,17 +77,20 @@ object IndexSupervisor extends StrictLogging {
   case object Relay extends IndexConstituent {
     override val category: Symbol = 'IndexRelay
 
-    override def postStart( constituent: ActorRef, subscription: SubscriptionClassifier ): Boolean = {
+    override def postStart(
+      constituent: ActorRef,
+      subscription: SubscriptionClassifier
+    ): Boolean = {
       subscription.fold(
         classifier => {
-          val (ctx, clazz) = classifier
-          logger.debug( "Relay[{}] index with Akka EventStream for class={}", constituent, clazz )
+          val ( ctx, clazz ) = classifier
+          scribe.debug( s"Relay[${constituent}] index with Akka EventStream for class=${clazz}" )
           ctx.system.eventStream.subscribe( constituent, clazz )
           ctx.system.eventStream.subscribe( constituent, classOf[Envelope] )
         },
         classifier => {
-          val (bus, name) = classifier
-          logger.debug( "Relay[{}] index with bus[{}] for name={}", constituent, bus, name )
+          val ( bus, name ) = classifier
+          scribe.debug( s"Relay[${constituent}] index with bus[${bus}] for name=${name}" )
           bus.subscribe( constituent, name )
         }
       )
@@ -96,24 +101,32 @@ object IndexSupervisor extends StrictLogging {
     override val category: Symbol = 'IndexAggregate
   }
 
-
-  case class RegisterConstituentRef( constituent: IndexConstituent, path: ActorPath, props: Props ) {
+  case class RegisterConstituentRef(
+    constituent: IndexConstituent,
+    path: ActorPath,
+    props: Props
+  ) {
     def name: String = path.name
     override def toString: String = s"${getClass.safeSimpleName}(${constituent}, ${path})"
   }
 
-
   trait ConstituencyProvider { outer: Actor =>
+
     def pathFor(
       registrantType: AggregateRootType,
       spec: IndexSpecification
     )(
       constituent: IndexConstituent
     ): ActorPath = {
-      ActorPath.fromString( self.path + "/" + constituent.category.name + "-" + spec.topic(registrantType) )
+      ActorPath.fromString(
+        self.path + "/" + constituent.category.name + "-" + spec.topic( registrantType )
+      )
     }
 
-    def constituencyFor( registrantType: AggregateRootType, spec: IndexSpecification ): List[RegisterConstituentRef] = {
+    def constituencyFor(
+      registrantType: AggregateRootType,
+      spec: IndexSpecification
+    ): List[RegisterConstituentRef] = {
       val p = pathFor( registrantType, spec ) _
       val aggregatePath = p( Aggregate )
 
@@ -125,8 +138,8 @@ object IndexSupervisor extends StrictLogging {
     }
   }
 
-
   object IndexRegistration {
+
     def props(
       supervisor: ActorRef,
       constituency: List[RegisterConstituentRef],
@@ -134,7 +147,17 @@ object IndexSupervisor extends StrictLogging {
       spec: IndexSpecification,
       registrant: ActorRef,
       registrantType: AggregateRootType
-    ): Props = Props( new IndexRegistration( supervisor, constituency, subscription, spec, registrant, registrantType ) )
+    ): Props =
+      Props(
+        new IndexRegistration(
+          supervisor,
+          constituency,
+          subscription,
+          spec,
+          registrant,
+          registrantType
+        )
+      )
   }
 
   class IndexRegistration(
@@ -144,11 +167,11 @@ object IndexSupervisor extends StrictLogging {
     spec: IndexSpecification,
     registrant: ActorRef,
     registrantType: AggregateRootType
-  ) extends Actor with ActorLogging {
+  ) extends Actor
+      with ActorLogging {
 
     implicit val ec: ExecutionContext = context.dispatcher //okay to use actor's dispatcher
     implicit val askTimeout: Timeout = 3.seconds //todo move into configuration
-
 
     sealed trait RegistrationWorkflow
 
@@ -159,30 +182,35 @@ object IndexSupervisor extends StrictLogging {
 
     case class Startup( pieces: List[RegisterConstituentRef] ) extends RegistrationWorkflow
 
-
     self ! Survey( toFind = constituency, toStart = List() )
-    constituency foreach { c => context.actorSelection( c.path ) ! Identify( c.name ) }
+    constituency foreach { c =>
+      context.actorSelection( c.path ) ! Identify( c.name )
+    }
 
-    var constituentRefs: Map[IndexConstituent, ActorRef] = Map( )
+    var constituentRefs: Map[IndexConstituent, ActorRef] = Map()
 
     override def receive: Receive = survey
 
     val survey: Receive = LoggingReceive {
-      case Survey(Nil, toStart) => {
-        log.debug( """starting for spec[{}]: {}""", spec, toStart.map(_.name).mkString("[",",","]") )
-        self ! Startup(toStart)
+      case Survey( Nil, toStart ) => {
+        log.debug(
+          """starting for spec[{}]: {}""",
+          spec,
+          toStart.map( _.name ).mkString( "[", ",", "]" )
+        )
+        self ! Startup( toStart )
         context become startup
       }
 
-      case Survey(toFind, toStart) => {
+      case Survey( toFind, toStart ) => {
         val piece = toFind.head
-        context.actorSelection(piece.path) ? Identify(piece.name) map {
-          case ActorIdentity(_, None) => {
+        context.actorSelection( piece.path ) ? Identify( piece.name ) map {
+          case ActorIdentity( _, None ) => {
             log.debug( "{} not found for {}", piece.name, spec )
             Survey( toFind.tail, piece :: toStart )
           }
 
-          case ActorIdentity(_, Some(ref) ) => {
+          case ActorIdentity( _, Some( ref ) ) => {
             log.debug( "{} found for {}", piece.name, spec )
             constituentRefs += (piece.constituent -> ref)
             Survey( toFind.tail, toStart )
@@ -196,7 +224,7 @@ object IndexSupervisor extends StrictLogging {
 //ref akka concurrency for controlled startup pattern
       case Startup( Nil ) => {
         constituentRefs.values foreach { cref =>
-          log.debug( "sending WaitForStart to {}" , cref )
+          log.debug( "sending WaitForStart to {}", cref )
           cref ! index.WaitingForStart
         }
         context become verify( constituentRefs )
@@ -209,11 +237,12 @@ object IndexSupervisor extends StrictLogging {
         supervisor ? createPiece map {
           case ChildStarted( child ) => {
             p.constituent.postStart( child, subscription )
-            constituentRefs += (p.constituent -> child )
+            constituentRefs += (p.constituent -> child)
             Startup( pieces.tail )
           }
 
-          case m => log.error( "failed to create index piece: [{}]", p )  //todo consider retry state via ctx.become
+          case _ =>
+            log.error( "failed to create index piece: [{}]", p ) //todo consider retry state via ctx.become
         } pipeTo self
       }
     }
@@ -224,17 +253,18 @@ object IndexSupervisor extends StrictLogging {
         val verified = toCheck find {
           _._2 == c
         } getOrElse {
-          throw new IllegalStateException(s"failed to recognize index constituent[$c] in toCheck[${toCheck}}]")
+          throw new IllegalStateException(
+            s"failed to recognize index constituent[$c] in toCheck[${toCheck}}]"
+          )
         }
 
         log.debug( "verified constituent: {}", verified )
-        val next = toCheck - verified._1
-        handleNext(toCheck - verified._1)
+        handleNext( toCheck - verified._1 )
       }
     }
 
     def handleNext( next: Map[IndexConstituent, ActorRef] ): Unit = {
-      if ( !next.isEmpty ) context become verify( next )
+      if (!next.isEmpty) context become verify( next )
       else {
         val msg = IndexRegistered( constituentRefs( Agent ), registrantType, spec )
         log.debug( "sending: () ! {}", registrant, msg )

@@ -4,13 +4,20 @@ name := "demesne-core"
 
 description := "lorem ipsum."
 
-libraryDependencies ++= commonDependencies ++ Seq(
-  akka.contrib,
-  facility.inflector
-)
+scalacOptions := BuildSettings.scalacOptions
+
+libraryDependencies ++=
+  commonDependencies ++
+  commonTestDependencies ++
+  Seq(
+    akka.contrib,
+    inflector
+  )
 
 enablePlugins( BuildInfoPlugin )
 
 buildInfoKeys := Seq[BuildInfoKey]( name, version, scalaVersion, sbtVersion )
 
 buildInfoPackage := "demesne"
+
+testOptions in Test += Tests.Argument( "-oDF" )

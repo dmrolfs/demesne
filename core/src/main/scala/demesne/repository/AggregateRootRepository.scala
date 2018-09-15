@@ -1,35 +1,38 @@
 package demesne.repository
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.Done
 import akka.actor._
 import akka.cluster.sharding.ShardRegion.Passivate
 import akka.event.LoggingReceive
 import akka.pattern.pipe
-import cats.data.Validated.{Invalid, Valid}
+import cats.data.Validated.{ Invalid, Valid }
 import cats.syntax.validated._
+import omnibus.core.{ AllIssuesOr, EC }
 import omnibus.akka.ActorStack
 import omnibus.akka.envelope._
-import omnibus.commons.AllIssuesOr
-import demesne.{AggregateRootType, DomainModel}
-import demesne.repository.{StartProtocol => SP}
-
+import demesne.{ AggregateRootType, DomainModel }
+import demesne.repository.{ StartProtocol => SP }
 
 abstract class EnvelopingAggregateRootRepository(
   model: DomainModel,
   rootType: AggregateRootType
-) extends AggregateRootRepository( model, rootType) with EnvelopingActor { outer: AggregateContext =>
+) extends AggregateRootRepository( model, rootType )
+    with EnvelopingActor { outer: AggregateContext =>
 
   override def repository: Receive = {
     case message => {
-      val originalSender = sender()
       val aggregate = aggregateFor( message )
-      log.debug( "enveloping-repository:[{}] forwarding to aggregate:[{}] command:[{}]", self.path.name, aggregate, message )
+      log.debug(
+        "enveloping-repository:[{}] forwarding to aggregate:[{}] command:[{}]",
+        self.path.name,
+        aggregate,
+        message
+      )
       Option( aggregate ) foreach { _ forwardEnvelope message }
     }
   }
 }
-
 
 /** AggregateRootRepository for aggregate root actors. All client commands will go through this actor, who resolves/extracts the
   * aggregate's id from the command and either finds the aggregate or (if there is no such aggregate) creates the new
@@ -37,22 +40,34 @@ abstract class EnvelopingAggregateRootRepository(
   *
   * In addition to connecting clients with aggregates, this actor is a supervisor responsible for taking care of its
   * child aggregates, handling fault handling and recovery actions.
- */
-abstract class AggregateRootRepository( override val model: DomainModel, override val rootType: AggregateRootType )
-extends Actor
-with ActorStack
-with ActorLogging {
+  */
+abstract class AggregateRootRepository(
+  override val model: DomainModel,
+  override val rootType: AggregateRootType
+) extends Actor
+    with ActorStack
+    with ActorLogging {
   outer: AggregateContext =>
 
-  def handleLoad()( implicit ec: ExecutionContext ): Future[SP.Loaded] = outer.loadContext() map { _ => doLoad() }
+  def handleLoad[_: EC](): Future[SP.Loaded] = outer.loadContext() map { _ =>
+    doLoad()
+  }
 
-  def doLoad(): SP.Loaded = SP.Loaded(rootType, resources = Map.empty[Symbol, Any], dependencies = Set.empty[Symbol])
+  def doLoad(): SP.Loaded =
+    SP.Loaded( rootType, resources = Map.empty[Symbol, Any], dependencies = Set.empty[Symbol] )
 
-  def handleInitialize( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[SP.Started.type] = {
+  def handleInitialize(
+    resources: Map[Symbol, Any]
+  )( implicit ec: ExecutionContext ): Future[SP.Started.type] = {
     doInitialize( resources ) match {
-      case Valid( _ ) => outer.initializeContext( resources ) map { _ => SP.Started }
+      case Valid( _ ) =>
+        outer.initializeContext( resources ) map { _ =>
+          SP.Started
+        }
       case Invalid( exs ) => {
-        exs map { ex => log.error( ex, "initialization failed for resources:[{}]", resources.mkString(", ") ) }
+        exs map { ex =>
+          log.error( ex, "initialization failed for resources:[{}]", resources.mkString( ", " ) )
+        }
         Future.failed( exs.head )
       }
     }
@@ -68,13 +83,13 @@ with ActorLogging {
 
   val quiescent: Receive = {
     case SP.Load => {
-      log.debug( "received Load...")
+      log.debug( "received Load..." )
       val coordinator = sender()
       handleLoad() pipeTo coordinator
     }
 
     case SP.Initialize( resources ) => {
-      log.debug( "received Initialize...")
+      log.debug( "received Initialize..." )
       val coordinator = sender()
       handleInitialize( resources ) pipeTo coordinator
       context become LoggingReceive { around( nonfunctional orElse repository ) }
@@ -91,7 +106,7 @@ with ActorLogging {
       sender() ! stop
     }
 
-    case Envelope( Passivate(stop), _ ) => {
+    case Envelope( Passivate( stop ), _ ) => {
       log.debug(
         "passivate received by repository so not in clustered mode. sending stop-message:[{}] back to entity:[{}]",
         stop,
@@ -100,7 +115,7 @@ with ActorLogging {
       sender() ! stop
     }
 
-    case SP.WaitForStart => sender( ) ! SP.Started
+    case SP.WaitForStart => sender() ! SP.Started
   }
 
   def repository: Receive = {

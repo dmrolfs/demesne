@@ -1,9 +1,3 @@
-import scala.concurrent.ExecutionContext
-import akka.actor.ActorSystem
-import akka.util.Timeout
-import monix.execution.Scheduler
-
-
 /**
   == Overview ==
   Demesne extends Akka's Persistence frameworks to provide structure to consistently build and use CQRS+ES based
@@ -24,16 +18,12 @@ import monix.execution.Scheduler
   Messages (Commands and Events) are wrapped with an envelope containing meta data that describes the unit of work,
   actors involved and ordering.
 
-  Aggregates are returned from the DomainModel as an ActorRef. In order to ensure messages are sent into the domain with 
+  Aggregates are returned from the DomainModel as an ActorRef. In order to ensure messages are sent into the domain with
   an initial envelope use the enveloping send or !! operations. Developers need to ensure they continue using the
   envelope capability at each point otherwise the meta envelope will not follow the unit of work.
- */
+  */
 package object demesne {
-  type EC[_] = ExecutionContext
-  type AS[_] = ActorSystem
-  type S[_] = Scheduler
-  type T[_] = Timeout
-
-
-  trait DemesneError
+  type AS[_] = akka.actor.ActorSystem
+  type SCHED[_] = monix.execution.Scheduler
+  type TO[_] = akka.util.Timeout
 }

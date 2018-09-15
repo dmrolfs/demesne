@@ -1,91 +1,143 @@
 package demesne.testkit
 
 import java.util.concurrent.atomic.AtomicInteger
-import scala.util.Try
 
-import scala.concurrent.Await
+import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration._
 import akka.actor.ActorSystem
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.dispatch.Dispatchers
+import akka.testkit.TestEvent.Mute
+import akka.testkit.{ DeadLettersFilter, TestKit }
 import cats.syntax.either._
+import scribe.Level
+import scribe.writer.FileWriter
+import com.github.ghik.silencer.silent
 import com.typesafe.config.Config
-import com.typesafe.scalalogging.StrictLogging
-import org.scalatest.{MustMatchers, Outcome, ParallelTestExecution, fixture}
-import omnibus.commons.log.Trace
-import omnibus.commons.util._
-import demesne.{AggregateRootType, BoundedContext, DomainModel, StartTask}
-
+import org.scalatest.{ fixture, Matchers, Outcome, ParallelTestExecution }
+import omnibus.core.syntax.clazz._
+import demesne.{ AggregateRootType, BoundedContext, DomainModel }
 
 object ParallelAkkaSpec {
   val testPosition: AtomicInteger = new AtomicInteger()
 }
 
-
 // Runs each individual test in parallel. Only possible with Fixture isolation
-abstract class ParallelAkkaSpec extends fixture.WordSpec with MustMatchers with ParallelTestExecution with StrictLogging {
-  private val trace = Trace[ParallelAkkaSpec]
+abstract class ParallelAkkaSpec extends fixture.WordSpec with Matchers with ParallelTestExecution {
+  outer =>
 
-  def testPosition: AtomicInteger = ParallelAkkaSpec.testPosition
+  initializeLogging()
+
+  protected def initializeLogging(): Unit = {
+    scribe.Logger.root
+    //      .clearHandlers()
+    //      .clearModifiers()
+      .withHandler( writer = FileWriter() )
+      .withMinimumLevel( Level.Trace )
+      .replace()
+  }
+
+  @silent def slugForTest( test: OneArgTest ): String = {
+    s"Par-${getClass.safeSimpleName}-${ParallelAkkaSpec.testPosition.incrementAndGet()}"
+  }
+
+  @silent def systemForTest(
+    test: OneArgTest,
+    slug: String,
+    config: Option[Config] = None
+  ): ActorSystem = {
+    scribe.debug( s"creating system[${slug}] for test:[${test.name}]" )
+
+    ActorSystem(
+      name = slug,
+      config = config,
+      classLoader = None,
+      defaultExecutionContext = None
+    )
+  }
+
+  @silent def configurationForTest( test: OneArgTest, slug: String ): Option[Config] = {
+    Option( demesne.testkit.config )
+  }
+
+  def contextForTest( test: OneArgTest ): ( String, ActorSystem ) = {
+    val slug = slugForTest( test )
+    val config = configurationForTest( test, slug )
+    val system = systemForTest( test, slug, config )
+    ( slug, system )
+  }
 
   type Fixture <: AkkaFixture
   type FixtureParam = Fixture
 
-  abstract class AkkaFixture( val config: Config, _system: ActorSystem, val slug: String )
-  extends TestKit( _system ) with ImplicitSender {
-    def before( test: OneArgTest ): Unit = trace.block( "before" ) {
-      import scala.concurrent.ExecutionContext.global
-      val timeout = akka.util.Timeout( 5.seconds )
-      Await.ready( boundedContext.start()( global, timeout ), timeout.duration )
+  def createAkkaFixture( test: OneArgTest, system: ActorSystem, slug: String ): Fixture
+
+  abstract class AkkaFixture( val slug: String, _system: ActorSystem ) extends TestKit( _system ) {
+    val config = system.settings.config
+
+    def before( test: OneArgTest ): Unit = {
+      Await.ready( BoundedContext.make( Symbol( slug ), config, rootTypes ), 5.seconds )
     }
 
-    def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
+    def after( test: OneArgTest ): Unit = {}
 
     def rootTypes: Set[AggregateRootType]
     lazy val boundedContext: BoundedContext = {
-      Await.result( BoundedContext.make( Symbol(slug), config, rootTypes ), 5.seconds )
+      Await.result( BoundedContext.make( Symbol( slug ), config, rootTypes ), 5.seconds )
     }
 
     implicit lazy val model: DomainModel = boundedContext.unsafeModel
+
+    def spawn( dispatcherId: String = Dispatchers.DefaultDispatcherId )( body: => Unit ): Unit = {
+      Future { body }( system.dispatchers lookup dispatcherId )
+    }
+
+    def muteDeadLetters(
+      messagesClasses: Class[_]*
+    )(
+      implicit sys: ActorSystem = system
+    ): Unit = {
+      if (!sys.log.isDebugEnabled) {
+        def mute( clazz: Class[_] ): Unit = {
+          sys.eventStream.publish(
+            Mute( DeadLettersFilter( clazz )( occurrences = Int.MaxValue ) )
+          )
+        }
+
+        if (messagesClasses.isEmpty) mute( classOf[AnyRef] )
+        else messagesClasses foreach mute
+      }
+    }
   }
 
+  override protected def withFixture( test: OneArgTest ): Outcome = {
+    val ( slug, system ) = contextForTest( test )
 
-  def testSlug( test: OneArgTest ): String = s"Par-${getClass.safeSimpleName}-${ParallelAkkaSpec.testPosition.incrementAndGet()}"
-  def testConfiguration( test: OneArgTest, slug: String ): Config = demesne.testkit.config
-  def testSystem( test: OneArgTest, config: Config, slug: String ): ActorSystem = ActorSystem( name = slug, config )
-  def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture
-
-  override def withFixture( test: OneArgTest ): Outcome = {
-    val slug = testSlug( test )
-    val config = testConfiguration( test, slug )
-    val system = testSystem( test, config, slug )
-
-    val fixture = Either catchNonFatal { createAkkaFixture( test, config, system, slug ) }
-
-    val results = fixture map { f =>
-      logger.debug( ".......... before test .........." )
-      f before test
-      logger.debug( "++++++++++ starting test ++++++++++" )
-      ( test(f), f )
-    }
-
-    val outcome = results map { case (o, f) =>
-      logger.debug( "---------- finished test ------------" )
-      f after test
-      logger.debug( ".......... after test .........." )
-
-      o
-    }
-
-    outcome match {
-      case Right( o ) => {
-        Await.ready( system.terminate(), 5.seconds )
-        o
+    Either
+      .catchNonFatal { createAkkaFixture( test, system, slug ) }
+      .map { f =>
+        scribe.debug( s".......... before test [${test.name}] .........." )
+        f before test
+        scribe.debug( s"++++++++++ starting test [${test.name}] ++++++++++" )
+        ( test( f ), f )
       }
-      case Left( ex ) => {
-        Await.ready( system.terminate(), 5.seconds )
-        logger.error( s"test[${test.name}] failed", ex )
+      .map {
+        case ( outcome, f ) =>
+          scribe.debug( s"---------- finished test [${test.name}] ------------" )
+          f after test
+          scribe.debug( s".......... after test [${test.name}] .........." )
+
+          Option( f.system ) foreach { s ⇒
+            scribe.debug( s"terminating actor-system:${s.name}..." )
+            f.shutdown( actorSystem = s, verifySystemShutdown = false )
+            scribe.debug( s"actor-system:${s.name}.terminated" )
+          }
+
+          outcome
+      }
+      .valueOr { ex =>
+        scribe.error( s"test[${test.name}] failed", ex )
+        system.terminate()
         throw ex
       }
-    }
   }
 }

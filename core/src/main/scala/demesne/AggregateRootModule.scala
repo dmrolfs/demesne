@@ -1,42 +1,47 @@
 package demesne
 
 import akka.actor.ActorRef
-import com.typesafe.scalalogging.LazyLogging
-import omnibus.commons.ErrorOr
-import omnibus.commons.identifier.{Identifying, TaggedID}
-import omnibus.commons.util._
+import omnibus.identifier.Identifying
+import omnibus.core.syntax.clazz._
 
+abstract class AggregateRootModule[S, ID0]( implicit val identifying: Identifying.Aux[S, ID0] )
+    extends AggregateRootType.Provider { module =>
 
-abstract class AggregateRootModule[S, I]( implicit val identifying: Identifying.Aux[S, I] )
-  extends AggregateRootType.Provider with LazyLogging { module =>
+  type ID = ID0
+  type TID = identifying.TID
 
-  type ID = I
-  type TID = TaggedID[ID]
-
-  def nextId: ErrorOr[TID] = identifying.nextTID
+  def nextId: TID = identifying.next
 
   def shardName: String = _shardName
 
-  def aggregateOf( id: Any  )( implicit model: DomainModel ): ActorRef = model( rootType = module.rootType, id )
+  def aggregateOf( id: Any )( implicit model: DomainModel ): ActorRef =
+    model( rootType = module.rootType, id )
 
-  implicit def tagId( id: ID ): TID = identifying tag id
+//  implicit def tagId( id: ID ): TID = identifying tag id
 
-  override def toString: String = s"${getClass.safeSimpleName}(${identifying.idTag.name})"
+  override def toString: String = s"${getClass.safeSimpleName}(${identifying.label})"
 
-
-  private[this] lazy val _shardName: String = org.atteo.evo.inflector.English.plural( identifying.idTag.name ).capitalize
+  private[this] lazy val _shardName: String =
+    org.atteo.evo.inflector.English.plural( identifying.label ).capitalize
 }
 
 object AggregateRootModule {
 
-  trait Message[I] extends MessageLike {
-    override type ID = I
+  abstract class Message[A0, ID0](
+    implicit val identifying: Identifying.Aux[A0, ID0]
+  ) extends MessageLike {
+    override type A = A0
+    override type ID = ID0
   }
 
-  trait Command[I] extends Message[I] with CommandLike 
+  abstract class Command[A, ID0]( implicit override val identifying: Identifying.Aux[A, ID0] )
+      extends Message[A, ID0]
+      with CommandLike
 
-
-  trait Event[I] extends EventLike {
-    override type ID = I
+  abstract class Event[A0, ID0](
+    implicit val identifying: Identifying.Aux[A0, ID0]
+  ) extends EventLike {
+    override type A = A0
+    override type ID = ID0
   }
 }

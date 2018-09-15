@@ -1,12 +1,12 @@
 package demesne.repository
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import akka.Done
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
+import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.cluster.sharding.{ ClusterSharding, ClusterShardingSettings, ShardRegion }
 import net.ceedubs.ficus.Ficus._
-import demesne.{AggregateRootType, DomainModel}
-
+import demesne.{ AggregateRootType, DomainModel }
+import omnibus.core.EC
 
 /**
   * Created by rolfsd on 3/29/17.
@@ -16,16 +16,17 @@ trait AggregateContext {
   def rootType: AggregateRootType
   def aggregateProps: Props
   def aggregateFor( command: Any ): ActorRef
-  def loadContext()( implicit ec: ExecutionContext ): Future[Done] = Future successful Done
-  def initializeContext( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[Done] = Future successful Done
+  def loadContext[_: EC](): Future[Done] = Future successful Done
+
+  def initializeContext[_: EC]( resources: Map[Symbol, Any] ): Future[Done] = Future successful Done
 }
 
 trait LocalAggregateContext extends AggregateContext with ActorLogging { actor: Actor =>
   override def aggregateFor( command: Any ): ActorRef = {
-    if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
+    if (!rootType.aggregateIdFor.isDefinedAt( command )) {
       log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
     }
-    val (id, _) = rootType aggregateIdFor command
+    val ( id, _ ) = rootType aggregateIdFor command
     context.child( id ) getOrElse { context.actorOf( aggregateProps, id ) }
   }
 }
@@ -35,9 +36,9 @@ trait ClusteredAggregateContext extends AggregateContext with ActorLogging { act
   def extractEntityId: ShardRegion.ExtractEntityId = rootType.aggregateIdFor
   def extractShardId: ShardRegion.ExtractShardId = rootType.shardIdFor
 
-  override def initializeContext( resources: Map[Symbol, Any] )( implicit ec: ExecutionContext ): Future[Done] = {
+  override def initializeContext[_: EC]( resources: Map[Symbol, Any] ): Future[Done] = {
     Future {
-      if ( !isAggregateProxied ) {
+      if (!isAggregateProxied) {
         val region = ClusterSharding( model.system ).start(
           typeName = rootType.name,
           entityProps = aggregateProps,
@@ -55,7 +56,11 @@ trait ClusteredAggregateContext extends AggregateContext with ActorLogging { act
           extractShardId = this.extractShardId
         )
 
-        log.info( "cluster shard proxy started for root-type:[{}] region:[{}]", rootType.name, region )
+        log.info(
+          "cluster shard proxy started for root-type:[{}] region:[{}]",
+          rootType.name,
+          region
+        )
       }
 
       Done
@@ -66,10 +71,13 @@ trait ClusteredAggregateContext extends AggregateContext with ActorLogging { act
     val nodeRoles = model.system.settings.config.as[Option[Set[String]]]( "akka.cluster.roles" )
 
     val result = {
-      rootType
-      .clusterRole
-      .map { role => nodeRoles map { roles => !roles.contains( role ) } getOrElse true }
-      .getOrElse { false }
+      rootType.clusterRole
+        .map { role =>
+          nodeRoles map { roles =>
+            !roles.contains( role )
+          } getOrElse true
+        }
+        .getOrElse { false }
     }
 
     log.info(
@@ -83,7 +91,7 @@ trait ClusteredAggregateContext extends AggregateContext with ActorLogging { act
   }
 
   override def aggregateFor( command: Any ): ActorRef = {
-    if ( !rootType.aggregateIdFor.isDefinedAt(command) ) {
+    if (!rootType.aggregateIdFor.isDefinedAt( command )) {
       log.warning( "AggregateRootType[{}] does not recognize command[{}]", rootType.name, command )
     }
     ClusterSharding( model.system ) shardRegion rootType.name

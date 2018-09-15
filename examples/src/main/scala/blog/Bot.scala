@@ -1,16 +1,14 @@
 package sample.blog
 
 import scala.concurrent.duration._
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
 import akka.cluster.Cluster
 import akka.cluster.sharding.ClusterSharding
 import akka.event.LoggingReceive
 import demesne.DomainModel
-import omnibus.commons.identifier._
-import omnibus.commons.log.Trace
+import omnibus.identifier._
 import sample.blog.author.AuthorListingModule
 import sample.blog.post._
-
 
 object Bot {
   def props( model: DomainModel ): Props = Props( new Bot( model ) )
@@ -19,7 +17,6 @@ object Bot {
 }
 
 class Bot( model: DomainModel ) extends Actor with ActorLogging {
-  val trace = Trace[Bot]
 
   import context.dispatcher
   import sample.blog.Bot._
@@ -27,14 +24,10 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
 
   // val model =
   // val postRegion = ClusterSharding( context.system ).shardRegion( PostModule.shardName )
-  def postRegion( id: ShortUUID ): ActorRef = trace.block( s"postRegion( $id) " ) {
-    implicit val system = context.system
-    val result = model.aggregateOf( PostModule.rootType, id )
-    // log warning s"post AR = ${result}"
-    result
-  }
+  def postRegion( id: Post#TID ): ActorRef = model.aggregateOf( PostModule.rootType, id.value )
 
-  val listingsRegion = ClusterSharding( context.system ).shardRegion( AuthorListingModule.shardName )
+  val listingsRegion =
+    ClusterSharding( context.system ).shardRegion( AuthorListingModule.shardName )
 
   val from = Cluster( context.system ).selfAddress.hostPort
 
@@ -54,7 +47,7 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
   val create: Receive = LoggingReceive {
     case Tick => {
       //      val postId = TryV unsafeGet Post.identifying.nextTID
-      val postId = Post.identifying.nextTID.unsafeGet
+      val postId: Id.Aux[Post, ShortUUID] = Post.identifying.next
       n += 1
       log.info( s"bot CREATING post $n" )
       val title = s"Post $n from $from"
@@ -102,7 +95,9 @@ class Bot( model: DomainModel ) extends Actor with ActorLogging {
 
     case AuthorListingModule.Posts( summaries ) => {
       log.info( s"bot LISTING recd posts by $currentAuthor" )
-      log.info( s"""Posts by ${currentAuthor}: ${summaries.map{ _.title }.mkString( "\n\t", "\n\t", "" )}""" )
+      log.info( s"""Posts by ${currentAuthor}: ${summaries
+        .map { _.title }
+        .mkString( "\n\t", "\n\t", "" )}""" )
       context become create
     }
   }

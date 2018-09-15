@@ -1,11 +1,11 @@
 package demesne
 
-import omnibus.commons.identifier.TaggedID
-
+import omnibus.identifier.Id
 
 trait MessageLike {
+  type A // AggregateRoot entity
   type ID
-  type TID = TaggedID[ID]
+  type TID = Id.Aux[A, ID]
   def targetId: TID
 }
 

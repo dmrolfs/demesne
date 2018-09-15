@@ -8,67 +8,69 @@ import scala.collection.immutable
 import scala.concurrent.duration._
 import scala.concurrent.Await
 import scala.util.Success
-import akka.testkit.{TestActorRef, TestProbe}
+import akka.testkit.{ TestActorRef, TestProbe }
 import akka.util.Timeout
-import com.typesafe.config.Config
-import com.typesafe.scalalogging.StrictLogging
 import demesne._
 import demesne.testkit._
-import org.scalatest.{Outcome, Tag}
-import omnibus.akka.envelope.{ComponentPath => EnvComponentPath, ComponentType => EnvComponentType, _}
+import org.scalatest.Tag
+import omnibus.akka.envelope._
 import omnibus.akka.publish.ReliablePublisher.ReliableMessage
-import omnibus.commons.identifier.{ShortUUID, TaggedID}
-import omnibus.commons.log.Trace
-import sample.blog.author.AuthorListingModule.{GetPosts, Posts}
+import omnibus.identifier.ShortUUID
+import sample.blog.author.AuthorListingModule.{ GetPosts, Posts }
+import sample.blog.post.Post
 import sample.blog.post.PostPrototol.PostPublished
-
 
 object AuthorListingModuleSpec {
   val sysId = new AtomicInteger()
 }
 
 /**
- * Created by damonrolfs on 9/18/14.
- */
-class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
+  * Created by damonrolfs on 9/18/14.
+  */
+class AuthorListingModuleSpec extends ParallelAkkaSpec {
 
-  private val trace = Trace[AuthorListingModuleSpec]
-
-  override def testSlug( test: OneArgTest ): String = "Blog-" + testPosition.incrementAndGet()
-
-  override def createAkkaFixture( test: OneArgTest, config: Config, system: ActorSystem, slug: String ): Fixture = {
-    new AuthorListingFixture( config, system, slug )
+  override def createAkkaFixture(
+    test: OneArgTest,
+    system: ActorSystem,
+    slug: String
+  ): Fixture = {
+    new AuthorListingFixture( system, slug )
   }
 
   override type Fixture = AuthorListingFixture
 
-  class AuthorListingFixture( _config: Config, _system: ActorSystem, _slug: String )
-  extends AkkaFixture( _config, _system, _slug ) {
-    private val trace = Trace[AuthorListingFixture]
+  class AuthorListingFixture( _system: ActorSystem, _slug: String )
+      extends AkkaFixture( _slug, _system ) {
+
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    override def before( test: OneArgTest ): Unit = trace.block( "before" ) {
+    override def before( test: OneArgTest ): Unit = {
       import demesne.repository.StartProtocol
 
       import akka.pattern.AskableActorSelection
-      val supervisorSel = new AskableActorSelection( system actorSelection s"/user/${boundedContext.name}-repositories" )
+      val supervisorSel = new AskableActorSelection(
+        system actorSelection s"/user/${boundedContext.name}-repositories"
+      )
       implicit val timeout = Timeout( 5.seconds )
-      Await.ready( ( supervisorSel ? StartProtocol.WaitForStart ), 5.seconds )
+      Await.ready( (supervisorSel ? StartProtocol.WaitForStart), 5.seconds )
     }
 
-    override def after( test: OneArgTest ): Unit = trace.block( "after" ) { }
+    override def after( test: OneArgTest ): Unit = {}
 
     override val rootTypes: Set[AggregateRootType] = Set.empty[AggregateRootType]
 
     val authorProbe = TestProbe()
 
-
     override lazy val boundedContext: BoundedContext = {
       val result = {
         for {
-          made <- BoundedContext.make( Symbol(slug), config, userResources = AuthorListingModule.resources(system) )
+          made <- BoundedContext.make(
+            Symbol( slug ),
+            config,
+            userResources = AuthorListingModule.resources( system )
+          )
           ready = made.withStartTask( AuthorListingModule.startTask )
-          started <- ready.start()( global, Timeout(5.seconds) )
+          started <- ready.start()( global, Timeout( 5.seconds ) )
         } yield started
       }
 
@@ -76,65 +78,65 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
     }
   }
 
-
   object WIP extends Tag( "wip" )
 
   val header = EnvelopeHeader(
-    fromComponentType = EnvComponentType( "component-type" ),
-    fromComponentPath = EnvComponentPath( "akka://Test/user/post" ),
-    toComponentPath =  EnvComponentPath( "akka://Test/user/author" ),
+    fromComponentType = ComponentType( "component-type" ),
+    fromComponentPath = ComponentPath( "akka://Test/user/post" ),
+    toComponentPath = ComponentPath( "akka://Test/user/author" ),
     messageType = MessageType( "posting" ),
     workId = WorkId( ShortUUID() ),
     messageNumber = MessageNumber( 13 ),
-    version = EnvelopeVersion( 7 )
+    version = EnvelopeVersion( 7 ),
+    properties = EnvelopeProperties()
   )
 
-  def nextPostId: TaggedID[ShortUUID] = TaggedID( tag = 'post, id = ShortUUID() )
+  def nextPostId: Post#TID = Post.identifying.next
 
   "Author listing Module should" should {
     "extract cluster id from message" in { fixture: Fixture =>
-      implicit val system = fixture.system
+//      implicit val system = fixture.system
 
       val extractor = AuthorListingModule.AuthorListing.idExtractor
       val pp = PostPublished( sourceId = nextPostId, author = "Damon", title = "Extraction" )
-      extractor( pp ) mustBe ( pp.author, pp )
+      extractor( pp ) shouldBe ( ( pp.author, pp ) )
 
       val gp = GetPosts( author = "Damon" )
-      extractor( gp ) mustBe ( gp.author, gp )
+      extractor( gp ) shouldBe ( ( gp.author, gp ) )
 
       val epp = Envelope( payload = pp, header = header )
-      extractor( epp ) mustBe ( pp.author, epp )
+      extractor( epp ) shouldBe ( ( pp.author, epp ) )
       val egp = Envelope( payload = gp, header = header )
-      extractor( egp ) mustBe ( gp.author, egp )
+      extractor( egp ) shouldBe ( ( gp.author, egp ) )
 
       val rpp = ReliableMessage( 3L, epp )
-      extractor( rpp ) mustBe (pp.author, rpp )
+      extractor( rpp ) shouldBe ( ( pp.author, rpp ) )
       val rgp = ReliableMessage( 7L, egp )
-      extractor( rgp ) mustBe (gp.author, rgp )
+      extractor( rgp ) shouldBe ( ( gp.author, rgp ) )
     }
 
     "extract shard from message" in { fixture: Fixture =>
-      implicit val system = fixture.system
+//      implicit val system = fixture.system
 
       val shard = AuthorListingModule.AuthorListing.shardResolver
       val author = "Damon"
-      val authorHash = ( math.abs( author.hashCode ) % 100 ).toString
+      val authorHash = (math.abs( author.hashCode ) % 100).toString
 
       val pp = PostPublished( sourceId = nextPostId, author = author, title = "Extraction" )
-      shard( pp ) mustBe authorHash
+      shard( pp ) shouldBe authorHash
 
       val gp = GetPosts( author = "Damon" )
-      shard( gp ) mustBe authorHash
+      shard( gp ) shouldBe authorHash
 
       val epp = Envelope( payload = pp, header = header )
-      shard( epp ) mustBe authorHash
+      shard( epp ) shouldBe authorHash
       val egp = Envelope( payload = gp, header = header )
-      shard( egp ) mustBe authorHash
+      shard( egp ) shouldBe authorHash
 
       val rpp = ReliableMessage( 3L, epp )
-      shard( rpp ) mustBe authorHash
+      shard( rpp ) shouldBe authorHash
       val rgp = ReliableMessage( 7L, egp )
-      shard( rgp ) mustBe authorHash
+      shard( rgp ) shouldBe authorHash
     }
 
     "handle PostPublished event" in { fixture: Fixture =>
@@ -142,9 +144,9 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
 
       val pp = PostPublished( sourceId = nextPostId, author = "Damon", title = "Handle Publishing" )
       val real = TestActorRef[AuthorListingModule.AuthorListing].underlyingActor
-      real.posts mustBe Vector.empty
+      real.posts shouldBe Vector.empty
       real.receive( pp )
-      real.posts mustBe IndexedSeq( pp )
+      real.posts shouldBe IndexedSeq( pp )
     }
 
     "respond to GetPosts requests" in { fixture: Fixture =>
@@ -155,16 +157,16 @@ class AuthorListingModuleSpec extends ParallelAkkaSpec with StrictLogging {
       val pp = PostPublished( sourceId = nextPostId, author = "Damon", title = "Handle Publishing" )
       val ref = TestActorRef[AuthorListingModule.AuthorListing]
       val real = ref.underlyingActor
-      val expected: immutable.IndexedSeq[PostPublished] = immutable.IndexedSeq( pp )
-      real.posts mustBe Vector.empty
-      val r1 = ref ? GetPosts("Damon")
-      val Success(Posts(a1)) = r1.value.get
-      a1 mustBe immutable.IndexedSeq.empty
+//      val expected: immutable.IndexedSeq[PostPublished] = immutable.IndexedSeq( pp )
+      real.posts shouldBe Vector.empty
+      val r1 = ref ? GetPosts( "Damon" )
+      val Success( Posts( a1 ) ) = r1.value.get
+      a1 shouldBe immutable.IndexedSeq.empty
 
       real.receive( pp )
       val r2 = ref ? GetPosts( "Damon" )
-      val Success(Posts(a2)) = r2.value.get
-      a2 mustBe immutable.IndexedSeq( pp )
+      val Success( Posts( a2 ) ) = r2.value.get
+      a2 shouldBe immutable.IndexedSeq( pp )
     }
   }
 }

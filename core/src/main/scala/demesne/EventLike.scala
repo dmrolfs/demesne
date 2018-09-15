@@ -1,18 +1,15 @@
 package demesne
 
-import omnibus.commons.identifier.TaggedID
-
+import omnibus.identifier.Id
 
 trait EventLike extends Serializable {
+  type A
   type ID
-  type TID = TaggedID[ID]
+  type TID = Id.Aux[A, ID]
   def sourceId: TID
   def tags: Set[String] = Set.empty[String]
-  // def sourceTypeName: Option[String]
-  // def version: Long
 }
 
-// object EventLike {
-//   // def unapply( e: EventLike ): Option[(e.TID, Long)] = Some( (e.sourceId, e.version) )
-//   def unapply( e: EventLike ): Option[(e.TID, Option[String])] = Some( (e.sourceId, e.sourceTypeName) )
-// }
+object EventLike {
+  def unapply( e: EventLike ): Option[( e.TID, Set[String] )] = Some( ( e.sourceId, e.tags ) )
+}

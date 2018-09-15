@@ -4,12 +4,18 @@ name := "demesne-testkit"
 
 description := "lorem ipsum."
 
-libraryDependencies ++= commonDependencies ++ Seq(
-  akka.contrib,
-  akka.remote,
-  akka.testkit,
-  qa.scalatest,
-  qa.mockito.core,
-  qa.persistence.inMemory,
-  facility.inflector
-)
+scalacOptions := BuildSettings.scalacOptions
+
+libraryDependencies ++=
+  commonDependencies ++
+  Seq(
+    akka.contrib,
+    akka.remote,
+    akka.testkit,
+    quality.scalatest,
+    quality.mockito.core,
+    quality.persistence.inMemory,
+    inflector
+  )
+
+testOptions in Test += Tests.Argument( "-oDF" )

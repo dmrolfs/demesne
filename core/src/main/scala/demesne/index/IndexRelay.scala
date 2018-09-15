@@ -1,29 +1,30 @@
 package demesne.index
 
 import scala.concurrent.duration._
-import akka.actor.FSM.{CurrentState, Transition}
+import akka.actor.FSM.{ CurrentState, Transition }
 import akka.actor._
 import akka.contrib.pattern.ReliableProxy
-import akka.contrib.pattern.ReliableProxy.{Connecting, TargetChanged}
+import akka.contrib.pattern.ReliableProxy.{ Connecting, TargetChanged }
 import akka.event.LoggingReceive
 import omnibus.akka.envelope.Envelope
 
+object IndexRelay {
 
-object IndexRelay extends com.typesafe.scalalogging.LazyLogging {
   def props( indexAggregatePath: ActorPath, extractor: KeyIdExtractor ): Props = {
     Props( new IndexRelay( indexAggregatePath, extractor ) )
   }
 }
 
 /**
- * Created by damonrolfs on 10/27/14.
- */
+  * Created by damonrolfs on 10/27/14.
+  */
 class IndexRelay( indexAggregatePath: ActorPath, extractor: KeyIdExtractor )
-extends Actor
-with ActorLogging {
+    extends Actor
+    with ActorLogging {
+
   val fullExtractor: KeyIdExtractor = {
-    case m if extractor.isDefinedAt( m ) => extractor( m )
-    case e @ Envelope( payload, _ ) if extractor.isDefinedAt( payload ) => extractor( payload )
+    case m if extractor.isDefinedAt( m )                            => extractor( m )
+    case Envelope( payload, _ ) if extractor.isDefinedAt( payload ) => extractor( payload )
   }
 
   //todo move into configuration retry timeout
@@ -42,7 +43,7 @@ with ActorLogging {
       context become starting( waiting )
     }
 
-    case Transition( _, Connecting, _) => {
+    case Transition( _, Connecting, _ ) => {
       log.debug( "Relay connected to index aggregate at {}", indexAggregatePath )
       proxy ! WaitingForStart
       context become starting( waiting )
@@ -53,9 +54,9 @@ with ActorLogging {
       context become connecting( List( sender() ) )
     }
 
-    case _: CurrentState[_] => { }
-    case _: ActorIdentity => { }
-    case _: TargetChanged => { }
+    case _: CurrentState[_] => {}
+    case _: ActorIdentity   => {}
+    case _: TargetChanged   => {}
   }
 
   def starting( waiting: List[ActorRef] ): Receive = LoggingReceive {
@@ -70,10 +71,10 @@ with ActorLogging {
       context become starting( List( sender() ) )
     }
 
-    case _: Transition[_] => { }
-    case _: CurrentState[_] => { }
-    case _: ActorIdentity => { }
-    case _: TargetChanged => { }
+    case _: Transition[_]   => {}
+    case _: CurrentState[_] => {}
+    case _: ActorIdentity   => {}
+    case _: TargetChanged   => {}
   }
 
   val active: Receive = LoggingReceive {
@@ -88,10 +89,10 @@ with ActorLogging {
       sender() ! Started
     }
 
-    case _: Transition[_] => { }
-    case _: CurrentState[_] => { }
-    case _: ActorIdentity => { }
-    case _: TargetChanged => { }
+    case _: Transition[_]   => {}
+    case _: CurrentState[_] => {}
+    case _: ActorIdentity   => {}
+    case _: TargetChanged   => {}
   }
 
   override def unhandled( message: Any ): Unit = {
@@ -100,7 +101,12 @@ with ActorLogging {
 //      case _: akka.actor.FSM.Transition[_] => ()
 //      case _: akka.contrib.pattern.ReliableProxy.TargetChanged => ()
 //      case id: ActorIdentity => log.debug( "received ActorIdentity:[{}]", id )
-      case m => log.warning( "RELAY_UNHANDLED [{}]; extractor-defined-at={}", message, fullExtractor.isDefinedAt(message) )
+      case _ =>
+        log.warning(
+          "RELAY_UNHANDLED [{}]; extractor-defined-at={}",
+          message,
+          fullExtractor.isDefinedAt( message )
+        )
     }
   }
 }

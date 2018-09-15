@@ -2,7 +2,6 @@ package demesne.repository
 
 import demesne.AggregateRootType
 
-
 /**
   * Created by rolfsd on 8/19/16.
   */
@@ -17,13 +16,14 @@ object StartProtocol {
     dependencies: Set[Symbol] = Set.empty[Symbol]
   ) extends StartProtocol {
     override def toString: String = {
-      s"""Loaded(${rootType.name} dependencies:[${dependencies.mkString(", ")}] resources:[${resources.keySet.mkString(", ")}])"""
+      s"""Loaded(${rootType.name} dependencies:[${dependencies.mkString( ", " )}] resources:[${resources.keySet
+        .mkString( ", " )}])"""
     }
   }
 
   case class Initialize( resources: Map[Symbol, Any] ) extends StartProtocol {
     override def toString: String = {
-      s"""Initialize( resources:[${resources.keySet.mkString(", ")}] )"""
+      s"""Initialize( resources:[${resources.keySet.mkString( ", " )}] )"""
     }
   }
 
@@ -33,7 +33,11 @@ object StartProtocol {
 
   case object GetStatus extends StartProtocol
 
-  case class StartStatus( repositories: Map[String, RepositorySupervisor.RepositoryStartupState] ) extends StartProtocol {
-    override def toString: String = s"""StartStatus( ${repositories.map{ case (r, s) => r+":"+s }.mkString("[", ", ", "]")} )"""
+  case class StartStatus( repositories: Map[String, RepositorySupervisor.RepositoryStartupState] )
+      extends StartProtocol {
+    override def toString: String =
+      s"""StartStatus( ${repositories
+        .map { case ( r, s ) => r + ":" + s }
+        .mkString( "[", ", ", "]" )} )"""
   }
 }

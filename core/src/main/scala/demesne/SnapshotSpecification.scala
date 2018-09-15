@@ -2,9 +2,8 @@ package demesne
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import akka.actor.{ActorRef, ActorSystem, Cancellable, NotInfluenceReceiveTimeout}
-import omnibus.commons.identifier.TaggedID
-
+import akka.actor.{ ActorRef, ActorSystem, Cancellable, NotInfluenceReceiveTimeout }
+import omnibus.identifier.Id
 
 object SnapshotSpecification {
   case object DoNotSnapshot extends SnapshotSpecification {
@@ -14,16 +13,28 @@ object SnapshotSpecification {
 }
 
 abstract class SnapshotSpecification { outer =>
-  def saveSnapshotCommand[ID]( tid: TaggedID[ID] ): Any = SaveSnapshot( targetId = tid )
+  type TID[S, ID] = Id.Aux[S, ID]
+
+  def saveSnapshotCommand[S, ID]( targetId: TID[S, ID] ): Any = SaveSnapshot[S, ID]( targetId )
   def snapshotInitialDelay: FiniteDuration
   def snapshotInterval: FiniteDuration
 
-  def schedule[ID]( system: ActorSystem, target: ActorRef, tid: TaggedID[ID] )( implicit ec: ExecutionContext ): Cancellable = {
-    system.scheduler.schedule( snapshotInitialDelay, snapshotInterval, target, saveSnapshotCommand(tid) )
+  def schedule[S, ID]( system: ActorSystem, target: ActorRef, tid: TID[S, ID] )(
+    implicit ec: ExecutionContext
+  ): Cancellable = {
+    system.scheduler.schedule(
+      snapshotInitialDelay,
+      snapshotInterval,
+      target,
+      saveSnapshotCommand( tid )
+    )
   }
 }
 
+case class SaveSnapshot[S, ID0]( override val targetId: SaveSnapshot[S, ID0]#TID )
+    extends CommandLike
+    with NotInfluenceReceiveTimeout {
 
-case class SaveSnapshot( override val targetId: TaggedID[Any] ) extends CommandLike with NotInfluenceReceiveTimeout {
-  override type ID = Any
+  override type ID = ID0
+  override type A = S
 }
