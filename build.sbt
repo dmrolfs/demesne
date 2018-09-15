@@ -3,7 +3,7 @@ import BuildSettings._
 
 name := "demesne"
 
-version in ThisBuild := "2.3.0"
+version in ThisBuild := "2.4.0"
 
 organization in ThisBuild := "com.github.dmrolfs"
 

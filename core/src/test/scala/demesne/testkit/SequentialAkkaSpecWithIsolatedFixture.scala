@@ -28,7 +28,7 @@ abstract class SequentialAkkaSpecWithIsolatedFixture extends fixture.WordSpec wi
     scribe.Logger.root
     //      .clearHandlers()
     //      .clearModifiers()
-      .withHandler( writer = FileWriter.default )
+      .withHandler( writer = FileWriter() )
       .withMinimumLevel( Level.Debug )
       .replace()
   }

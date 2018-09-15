@@ -13,7 +13,7 @@ import com.typesafe.config.ConfigFactory
 import demesne._
 import sample.blog.author.AuthorListingModule
 import sample.blog.post.PostModule
-import scribe.writer.{ FileWriter, FlatPathBuilder }
+import scribe.writer.{ file, FileWriter }
 import scribe.{ Level, ScribeMacros }
 
 object BlogApp {
@@ -22,9 +22,7 @@ object BlogApp {
     scribe.Logger.root
     //      .clearHandlers()
     //      .clearModifiers()
-      .withHandler(
-        writer = FileWriter( new FlatPathBuilder( Paths.get( "logs" ).resolve( "app.log" ) ) )
-      )
+      .withHandler( writer = FileWriter() )
       .withMinimumLevel( Level.Trace )
       .replace()
 
