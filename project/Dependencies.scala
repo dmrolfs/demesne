@@ -45,7 +45,7 @@ object Dependencies {
   object omnibus extends SimpleModule {
     override val groupId: String = "com.github.dmrolfs"
     override val artifactIdRoot: String = "omnibus"
-    override val version: String = "0.73-SNAPSHOT"
+    override val version: String = "0.73"
 
     def all = Seq( core, identifier, commons, akka, archetype )
 
@@ -59,7 +59,7 @@ object Dependencies {
   object akka extends SimpleModule {
     override val groupId: String = "com.typesafe.akka"
     override val artifactIdRoot: String = "akka"
-    override val version: String = "2.5.14"
+    override val version: String = "2.5.16"
 
     def all = Seq(
       actor,
@@ -109,7 +109,7 @@ object Dependencies {
   object cats extends SimpleModule {
     override val groupId: String = "org.typelevel"
     override val artifactIdRoot: String = "cats"
-    override val version: String = "1.2.0"
+    override val version: String = "1.4.0"
 
     def all = Seq( core, kernel, macros )
 
@@ -133,7 +133,7 @@ object Dependencies {
     object scribe extends SimpleModule {
       override val groupId: String = "com.outr"
       override def artifactIdRoot: String = "scribe"
-      override def version: String = "2.5.3"
+      override def version: String = "2.6.0"
       def all = Seq( core, slf4j )
       val core = module( "" )
       val slf4j = module( "slf4j" )
@@ -155,7 +155,7 @@ object Dependencies {
     val scalatest = "org.scalatest" %% "scalatest" % "3.0.5"
 
     object mockito {
-      val version = "2.21.0"
+      val version = "2.22.0"
       val core = "org.mockito" % "mockito-core" % version
     }
 

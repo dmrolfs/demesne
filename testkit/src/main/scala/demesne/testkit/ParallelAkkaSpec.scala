@@ -31,7 +31,7 @@ abstract class ParallelAkkaSpec extends fixture.WordSpec with Matchers with Para
     scribe.Logger.root
     //      .clearHandlers()
     //      .clearModifiers()
-      .withHandler( writer = FileWriter.default )
+      .withHandler( writer = FileWriter() )
       .withMinimumLevel( Level.Trace )
       .replace()
   }
